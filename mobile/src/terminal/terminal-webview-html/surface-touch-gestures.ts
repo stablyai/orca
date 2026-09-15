@@ -42,10 +42,13 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
   });
 
   var ts = {
+    startX: 0, startY: 0, backSwipe: null,
     lastX: 0, lastY: 0, lastTime: 0, velY: 0,
     accumDelta: 0, momentumId: null, isPinching: false,
     pinchDist: 0, pinchScale: 0, pinchSurfX: 0, pinchSurfY: 0
   };
+  var EDGE_BACK_START_X = 24;
+  var EDGE_BACK_SLOP = 8;
 
   function updateTouchVelocity(deltaY, dt) {
     if (dt <= 0) return;
@@ -78,6 +81,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
         cancelAnimationFrame(ts.momentumId);
         ts.momentumId = null;
       }
+      ts.backSwipe = null;
       if (e.touches.length === 2) {
         ts.isPinching = true;
         smoothScrollOffsetY = 0;
@@ -90,8 +94,9 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
         ts.pinchSurfY = (my - panY) / total;
       } else if (e.touches.length === 1) {
         ts.isPinching = false;
-        ts.lastX = e.touches[0].clientX;
-        ts.lastY = e.touches[0].clientY;
+        ts.startX = ts.lastX = e.touches[0].clientX;
+        ts.startY = ts.lastY = e.touches[0].clientY;
+        ts.backSwipe = isIOSWebView() && ts.startX <= EDGE_BACK_START_X ? 'pending' : null;
         ts.lastTime = Date.now();
         ts.velY = 0;
         ts.accumDelta = 0;
@@ -101,8 +106,23 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
     targetSurface.addEventListener('touchmove', function(e) {
       if (dispatcherShouldBlockSurface()) return;
       if (!term) return;
-      e.preventDefault();
       e.stopPropagation();
+
+      // Let UIKit own edge-back without xterm cancelling the native gesture.
+      if (ts.backSwipe && e.touches.length === 1) {
+        if (ts.backSwipe === 'pending') {
+          var dx = e.touches[0].clientX - ts.startX;
+          var dy = e.touches[0].clientY - ts.startY;
+          if (Math.max(Math.abs(dx), Math.abs(dy)) < EDGE_BACK_SLOP) return;
+          ts.backSwipe = dx > Math.abs(dy) ? 'active' : null;
+          if (ts.backSwipe === 'active') {
+            clearLongPress();
+            tapCandidate = null;
+          }
+        }
+        if (ts.backSwipe === 'active') return;
+      }
+      e.preventDefault();
 
       if (e.touches.length === 2) {
         ts.isPinching = true;
@@ -166,6 +186,10 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
     targetSurface.addEventListener('touchend', function(e) {
       if (dispatcherShouldBlockSurface()) return;
       if (!term) return;
+      if (ts.backSwipe === 'active') {
+        e.stopPropagation();
+        return;
+      }
 
       if (ts.isPinching && e.touches.length < 2) {
         ts.isPinching = false;
