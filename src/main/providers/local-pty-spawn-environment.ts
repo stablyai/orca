@@ -56,6 +56,7 @@ export function buildLocalPtySpawnEnvironment(args: {
   return awaitCancelableLocalPtySpawn(
     id,
     getOptions().buildSpawnEnv!(id, spawnEnv, {
+      explicitEnv: spawn.env ?? {},
       command: spawn.command,
       launchAgent: spawn.launchAgent,
       codexHomePathOverride: spawn.codexHomePathOverride,
