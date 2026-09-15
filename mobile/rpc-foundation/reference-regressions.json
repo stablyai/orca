@@ -1,0 +1,40 @@
+{
+  "revision": "bcba08b3e4675fe0c687fe6346655f8ce66cd138",
+  "sources": [
+    {
+      "file": "mobile/src/session/native-host-session-native-chat-operations.ts",
+      "sha256": "2b8bf516424f730617826e3e6e180a5c3e7b3b626d0aba759c695677968d3000"
+    },
+    {
+      "file": "mobile/src/session/github-pr-mutations.ts",
+      "sha256": "9d07404d2936a7eca4a0b97aad495ae0adab01b18a15d37d9796d762edc0739a"
+    },
+    {
+      "file": "mobile/src/tasks/native-host-task-project-mutation-operations.ts",
+      "sha256": "360e0609c30ce099c9bba014b3bb8b7458f0af453351e0614cc1a12b5608a594"
+    },
+    {
+      "file": "mobile/src/tasks/native-host-task-detail-operations.ts",
+      "sha256": "92df0e2f312caeb7d6f8af20132ce6553d3343904ca2422c4a89c45344cec66b"
+    }
+  ],
+  "supportingFunctions": ["rankSuggestions", "buildGithubPrParams", "githubPrRepoSlugParam"],
+  "supportingSource": "current main; ranking and sender parameter construction only, never reply acceptance or lifecycle",
+  "results": [
+    {
+      "id": "b1",
+      "killed": true,
+      "observed": "[\"stale/app.ts\"]"
+    },
+    {
+      "id": "b2",
+      "killed": true,
+      "observed": "null result accepted"
+    },
+    {
+      "id": "b3",
+      "killed": true,
+      "observed": "issue refused"
+    }
+  ]
+}

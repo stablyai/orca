@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "scope": ["mobile/packages", "mobile/plugins"],
+  "extensions": ["swift", "kt", "m", "mm", "h", "java"],
+  "entries": [
+    {
+      "file": "mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/AudioEngine.kt",
+      "sha256": "3e63ae5d3a382e8849f8ee81b6602908b3b6fd3df1836ba9668fff5873e192cb",
+      "nativeMethods": [],
+      "rpcCandidates": []
+    },
+    {
+      "file": "mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt",
+      "sha256": "e2cf2be8bd984e27c045c0691b31d73cb24a8b526e98f2915c1eb843ab82287e",
+      "nativeMethods": [],
+      "rpcCandidates": []
+    },
+    {
+      "file": "mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioModule.kt",
+      "sha256": "a0a9cabb5c049b80535b28d897f497dc60b3c2fd0597206a0a142596492557fc",
+      "nativeMethods": [
+        "initialize",
+        "isRecording",
+        "toggleRecording",
+        "tearDown",
+        "restart",
+        "playPCMData",
+        "bypassVoiceProcessing",
+        "isPlaying",
+        "stopPlayback",
+        "pausePlayback",
+        "resumePlayback",
+        "getMicrophoneModeIOS",
+        "setMicrophoneModeIOS",
+        "getMicrophonePermissionsAsync",
+        "requestMicrophonePermissionsAsync"
+      ],
+      "rpcCandidates": []
+    },
+    {
+      "file": "mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioPackage.kt",
+      "sha256": "f9673f26ee87f7142e83bdefffba5c6aefc3f006056c8af5e8d964093e890433",
+      "nativeMethods": [],
+      "rpcCandidates": []
+    },
+    {
+      "file": "mobile/packages/expo-two-way-audio/ios/AudioEngine.swift",
+      "sha256": "424a18a4c11f6daac57f53e9f42d5b460596de1815b37530e17caed3ee9757b4",
+      "nativeMethods": [],
+      "rpcCandidates": []
+    },
+    {
+      "file": "mobile/packages/expo-two-way-audio/ios/ExpoTwoWayAudioModule.swift",
+      "sha256": "603ee85ca3a6b0127af46b59ab104b57867ab428b9ce16516ae8df4e15698706",
+      "nativeMethods": [
+        "initialize",
+        "isRecording",
+        "toggleRecording",
+        "getMicrophoneModeIOS",
+        "setMicrophoneModeIOS",
+        "tearDown",
+        "restart",
+        "playPCMData",
+        "bypassVoiceProcessing",
+        "isPlaying",
+        "stopPlayback",
+        "pausePlayback",
+        "resumePlayback",
+        "getMicrophonePermissionsAsync",
+        "requestMicrophonePermissionsAsync"
+      ],
+      "rpcCandidates": []
+    },
+    {
+      "file": "mobile/packages/expo-two-way-audio/ios/MicrophonePermissionRequester.swift",
+      "sha256": "450f528defa4bb5fa3192bbdcb86a705dccf5d1982747be81c9d3c2a699ff68c",
+      "nativeMethods": [],
+      "rpcCandidates": []
+    }
+  ],
+  "hostRpcCandidates": [],
+  "note": "Native ABI methods are audio operations; host dictation RPC construction lives in JavaScript and is covered by the access inventory."
+}

@@ -1,0 +1,21 @@
+{
+  "baseline": "e80fae0c4d",
+  "regression": "bcba08b3e4",
+  "tests": [
+    {
+      "id": "b1",
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "name": "b1: reset during A-B-A ignores stale files.list inventory and preserves the fresh load"
+    },
+    {
+      "id": "b2",
+      "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.test.ts",
+      "name": "b2: null Project mutation result does not commit success"
+    },
+    {
+      "id": "b3",
+      "file": "mobile/src/tasks/use-mobile-tasks-item-detail-loading.test.ts",
+      "name": "b3: comments transport error wins over an issue refusal after the raw barrier"
+    }
+  ]
+}
