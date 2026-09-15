@@ -91,10 +91,16 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     const didStartNavigationHandler = (
       _event: Electron.Event,
       url: string,
-      _isInPlace: boolean,
+      isInPlace: boolean,
       isMainFrame: boolean
     ): void => {
       if (!isMainFrame || isChromiumInternalErrorUrl(url)) {
+        return
+      }
+      if (isInPlace) {
+        // Why: a same-document navigation never emits 'did-navigate', so a pending target recorded
+        // here would never be cleared and would leak into supersededUrls on the next real
+        // navigation. 'did-navigate-in-page' owns the same-document commit instead.
         return
       }
       // Why: getURL() still reports the previous committed URL until this navigation commits, so
@@ -121,12 +127,39 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       // Why: a committed nav makes the did-start-navigation stash obsolete; drop it so a later ERR_ABORTED can't restore an error over it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
       this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)
+      this.notifyBrowserGuestStateChanged(guest.id)
+    }
+
+    const didNavigateInPageHandler = (
+      _event: Electron.Event,
+      url: string,
+      isMainFrame: boolean
+    ): void => {
+      if (!isMainFrame) {
+        return
+      }
+      // Why the pending record is left alone: an in-place start never creates one, so anything
+      // here belongs to an overlapping full navigation whose target the UA and failure paths still
+      // resolve against. Deleting it would settle the wrong navigation.
+      if (!this.pendingNavigationByGuestId.has(guest.id)) {
+        // Why settle only with no full navigation in flight: a same-document commit replaces this
+        // document's own failure state, and tabList publishes loadError.validatedUrl ahead of
+        // getURL(), so a stale failure would keep republishing the failed target as the tab's url.
+        this.loadErrorsByGuestId.delete(guest.id)
+        this.clearedLoadErrorsByGuestId.delete(guest.id)
+        this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)
+      }
+      // Why notify regardless: Electron emits no 'did-navigate' for a same-document commit, so
+      // otherwise the pushed host snapshot keeps the pre-navigation url while a pull reads the new
+      // one — the same stale-push class the committed-navigation notify fixes for full navigations.
+      this.notifyBrowserGuestStateChanged(guest.id)
     }
 
     guest.on('will-navigate', navigationGuard)
     guest.on('will-redirect', willRedirectHandler)
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
+    guest.on('did-navigate-in-page', didNavigateInPageHandler)
     guest.on('did-fail-load', didFailLoadHandler)
     const handleDestroyed = (): void => {
       // Why: guests can die before renderer registration, else attach-time closures leak until shutdown.
@@ -145,6 +178,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('will-redirect', willRedirectHandler)
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
+        guest.off('did-navigate-in-page', didNavigateInPageHandler)
         guest.off('did-fail-load', didFailLoadHandler)
       }
     }
