@@ -20,6 +20,7 @@ import type { AutomationsApi } from './api/automation-api'
 import type { BrowserApi } from './api/browser-api'
 import type { CliApi } from './api/cli-install-api'
 import type { CrashReportsApi, FeedbackApi } from './api/crash-report-api'
+import type { CustomGitServerApi } from './api/custom-git-server-api'
 import type { DashboardApi, TerminalPreviewApi } from './api/dashboard-api'
 import type { DocPreviewApi } from './api/doc-preview-api'
 import type { EmulatorApi } from './api/emulator-api'
@@ -105,6 +106,7 @@ export type PreloadApi = {
   codexConfigSync: CodexConfigSyncApi
   agentTrust: AgentTrustApi
   preflight: PreflightApi
+  customGitServer: CustomGitServerApi
   notifications: NotificationsApi
   onboarding: OnboardingApi
   dashboard: DashboardApi

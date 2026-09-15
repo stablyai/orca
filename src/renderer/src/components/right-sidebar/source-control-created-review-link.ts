@@ -39,6 +39,8 @@ export function resolveCreatedHostedReviewLink(
       return { worktree: { linkedGiteaPR: number }, lookup: { linkedGiteaPR: number } }
     case 'bitbucket':
       return { worktree: { linkedBitbucketPR: number }, lookup: { linkedBitbucketPR: number } }
+    // Custom-server reviews are discovered by branch, not persisted by number.
+    case 'custom':
     case 'unsupported':
       return { worktree: {}, lookup: {} }
   }
