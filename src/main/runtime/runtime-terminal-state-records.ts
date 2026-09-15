@@ -121,7 +121,7 @@ export type RuntimePtyTitleTrackerEntry = {
   afterFacts: (() => void)[]
   commandCodeDetector: { observe: (data: string) => boolean } | null
   /** Bob's approval modal is its only 'blocked on you' signal; see bob-approval-prompt.ts. */
-  bobApprovalDetector: { observe: (data: string) => boolean } | null
+  bobApprovalDetector: { observe: (data: string) => boolean; observeInput: () => void } | null
 }
 
 export type RuntimeHeadlessTerminal = {
