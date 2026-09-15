@@ -205,12 +205,12 @@ describe('session write subscriber allocation', () => {
     // A gate that misses a projection input persists stale state, so this is a correctness lock,
     // not a perf one. Record what the builder actually touches rather than trusting the types.
     const read = new Set<string>()
-    const snapshot = new Proxy(makeSessionState() as unknown as Record<string, unknown>, {
-      get(target, property, receiver) {
+    const snapshot = new Proxy(makeSessionState() as unknown as Record<string | symbol, unknown>, {
+      get(target, property) {
         if (typeof property === 'string') {
           read.add(property)
         }
-        return Reflect.get(target, property, receiver)
+        return target[property]
       }
     })
     buildWorkspaceSessionPatch(

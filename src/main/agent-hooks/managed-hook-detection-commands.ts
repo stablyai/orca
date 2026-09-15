@@ -53,10 +53,12 @@ export function readManagedHookDetectionResult(value: unknown): {
   if (value === null || typeof value !== 'object') {
     return { agents: [], claudeVersion: null }
   }
-  const agents = detectedManagedHookAgents(Reflect.get(value, 'agents'))
-  const versions = Reflect.get(value, 'versions')
+  const agents = detectedManagedHookAgents('agents' in value ? value.agents : null)
+  const versions = 'versions' in value ? value.versions : null
   const rawClaudeVersion =
-    versions !== null && typeof versions === 'object' ? Reflect.get(versions, 'claude') : null
+    versions !== null && typeof versions === 'object' && 'claude' in versions
+      ? versions.claude
+      : null
   return {
     agents,
     claudeVersion: parseClaudeCliVersion(

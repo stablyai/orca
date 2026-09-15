@@ -346,6 +346,7 @@ describe('a teardown that fails is retried by the next stop', () => {
     const flaky = new Proxy(real, {
       get(target, property, receiver) {
         if (property !== 'close') {
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, property, receiver)
         }
         return async () => {

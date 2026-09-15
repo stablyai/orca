@@ -99,6 +99,7 @@ describe('mailbox pointer staging watermark', () => {
             throw new Error('SQLITE_BUSY')
           }
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         const value = Reflect.get(target, prop, receiver)
         return typeof value === 'function' ? value.bind(target) : value
       }
@@ -178,6 +179,7 @@ describe('mailbox pointer staging watermark', () => {
           stealNextClaim = false
           return () => false
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         const value = Reflect.get(target, prop, receiver)
         return typeof value === 'function' ? value.bind(target) : value
       }

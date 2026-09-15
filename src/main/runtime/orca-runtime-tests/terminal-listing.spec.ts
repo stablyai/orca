@@ -436,6 +436,7 @@ describe('OrcaRuntimeService', () => {
             throw new Error('onPtyData should use the PTY leaf index')
           }
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         const value = Reflect.get(target, prop, target)
         return typeof value === 'function' ? value.bind(target) : value
       }

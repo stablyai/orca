@@ -7,6 +7,11 @@ import { runProcess } from '../../src/shared/child-process/run-process'
 
 test.use({ seedTestRepo: false })
 
+declare global {
+  // eslint-disable-next-line no-var -- main-process gate handle for this spec
+  var __releaseGroupCreateResponse: (() => void) | undefined
+}
+
 for (const delayCreateResponse of [false, true]) {
   test(`created groups survive sidebar expansion (${delayCreateResponse ? 'refresh first' : 'ordinary timing'})`, async ({
     orcaPage,
@@ -97,7 +102,7 @@ for (const delayCreateResponse of [false, true]) {
           .toBe(true)
       } finally {
         await electronApp.evaluate(() => {
-          const release = Reflect.get(globalThis, '__releaseGroupCreateResponse')
+          const release = globalThis.__releaseGroupCreateResponse
           if (typeof release !== 'function') {
             throw new Error('Group create response gate unavailable')
           }
