@@ -54,6 +54,7 @@ const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
   process.env.CLINE_SESSION_DATA_DIR?.trim() || join(homedir(), '.cline', 'data', 'sessions')
+const QWEN_PROJECTS_DIR = join(homedir(), '.qwen', 'projects')
 
 /**
  * Where one agent's session files live and which of them count as sessions.
@@ -263,6 +264,18 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // only those (not the sibling agents/*/wire.jsonl transcripts).
     filePredicate: (filePath) =>
       basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_')
+  },
+  'qwen-code': {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(options.qwenProjectsDir ?? QWEN_PROJECTS_DIR, wslHomeDirs, [
+        '.qwen',
+        'projects'
+      ]),
+    extensions: ['.jsonl'],
+    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME,
+    // Why: resumable sessions live at <project>/chats/<id>.jsonl; ignore
+    // anything outside a chats/ dir. Same segment convention as cursor.
+    filePredicate: (filePath) => pathSegments(filePath).includes('chats')
   }
 }
 
