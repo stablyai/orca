@@ -26,6 +26,7 @@ import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-syst
 import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
 import { publishDaemonPidFile } from './daemon-spawner'
 import { isNativePtyException } from './daemon-native-pty-exception'
+import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -318,6 +319,13 @@ async function main(): Promise<void> {
   daemonLog.log('ready')
 
   warmWindowsConptyOnce()
+  // Whether the addon loads is fixed for this process, and a detached daemon has
+  // no stderr, so the module's own warn cannot report it here. Both answers, so a
+  // bundle can tell "native" from "never asked" (#16905). Loading it now also pays
+  // the dlopen off the first teardown.
+  if (process.platform === 'win32') {
+    daemonLog.log('windows-process-table', { native: isWindowsProcessTableAvailable() })
+  }
 }
 
 // Only auto-run when executed directly (not imported for testing, or for the build guard's
