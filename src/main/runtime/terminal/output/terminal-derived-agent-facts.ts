@@ -59,6 +59,11 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
     })
   }
 
+  /** Input written to a PTY from any client; only input can close a Bob approval modal. */
+  notePtyInput(ptyId: string): void {
+    this.ptyTitleTrackersByPtyId.get(ptyId)?.bobApprovalDetector?.observeInput()
+  }
+
   protected emitBobApprovalWaiting(ptyId: string): void {
     this.emitTerminalAgentStatusEvents(ptyId, {
       cleanData: '',

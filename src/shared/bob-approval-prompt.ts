@@ -41,6 +41,8 @@ const CARRY_OVER_LIMIT = 512
 export type BobApprovalPromptDetector = {
   /** True only on the write that first paints a modal, so a repainting TUI fires once. */
   observe: (data: string) => boolean
+  /** Call on any input written to the pane. */
+  observeInput: () => void
 }
 
 export function textShowsBobApprovalPrompt(text: string): boolean {
@@ -70,10 +72,10 @@ function isBobLaunchCommand(command: string | null | undefined): boolean {
 }
 
 /**
- * Edge-triggered: fires when a modal first appears and stays armed until the composer is painted
- * with no modal beside it. A write merely lacking the modal proves nothing — the transcripts show
- * the execute modal repainted every frame with the composer hidden, and the spawn modal painted
- * once while the composer below it keeps repainting.
+ * Edge-triggered: fires when a modal first appears and stays armed until the user has typed and the
+ * composer is then painted with no modal beside it. Neither alone proves the modal closed — the
+ * transcripts show the spawn modal painted once while the composer below it keeps repainting (a
+ * resize would repaint the still-open modal), and ↑↓ input repaints the modal without closing it.
  *
  * Self-arms on Bob's own launch command or composer banner first (never on the approval text
  * alone), so an unrelated CLI that happens to print "Approve Once" cannot misattribute its status
@@ -85,8 +87,13 @@ export function createBobApprovalPromptDetector(args: {
   let hasSeenBobUi = isBobLaunchCommand(args.startupCommand)
   let carryOver = ''
   let armed = false
+  // Why: only input can close a modal; a modal repaint after that input shows it is still open.
+  let inputSinceModal = false
 
   return {
+    observeInput(): void {
+      inputSinceModal = armed
+    },
     observe(data: string): boolean {
       if (data.length === 0) {
         return false
@@ -107,14 +114,16 @@ export function createBobApprovalPromptDetector(args: {
         return false
       }
       if (mayShowModal && hasNewMatch(previous, text, BOB_APPROVAL_GLOBAL_RES)) {
+        inputSinceModal = false
         if (armed) {
           return false
         }
         armed = true
         return true
       }
-      if (showsComposer && hasNewMatch(previous, text, BOB_BANNER_GLOBAL_RES)) {
+      if (inputSinceModal && showsComposer && hasNewMatch(previous, text, BOB_BANNER_GLOBAL_RES)) {
         armed = false
+        inputSinceModal = false
       }
       return false
     }

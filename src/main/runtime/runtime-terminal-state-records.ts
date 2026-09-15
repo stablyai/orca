@@ -135,7 +135,7 @@ export type RuntimePtyTitleTrackerEntry = {
   /** The last observed title, so a program's activity change can re-classify it. */
   lastTitle: { raw: string; normalized: string } | null
   /** Bob's approval modal is its only 'blocked on you' signal; see bob-approval-prompt.ts. */
-  bobApprovalDetector: { observe: (data: string) => boolean } | null
+  bobApprovalDetector: { observe: (data: string) => boolean; observeInput: () => void } | null
 }
 
 export type RuntimeHeadlessTerminal = {
