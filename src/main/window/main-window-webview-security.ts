@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import { stopAllClientOfficeWatches } from '../office/office-watch-client-ledger'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { browserManager } from '../browser/browser-manager'
@@ -43,9 +44,14 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   // preview owns which grant, and a reload throws that record away. Grants it can no longer
   // release would stay live read authorities for the rest of the process.
   revokeAllDocPreviewGrants()
+  // Same reasoning one level out: the renderer is also the only record of which document it asked
+  // a host to watch, and a watch process outlives its client by design. A reload that dropped that
+  // record would leave a live process and a listening port on a host with nothing left to stop it.
+  void stopAllClientOfficeWatches()
   mainWindow.webContents.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) {
       revokeAllDocPreviewGrants()
+      void stopAllClientOfficeWatches()
     }
   })
   // Why these contents and not the window: every live preview is a guest of this WebContents, and
@@ -53,6 +59,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   mainWindow.webContents.on('destroyed', () => {
     setDocPreviewFailureSink(null)
     revokeAllDocPreviewGrants()
+    void stopAllClientOfficeWatches()
   })
   // Why: containment must be listening before any plugin panel frame is created,
   // so register it with the window's other navigation policy.

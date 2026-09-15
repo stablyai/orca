@@ -1,4 +1,7 @@
 import { translate } from '@/i18n/i18n'
+import { basename } from '@/lib/path'
+import { isOfficeDocument } from '../../../../shared/office-file-extensions'
+import { EditorOfficeBinaryPlaceholder } from './editor-office-binary-placeholder'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
@@ -113,6 +116,15 @@ export function EditorEditFileSurface({
           filePath={activeFile.filePath}
           mimeType={fileContent.mimeType}
           scrollCacheKey={pdfViewStateKey}
+        />
+      )
+    }
+    if (isOfficeDocument(activeFile.filePath)) {
+      return (
+        <EditorOfficeBinaryPlaceholder
+          filePath={activeFile.filePath}
+          worktreeId={activeFile.worktreeId}
+          fileName={basename(activeFile.filePath)}
         />
       )
     }

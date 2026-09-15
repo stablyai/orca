@@ -348,6 +348,13 @@ import {
   NotificationsSubscribeParams
 } from './notifications-params'
 import {
+  OfficeDocumentParams,
+  OfficeElementParams,
+  OfficeOptionalDocumentParams,
+  OfficeProbeParams,
+  OfficeSkillInstallParams
+} from './office-params'
+import {
   FederationDispatchParams,
   FederationFleetSnapshotParams,
   FederationOutputReadParams,
@@ -954,6 +961,17 @@ export const RPC_PARAMS_BY_METHOD = {
   'notifications.testPush': null,
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
+  'office.clearMarks': OfficeDocumentParams,
+  'office.goto': OfficeElementParams,
+  'office.marks': OfficeDocumentParams,
+  'office.probe': OfficeProbeParams,
+  'office.render': OfficeDocumentParams,
+  'office.selection': OfficeDocumentParams,
+  'office.skillsInstall': OfficeSkillInstallParams,
+  'office.skillsList': OfficeOptionalDocumentParams,
+  'office.watchRefresh': OfficeDocumentParams,
+  'office.watchStart': OfficeDocumentParams,
+  'office.watchStop': OfficeDocumentParams,
   'orchestration.ask': AskParams,
   'orchestration.check': CheckParams,
   'orchestration.dispatch': DispatchParams,

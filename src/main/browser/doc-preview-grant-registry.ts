@@ -17,6 +17,16 @@ export type DocPreviewOwner =
       /** Worktree root on the runtime host; `files.read` only accepts paths inside it. */
       worktreeRoot: string
     }
+  /**
+   * Bytes main already holds — an Office snapshot rendered on the owning host, and nothing else.
+   *
+   * Strictly narrower than both filesystem owners: it reads no disk on any machine, so there is no
+   * root to contain, no symlink to canonicalize and no directory a reader could be asked to
+   * authorize. It exists because the rendered snapshot is exactly one self-contained file, and the
+   * alternative — writing it somewhere a `files.read` grant could reach — means writing inside the
+   * reader's worktree and putting it in their git status.
+   */
+  | { kind: 'inline'; documents: ReadonlyMap<string, { bytes: Buffer; contentType: string }> }
 
 export type DocPreviewGrant = {
   id: string
@@ -87,6 +97,27 @@ export function mintDocPreviewGrant(params: {
   }
   grantsById.set(grant.id, grant)
   return grant
+}
+
+/** Synthetic base: an inline grant resolves nothing against a filesystem, but the grant shape
+ *  still carries a base and an entry, and both must be internally consistent. */
+const INLINE_DOC_PREVIEW_BASE = '/orca-inline-document'
+
+export const INLINE_DOC_PREVIEW_ENTRY = 'document.html'
+
+/** Mints a grant over bytes main already holds. No filesystem authority is granted at all. */
+export function mintInlineDocPreviewGrant(params: {
+  documents: ReadonlyMap<string, { bytes: Buffer; contentType: string }>
+  entryRelativePath?: string
+  browserPageId: string
+}): DocPreviewGrant {
+  return mintDocPreviewGrant({
+    owner: { kind: 'inline', documents: params.documents },
+    requestBase: INLINE_DOC_PREVIEW_BASE,
+    root: INLINE_DOC_PREVIEW_BASE,
+    entryRelativePath: params.entryRelativePath ?? INLINE_DOC_PREVIEW_ENTRY,
+    browserPageId: params.browserPageId
+  })
 }
 
 export function getDocPreviewGrant(grantId: string): DocPreviewGrant | null {
@@ -222,7 +253,9 @@ export function resolveDocPreviewTargetPath(
 /** Expands a live grant to the directory containing one reader-approved request. */
 export function authorizeDocPreviewDirectory(grantId: string, relativePath: string): boolean {
   const grant = grantsById.get(grantId)
-  if (!grant) {
+  if (!grant || grant.owner.kind === 'inline') {
+    // An inline grant has no filesystem to widen onto; answering true would report authority
+    // that does not exist and leave the reader waiting for bytes that never arrive.
     return false
   }
   const candidate = resolveDocPreviewCandidatePath(grant, relativePath)

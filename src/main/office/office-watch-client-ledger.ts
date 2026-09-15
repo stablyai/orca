@@ -1,0 +1,62 @@
+/**
+ * What this client has asked hosts to watch.
+ *
+ * The host-side registry in `office-watch-manager.ts` only knows about watches this process
+ * started. A watch on an SSH or paired host is owned by that host, and the only record that it was
+ * ever started for *this* reader lives here — so this is what a renderer reload, a window
+ * teardown or app quit has to walk. Without it, a reload silently orphans a watch process and a
+ * listening port on somebody else's machine, and nothing left in the system knows to stop it.
+ */
+import { officeHostOwnerKey, type OfficeHostOwner } from '../../shared/office-host-owner'
+import { OFFICE_WATCH_STOP_METHOD } from '../../shared/office-preview-rpc'
+import { dispatchOfficeRequest } from './office-host-dispatch'
+
+type ClientWatchRecord = {
+  owner: OfficeHostOwner
+  document: { workspaceRoot: string; relativePath: string }
+}
+
+const records = new Map<string, ClientWatchRecord>()
+
+function recordKey(
+  owner: OfficeHostOwner,
+  document: { workspaceRoot: string; relativePath: string }
+): string {
+  // A JSON tuple, not a delimiter join: a separator has to be a character neither half can contain
+  // or two pairs collide, and the NUL byte that bought that made this module binary to Git.
+  return JSON.stringify([officeHostOwnerKey(owner), document.workspaceRoot, document.relativePath])
+}
+
+export function rememberOfficeWatch(
+  owner: OfficeHostOwner,
+  document: { workspaceRoot: string; relativePath: string }
+): void {
+  records.set(recordKey(owner, document), { owner, document })
+}
+
+export function forgetOfficeWatch(
+  owner: OfficeHostOwner,
+  document: { workspaceRoot: string; relativePath: string }
+): void {
+  records.delete(recordKey(owner, document))
+}
+
+/**
+ * Stop every watch this client started, on whichever host owns it.
+ *
+ * Best-effort by nature: a host that cannot be reached cannot be told to stop, and that is
+ * `unverifiable`, not proof the process died. The record is dropped either way — keeping it would
+ * make the next teardown retry a host that may no longer exist — and the host's own relay shutdown
+ * is the second line of defence.
+ */
+export async function stopAllClientOfficeWatches(): Promise<void> {
+  const pending = [...records.values()]
+  records.clear()
+  await Promise.all(
+    pending.map((record) =>
+      dispatchOfficeRequest(record.owner, OFFICE_WATCH_STOP_METHOD, record.document).catch(
+        () => undefined
+      )
+    )
+  )
+}
