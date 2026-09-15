@@ -39,7 +39,8 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   devin: 'UserPromptSubmit',
   opencode: 'SessionStart',
   'mimo-code': null,
-  'command-code': null
+  'command-code': null,
+  'mistral-vibe': 'post_agent'
 }
 
 function reviveRetiredPane(source: unknown, hookEventName: string): boolean {

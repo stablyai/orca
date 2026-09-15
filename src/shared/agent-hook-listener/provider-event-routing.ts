@@ -19,6 +19,7 @@ import { extractCommandCodeToolFields } from './providers/command-code-tool-fiel
 import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
+import { extractVibeToolFields } from './providers/vibe-tool-fields'
 
 /** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
  *  observation stamp reuses it instead of minting a second list of event-name literals. */
@@ -65,6 +66,8 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'mistral-vibe':
+      return eventName === 'post_agent'
   }
 }
 
@@ -157,5 +160,7 @@ export function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'mistral-vibe':
+      return extractVibeToolFields(eventName, hookPayload)
   }
 }
