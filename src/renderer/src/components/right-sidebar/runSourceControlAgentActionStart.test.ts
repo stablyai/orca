@@ -57,7 +57,7 @@ describe('runSourceControlAgentActionStart', () => {
 
   it('waits for deferred prompt delivery before confirming a source-control launch', async () => {
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true,
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
@@ -84,7 +84,7 @@ describe('runSourceControlAgentActionStart', () => {
     const onLaunchAccepted = vi.fn()
     const onLaunchAborted = vi.fn()
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true,
       promptDeliveryResult
@@ -110,7 +110,7 @@ describe('runSourceControlAgentActionStart', () => {
   it('fires onLaunchAccepted exactly once and only when a tab was created', async () => {
     const onLaunchAccepted = vi.fn()
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true,
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
@@ -136,7 +136,7 @@ describe('runSourceControlAgentActionStart', () => {
     const onLaunchAccepted = vi.fn()
     const onLaunchAborted = vi.fn()
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true,
       promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: true })
@@ -157,7 +157,7 @@ describe('runSourceControlAgentActionStart', () => {
     const originalConsole = console
     vi.stubGlobal('console', { ...originalConsole, error: vi.fn() })
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true,
       promptDeliveryResult: Promise.reject(new Error('boom'))
@@ -189,7 +189,7 @@ describe('runSourceControlAgentActionStart', () => {
 
   it('keeps the source-control dialog open when deferred prompt delivery fails', async () => {
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true,
       promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: false })
@@ -206,7 +206,7 @@ describe('runSourceControlAgentActionStart', () => {
 
   it('does not show a generic start failure when deferred delivery already notified the user', async () => {
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true,
       promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: true })
@@ -226,7 +226,7 @@ describe('runSourceControlAgentActionStart', () => {
     const consoleError = vi.fn()
     vi.stubGlobal('console', { ...originalConsole, error: consoleError })
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true,
       promptDeliveryResult: Promise.reject(error)
@@ -247,7 +247,7 @@ describe('runSourceControlAgentActionStart', () => {
 
   it('keeps non-deferred tab launches immediate', async () => {
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true
     })
@@ -338,7 +338,7 @@ describe('runSourceControlAgentActionStart', () => {
     vi.stubGlobal('console', { ...originalConsole, error: consoleError })
     mocks.onSaveAgentDefault.mockRejectedValue(new Error('settings not loaded'))
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-1',
+      surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
       pasteDraftAfterLaunch: true,
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })

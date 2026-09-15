@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "scenarios": [
     {
       "id": "b1",
@@ -14432,6 +14432,396 @@
         },
         {
           "checkpoint": "dismissed"
+        }
+      ]
+    },
+    {
+      "id": "files-explorer-legacy-fallback",
+      "operation": "files.explorer-screen",
+      "version": 1,
+      "family": "files.explorer-screen",
+      "sites": ["mobile/src/files/MobileFileExplorerPanel.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "loading"
+        },
+        {
+          "complete": "files.readDir#1",
+          "params": {
+            "worktree": "id:wt-files",
+            "relativePath": ""
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "complete": "files.list#1",
+          "params": {
+            "worktree": "id:wt-files"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "README.md",
+                  "basename": "README.md",
+                  "kind": "text"
+                },
+                {
+                  "relativePath": "src/app.ts",
+                  "basename": "app.ts",
+                  "kind": "text"
+                }
+              ],
+              "totalCount": 2,
+              "truncated": true
+            }
+          }
+        },
+        {
+          "checkpoint": "legacy-listed"
+        }
+      ]
+    },
+    {
+      "id": "files-explorer-readdir",
+      "operation": "files.explorer-screen",
+      "version": 1,
+      "family": "files.explorer-screen",
+      "sites": ["mobile/src/files/MobileFileExplorerPanel.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "loading"
+        },
+        {
+          "complete": "files.readDir#1",
+          "params": {
+            "worktree": "id:wt-files",
+            "relativePath": ""
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "name": "src",
+                "isDirectory": true
+              },
+              {
+                "name": "README.md",
+                "isDirectory": false
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "listed"
+        }
+      ]
+    },
+    {
+      "id": "new-workspace-repositories-fulfilled",
+      "operation": "workspace.repositories",
+      "version": 1,
+      "family": "components.new-workspace-repositories",
+      "sites": ["mobile/src/components/use-new-workspace-repositories.ts"],
+      "schedules": [],
+      "deviceStore": {
+        "orca:last-visited-worktree": "{\"hostId\":\"host-1\",\"worktreeId\":\"repo-b::/tmp/repo-b\"}"
+      },
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "loading"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-a",
+                  "displayName": "alpha",
+                  "path": "/tmp/repo-a"
+                },
+                {
+                  "id": "repo-b",
+                  "displayName": "beta",
+                  "path": "/tmp/repo-b"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "selected"
+        }
+      ]
+    },
+    {
+      "id": "codex-reset-credit-consumed",
+      "operation": "accounts.codex-reset-credit",
+      "version": 1,
+      "family": "components.codex-reset-credit",
+      "sites": [
+        "mobile/src/components/codex-reset-credit.ts",
+        "mobile/src/storage/codex-reset-attempt-journal.ts"
+      ],
+      "schedules": [],
+      "deviceStore": {},
+      "steps": [
+        {
+          "action": "confirm",
+          "id": "confirm"
+        },
+        {
+          "checkpoint": "requested"
+        },
+        {
+          "complete": "accounts.consumeCodexResetCredit#1",
+          "params": {
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001",
+            "expectedScope": {
+              "target": {
+                "runtime": "host",
+                "wslDistro": null
+              },
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": "reset",
+              "scope": {
+                "target": {
+                  "runtime": "host",
+                  "wslDistro": null
+                },
+                "accountId": "codex-1",
+                "accountRevision": 1700000000000,
+                "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]"
+              },
+              "snapshot": {
+                "claude": {
+                  "accounts": [],
+                  "activeAccountId": null
+                },
+                "codex": {
+                  "accounts": [
+                    {
+                      "id": "codex-1",
+                      "email": "codex@example.test",
+                      "updatedAt": 1700000000000
+                    }
+                  ],
+                  "activeAccountId": "codex-1",
+                  "activeAccountIdsByRuntime": {
+                    "host": "codex-1",
+                    "wsl": {}
+                  }
+                },
+                "rateLimits": {
+                  "claude": null,
+                  "codex": {
+                    "provider": "codex",
+                    "session": null,
+                    "weekly": null,
+                    "rateLimitResetCredits": {
+                      "availableCount": 1
+                    },
+                    "updatedAt": 1700000000000,
+                    "error": null,
+                    "status": "ok"
+                  },
+                  "inactiveClaudeAccounts": [],
+                  "inactiveCodexAccounts": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "consumed"
+        }
+      ]
+    },
+    {
+      "id": "codex-reset-credit-resumed",
+      "operation": "accounts.codex-reset-credit",
+      "version": 1,
+      "family": "components.codex-reset-credit",
+      "sites": ["mobile/src/storage/codex-reset-attempt-journal.ts"],
+      "schedules": [],
+      "deviceStore": {
+        "orca:codex-reset-credit-attempt:v1:0832055c2fa90e8e145c588ad4db656a2fc2840ed2e851a28494eae769db9b3e": "{\"v\":1,\"hostId\":\"host-1\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"},\"idempotencyKey\":\"11111111-1111-4111-8111-111111111111\"}"
+      },
+      "steps": [
+        {
+          "action": "confirm",
+          "id": "confirm"
+        },
+        {
+          "checkpoint": "requested"
+        },
+        {
+          "complete": "accounts.consumeCodexResetCredit#1",
+          "params": {
+            "idempotencyKey": "11111111-1111-4111-8111-111111111111",
+            "expectedScope": {
+              "target": {
+                "runtime": "host",
+                "wslDistro": null
+              },
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": "alreadyRedeemed",
+              "scope": {
+                "target": {
+                  "runtime": "host",
+                  "wslDistro": null
+                },
+                "accountId": "codex-1",
+                "accountRevision": 1700000000000,
+                "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]"
+              },
+              "snapshot": {
+                "claude": {
+                  "accounts": [],
+                  "activeAccountId": null
+                },
+                "codex": {
+                  "accounts": [
+                    {
+                      "id": "codex-1",
+                      "email": "codex@example.test",
+                      "updatedAt": 1700000000000
+                    }
+                  ],
+                  "activeAccountId": "codex-1",
+                  "activeAccountIdsByRuntime": {
+                    "host": "codex-1",
+                    "wsl": {}
+                  }
+                },
+                "rateLimits": {
+                  "claude": null,
+                  "codex": {
+                    "provider": "codex",
+                    "session": null,
+                    "weekly": null,
+                    "rateLimitResetCredits": {
+                      "availableCount": 1
+                    },
+                    "updatedAt": 1700000000000,
+                    "error": null,
+                    "status": "ok"
+                  },
+                  "inactiveClaudeAccounts": [],
+                  "inactiveCodexAccounts": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "consumed"
+        }
+      ]
+    },
+    {
+      "id": "push-dismissal-tray-reconciled",
+      "operation": "notifications.push-dismissal",
+      "version": 1,
+      "family": "notifications.push-dismissal",
+      "sites": ["mobile/src/notifications/push-dismissal-reconciliation.ts"],
+      "schedules": [],
+      "deviceStore": {
+        "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"wss://desk.test\",\"publicKeyB64\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationTray": [
+          {
+            "request": {
+              "identifier": "tray-1",
+              "content": {
+                "data": {
+                  "hostFingerprint": "Yw3NKWbEM2aRElRI",
+                  "kind": "alert",
+                  "notificationId": "note-1",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 7
+                }
+              }
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "action": "catchup",
+          "id": "catchup"
+        },
+        {
+          "checkpoint": "requested"
+        },
+        {
+          "complete": "notifications.getMissedSince#1",
+          "params": {
+            "lastSeenSeq": 9007199254740991,
+            "deliveredPushes": [
+              {
+                "notificationId": "note-1",
+                "notificationEpoch": "epoch-1",
+                "notificationSeq": 7
+              }
+            ]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "dismissedPushes": [
+                {
+                  "notificationId": "note-1",
+                  "notificationEpoch": "epoch-1",
+                  "notificationSeq": 7
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "reconciled"
         }
       ]
     }

@@ -3,9 +3,9 @@
   "family": "terminal.viewport-refit",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "bde05ca916393d7f5ccd48686cf13a52fb2dfa599ea874b084c58bd59adb7e7f",
   "platform": "darwin",
@@ -13,12 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "05338e19b42a": {
-      "name": "subscribe-terminal",
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
     "121036dfcf5a": {
       "name": "terminal.updateViewport#1",
       "args": [
@@ -102,6 +96,21 @@
           }
         }
       }
+    },
+    "37024426b62f": {
+      "name": "subscribe-terminal",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 1
+    },
+    "3c255f83f3e1": {
+      "name": "reflow",
+      "value": {
+        "cols": 100,
+        "rows": 30
+      },
+      "sent": 1
     },
     "3f6a9fc794e0": {
       "name": "terminal.updateViewport#1",
@@ -217,25 +226,6 @@
           "id": "frame-1",
           "ok": true
         }
-      }
-    },
-    "472aa5c4220c": {
-      "name": "measure-fit",
-      "value": {
-        "frameHeight": 600
-      }
-    },
-    "58cda7b4ca05": {
-      "name": "reflow",
-      "value": {
-        "cols": 100,
-        "rows": 30
-      }
-    },
-    "5fde1571425b": {
-      "name": "unsubscribe-terminal",
-      "value": {
-        "handle": "terminal-1"
       }
     },
     "7e0619ad636f": {
@@ -375,6 +365,20 @@
           }
         }
       }
+    },
+    "a1c0c7168922": {
+      "name": "unsubscribe-terminal",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 1
+    },
+    "a993d0d38252": {
+      "name": "measure-fit",
+      "value": {
+        "frameHeight": 600
+      },
+      "sent": 0
     },
     "ba81b169e3b7": {
       "name": "terminal.updateViewport#1",
@@ -523,7 +527,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "58cda7b4ca05"]
+          "effects": ["a993d0d38252", "3c255f83f3e1"]
         }
       },
       {
@@ -536,7 +540,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
@@ -549,7 +553,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
@@ -562,7 +566,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
@@ -575,7 +579,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
@@ -588,7 +592,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
@@ -601,7 +605,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
@@ -614,7 +618,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
@@ -627,7 +631,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
@@ -640,7 +644,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       },
       {
@@ -653,7 +657,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "5fde1571425b", "05338e19b42a"]
+          "effects": ["a993d0d38252", "a1c0c7168922", "37024426b62f"]
         }
       }
     ]

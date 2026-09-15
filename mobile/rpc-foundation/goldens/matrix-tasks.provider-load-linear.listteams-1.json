@@ -3,9 +3,9 @@
   "family": "tasks.provider-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "e518040cbd40e3cc8c22e0b70b6de1087386936f75ed2f65f6e7b4fcdc344ba2",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0182b1872be2": {
-      "name": "selectedLinearWorkspaceId",
-      "value": "linear-workspace"
-    },
     "0a6ad30d39df": {
       "connected": true,
       "selectedTeams": [],
@@ -97,11 +93,10 @@
         }
       }
     },
-    "11dbbb2ef04c": {
-      "name": "linearTeams",
-      "value": {
-        "error": "refused"
-      }
+    "0faba633b165": {
+      "name": "selectedLinearWorkspaceId",
+      "value": "linear-workspace",
+      "sent": 1
     },
     "1a92facf7fe2": {
       "name": "linear.listTeams#1",
@@ -210,6 +205,16 @@
       "settledAt": 0,
       "value": 4
     },
+    "47dd57bc8f58": {
+      "name": "linearTeams",
+      "value": {
+        "error": {
+          "message": "inner refused"
+        },
+        "ok": false
+      },
+      "sent": 2
+    },
     "49c5fd241816": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -249,14 +254,6 @@
           }
         }
       }
-    },
-    "50941ff8a9e3": {
-      "name": "linearConnected",
-      "value": true
-    },
-    "50f6d11bf12d": {
-      "name": "selectedLinearTeamIds",
-      "value": ["team-1"]
     },
     "5366d6506b21": {
       "name": "linear.listTeams#1",
@@ -323,6 +320,23 @@
         }
       }
     },
+    "552cce3107ea": {
+      "name": "linearWorkspaces",
+      "value": [
+        {
+          "id": "linear-workspace",
+          "name": "Workspace"
+        }
+      ],
+      "sent": 1
+    },
+    "56537bf8a7ad": {
+      "name": "linearTeams",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 2
+    },
     "67b5ebc67646": {
       "connected": true,
       "selectedTeams": ["team-1"],
@@ -342,14 +356,10 @@
         }
       ]
     },
-    "6e94ef6ce810": {
-      "name": "linearTeams",
-      "value": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      }
+    "69d74e72326c": {
+      "name": "linearConnected",
+      "value": true,
+      "sent": 1
     },
     "775d7e2fb99d": {
       "name": "linear.status#1",
@@ -564,7 +574,7 @@
         }
       }
     },
-    "89bbb50f70ec": {
+    "8e1216596b9c": {
       "name": "linearTeams",
       "value": [
         {
@@ -573,7 +583,8 @@
           "name": "Engineering",
           "workspaceId": "linear-workspace"
         }
-      ]
+      ],
+      "sent": 2
     },
     "93e7019b0698": {
       "status": "rejected",
@@ -584,6 +595,13 @@
         "message": "Cannot read properties of undefined (reading 'map')",
         "isRpcDeliveryUnknown": false
       }
+    },
+    "95592fc22995": {
+      "name": "linearTeams",
+      "value": {
+        "$rpc": "undefined"
+      },
+      "sent": 2
     },
     "9b27648fc6b9": {
       "status": "rejected",
@@ -704,15 +722,6 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "ba929d11c91c": {
-      "name": "linearWorkspaces",
-      "value": [
-        {
-          "id": "linear-workspace",
-          "name": "Workspace"
-        }
-      ]
-    },
     "bd5c2292b89a": {
       "connected": true,
       "selectedTeams": [],
@@ -728,6 +737,11 @@
     "bfba52c22ce2": {
       "name": "linear.listTeams#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\",\"params\":{\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "c1c057249f99": {
+      "name": "selectedLinearTeamIds",
+      "value": ["team-1"],
+      "sent": 2
     },
     "c1e3ae5492e1": {
       "name": "github.countWorkItems#1",
@@ -778,13 +792,6 @@
         }
       }
     },
-    "d74b0f3fb507": {
-      "name": "linearTeams",
-      "value": {
-        "error": "inner refused",
-        "ok": false
-      }
-    },
     "d8aa5fae89ce": {
       "connected": true,
       "selectedTeams": [],
@@ -799,21 +806,17 @@
         }
       ]
     },
-    "daf57f2538da": {
+    "d9ae9e9a0660": {
       "name": "linearTeams",
       "value": {
-        "$rpc": "null"
-      }
+        "error": "inner refused",
+        "ok": false
+      },
+      "sent": 2
     },
     "e19509ebde55": {
       "name": "linear.status#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-    },
-    "e91ea8177e6e": {
-      "name": "linearTeams",
-      "value": {
-        "$rpc": "undefined"
-      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -865,6 +868,13 @@
         "message": "",
         "isRpcDeliveryUnknown": false
       }
+    },
+    "fccc4f6aae53": {
+      "name": "linearTeams",
+      "value": {
+        "error": "refused"
+      },
+      "sent": 2
     }
   },
   "recording": {
@@ -881,11 +891,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "69d74e72326c",
+            "552cce3107ea",
+            "0faba633b165",
+            "8e1216596b9c",
+            "c1c057249f99"
           ]
         }
       },
@@ -901,11 +911,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "69d74e72326c",
+            "552cce3107ea",
+            "0faba633b165",
+            "8e1216596b9c",
+            "c1c057249f99"
           ]
         }
       },
@@ -922,11 +932,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "69d74e72326c",
+            "552cce3107ea",
+            "0faba633b165",
+            "8e1216596b9c",
+            "c1c057249f99"
           ]
         }
       },
@@ -956,11 +966,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "69d74e72326c",
+            "552cce3107ea",
+            "0faba633b165",
+            "8e1216596b9c",
+            "c1c057249f99"
           ]
         }
       },
@@ -974,7 +984,7 @@
             "linear-context-0": "93e7019b0698"
           },
           "state": "d8aa5fae89ce",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "e91ea8177e6e"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "95592fc22995"]
         }
       },
       {
@@ -988,7 +998,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "d8aa5fae89ce",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "e91ea8177e6e"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "95592fc22995"]
         }
       },
       {
@@ -1003,7 +1013,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "d8aa5fae89ce",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "e91ea8177e6e"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "95592fc22995"]
         }
       },
       {
@@ -1031,7 +1041,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "d8aa5fae89ce",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "e91ea8177e6e"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "95592fc22995"]
         }
       },
       {
@@ -1044,7 +1054,7 @@
             "linear-context-0": "335785e8af30"
           },
           "state": "a591435f3ef1",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "daf57f2538da"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "56537bf8a7ad"]
         }
       },
       {
@@ -1058,7 +1068,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "a591435f3ef1",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "daf57f2538da"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "56537bf8a7ad"]
         }
       },
       {
@@ -1073,7 +1083,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "a591435f3ef1",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "daf57f2538da"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "56537bf8a7ad"]
         }
       },
       {
@@ -1101,7 +1111,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "a591435f3ef1",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "daf57f2538da"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "56537bf8a7ad"]
         }
       },
       {
@@ -1114,7 +1124,7 @@
             "linear-context-0": "9b27648fc6b9"
           },
           "state": "0a6ad30d39df",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "11dbbb2ef04c"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "fccc4f6aae53"]
         }
       },
       {
@@ -1128,7 +1138,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "0a6ad30d39df",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "11dbbb2ef04c"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "fccc4f6aae53"]
         }
       },
       {
@@ -1143,7 +1153,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "0a6ad30d39df",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "11dbbb2ef04c"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "fccc4f6aae53"]
         }
       },
       {
@@ -1171,7 +1181,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "0a6ad30d39df",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "11dbbb2ef04c"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "fccc4f6aae53"]
         }
       },
       {
@@ -1184,7 +1194,7 @@
             "linear-context-0": "9b27648fc6b9"
           },
           "state": "7ec901b0100d",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "d74b0f3fb507"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "d9ae9e9a0660"]
         }
       },
       {
@@ -1198,7 +1208,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "7ec901b0100d",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "d74b0f3fb507"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "d9ae9e9a0660"]
         }
       },
       {
@@ -1213,7 +1223,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "7ec901b0100d",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "d74b0f3fb507"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "d9ae9e9a0660"]
         }
       },
       {
@@ -1241,7 +1251,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "7ec901b0100d",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "d74b0f3fb507"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "d9ae9e9a0660"]
         }
       },
       {
@@ -1254,7 +1264,7 @@
             "linear-context-0": "9b27648fc6b9"
           },
           "state": "4079678c7804",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "6e94ef6ce810"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "47dd57bc8f58"]
         }
       },
       {
@@ -1268,7 +1278,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "4079678c7804",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "6e94ef6ce810"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "47dd57bc8f58"]
         }
       },
       {
@@ -1283,7 +1293,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "4079678c7804",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "6e94ef6ce810"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "47dd57bc8f58"]
         }
       },
       {
@@ -1311,7 +1321,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "4079678c7804",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2", "6e94ef6ce810"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165", "47dd57bc8f58"]
         }
       },
       {
@@ -1324,7 +1334,7 @@
             "linear-context-0": "32a7c0ae7918"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1338,7 +1348,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1353,7 +1363,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1381,7 +1391,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1394,7 +1404,7 @@
             "linear-context-0": "f3b516f62081"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1408,7 +1418,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1423,7 +1433,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1451,7 +1461,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1464,7 +1474,7 @@
             "linear-context-0": "b948e8307e81"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1478,7 +1488,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1493,7 +1503,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1521,7 +1531,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1534,7 +1544,7 @@
             "linear-context-0": "a947768bc0ed"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1548,7 +1558,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1563,7 +1573,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1591,7 +1601,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1604,7 +1614,7 @@
             "linear-context-0": "c7584e82c72f"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1618,7 +1628,7 @@
             "persist-teams-1": "eb79a9b3682a"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1633,7 +1643,7 @@
             "github-page-2": "49c5fd241816"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       },
       {
@@ -1661,7 +1671,7 @@
             "github-count-3": "413e4f429e18"
           },
           "state": "bd5c2292b89a",
-          "effects": ["50941ff8a9e3", "ba929d11c91c", "0182b1872be2"]
+          "effects": ["69d74e72326c", "552cce3107ea", "0faba633b165"]
         }
       }
     ]

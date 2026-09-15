@@ -3,9 +3,9 @@
   "family": "tasks.project-row-comments-pr",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "55058202df36c8b951510215936e496ea88d3d71a6690090a13c52deb13e34e1",
   "scenarioSha256": "e5ff558593fd32d66e6ba1722ebf54d50992c9c2b6db41ef2435b47972fbd0fd",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "02839f22d2db": {
+      "name": "projectMutating",
+      "value": false,
+      "sent": 1
+    },
     "0fa9db1cc7c0": {
       "name": "github.project.updatePullRequestBySlug#1",
       "args": [
@@ -51,10 +56,6 @@
           }
         }
       }
-    },
-    "2cd14f7121a5": {
-      "name": "projectMutating",
-      "value": false
     },
     "2d1e8ede1fcf": {
       "detail": {
@@ -122,11 +123,16 @@
         "itemType": "PULL_REQUEST"
       }
     },
+    "7b2465eedefe": {
+      "name": "projectMutating",
+      "value": true,
+      "sent": 0
+    },
     "80e87e83df29": {
       "name": "github.project.updatePullRequestBySlug#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updatePullRequestBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":2,\"updates\":{\"title\":\"Renamed\"}}}"
     },
-    "944afddca6db": {
+    "c8e3f060e5f1": {
       "name": "projectRowItem",
       "value": {
         "content": {
@@ -144,13 +150,10 @@
         "fieldValuesByFieldId": {},
         "id": "item-2",
         "itemType": "PULL_REQUEST"
-      }
+      },
+      "sent": 1
     },
-    "c2a271fc5d97": {
-      "name": "projectMutating",
-      "value": true
-    },
-    "d8d5425b5f04": {
+    "c9abda0c6d89": {
       "name": "githubProjectTable",
       "value": {
         "fields": [
@@ -208,7 +211,8 @@
           "name": "Table",
           "number": 1
         }
-      }
+      },
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -232,7 +236,7 @@
             "update-item-0": "eb79a9b3682a"
           },
           "state": "2d1e8ede1fcf",
-          "effects": ["c2a271fc5d97", "944afddca6db", "d8d5425b5f04", "2cd14f7121a5"]
+          "effects": ["7b2465eedefe", "c8e3f060e5f1", "c9abda0c6d89", "02839f22d2db"]
         }
       }
     ]

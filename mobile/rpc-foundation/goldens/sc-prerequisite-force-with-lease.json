@@ -3,9 +3,9 @@
   "family": "git.remote-prerequisite",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "ec2847b4af357d8564d8e0a9a1072713c1afd7ff86ba69e9c83c056a6841ee39",
   "platform": "darwin",
@@ -62,13 +62,14 @@
         }
       }
     },
+    "3e471b70b788": {
+      "name": "progress",
+      "value": "force_pushing",
+      "sent": 0
+    },
     "ef6c20bf075b": {
       "name": "git.push#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"forceWithLease\":true}}"
-    },
-    "f664712ae7ac": {
-      "name": "progress",
-      "value": "force_pushing"
     }
   },
   "recording": {
@@ -83,7 +84,7 @@
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["f664712ae7ac"]
+          "effects": ["3e471b70b788"]
         }
       }
     ]

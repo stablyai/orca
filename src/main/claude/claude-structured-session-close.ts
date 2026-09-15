@@ -98,6 +98,14 @@ async function finalizeClaudePublishedSession(
     prompt.settle(null)
   }
   if ((await session.connection.close()) !== true) {
+    const cleanupError = claudeAcquisitionCleanupError(
+      session.connection,
+      new Error('provider close unproven')
+    )
+    // Why: the owner can release proven root-exit/processless sessions; genuinely unknown exits retry.
+    if (!(cleanupError instanceof AgentSessionAcquisitionExitUnprovenError)) {
+      throw cleanupError
+    }
     return false
   }
   if (session.backgroundTasks.clear()) {
@@ -263,6 +271,14 @@ export async function closeClaudeSession(input: {
 }): Promise<boolean> {
   const attempt = input.acquisitions.get(input.sessionId)
   if (!(await cancelClaudeAcquisitionAttempt(attempt))) {
+    const cleanupError = claudeAcquisitionCleanupError(
+      attempt?.connection,
+      new Error('acquisition cancel unproven')
+    )
+    // Why: cancellation must preserve the same actionable verdict as published-session close.
+    if (!(cleanupError instanceof AgentSessionAcquisitionExitUnprovenError)) {
+      throw cleanupError
+    }
     return false
   }
   if (attempt) {

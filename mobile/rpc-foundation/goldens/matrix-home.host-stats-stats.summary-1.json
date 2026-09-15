@@ -3,9 +3,9 @@
   "family": "home.host-stats",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "a9e0780298a1443664e7ae02056168aa34d67556c9c056d51a82c7b4a73ad35b",
   "scenarioSha256": "5518e08c1b20f0ddd4cb6bc81ff9af032b1a38daf24f3d3497bac5df8b2d0ec5",
   "platform": "darwin",
@@ -44,15 +44,6 @@
             "error": "inner refused",
             "ok": false
           }
-        }
-      }
-    },
-    "0632d58191fb": {
-      "name": "stats",
-      "value": {
-        "host-1": {
-          "activeWorktrees": 1,
-          "totalWorktrees": 3
         }
       }
     },
@@ -123,13 +114,14 @@
         }
       }
     },
-    "2f0d38ebf67c": {
+    "334d5072a3ae": {
       "name": "stats",
       "value": {
         "host-1": {
           "$rpc": "undefined"
         }
-      }
+      },
+      "sent": 1
     },
     "44136fa355b3": {},
     "556edbbc8712": {
@@ -137,30 +129,36 @@
         "$rpc": "null"
       }
     },
-    "5d85cea3ab32": {
-      "name": "stats",
-      "value": {
-        "host-1": {
-          "error": "inner refused",
-          "ok": false
-        }
-      }
-    },
-    "6fe0cca6ed2a": {
-      "name": "stats",
-      "value": {
-        "host-1": {
-          "error": "refused"
-        }
-      }
-    },
-    "7b564b8fe22e": {
+    "71f63720e55d": {
       "name": "stats",
       "value": {
         "host-1": {
           "$rpc": "null"
         }
-      }
+      },
+      "sent": 1
+    },
+    "774545f8062f": {
+      "name": "stats",
+      "value": {
+        "host-1": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        }
+      },
+      "sent": 1
+    },
+    "7836888bb6c0": {
+      "name": "stats",
+      "value": {
+        "host-1": {
+          "activeWorktrees": 1,
+          "totalWorktrees": 3
+        }
+      },
+      "sent": 1
     },
     "7bf81b1e94c5": {
       "name": "stats.summary#1",
@@ -170,17 +168,6 @@
       "host-1": {
         "activeWorktrees": 1,
         "totalWorktrees": 3
-      }
-    },
-    "9b2c7b6a4f74": {
-      "name": "stats",
-      "value": {
-        "host-1": {
-          "error": {
-            "message": "inner refused"
-          },
-          "ok": false
-        }
       }
     },
     "9c34abfa17e7": {
@@ -425,6 +412,16 @@
         }
       }
     },
+    "e242a638aa23": {
+      "name": "stats",
+      "value": {
+        "host-1": {
+          "error": "inner refused",
+          "ok": false
+        }
+      },
+      "sent": 1
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -432,6 +429,15 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ec55f57d0b5d": {
+      "name": "stats",
+      "value": {
+        "host-1": {
+          "error": "refused"
+        }
+      },
+      "sent": 1
     },
     "f9b87a5a7a70": {
       "name": "stats.summary#1",
@@ -528,7 +534,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "9a84a7559023",
-          "effects": ["0632d58191fb"]
+          "effects": ["7836888bb6c0"]
         }
       },
       {
@@ -540,7 +546,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "c5bfd5f18460",
-          "effects": ["2f0d38ebf67c"]
+          "effects": ["334d5072a3ae"]
         }
       },
       {
@@ -552,7 +558,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "556edbbc8712",
-          "effects": ["7b564b8fe22e"]
+          "effects": ["71f63720e55d"]
         }
       },
       {
@@ -564,7 +570,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "b474d2a02a6a",
-          "effects": ["6fe0cca6ed2a"]
+          "effects": ["ec55f57d0b5d"]
         }
       },
       {
@@ -576,7 +582,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "e05986a4b6e2",
-          "effects": ["5d85cea3ab32"]
+          "effects": ["e242a638aa23"]
         }
       },
       {
@@ -588,7 +594,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "9c34abfa17e7",
-          "effects": ["9b2c7b6a4f74"]
+          "effects": ["774545f8062f"]
         }
       },
       {

@@ -3,9 +3,9 @@
   "family": "tasks.provider-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "21b6272878cba5f2b41c89378c178933ffc9406fe69b9c693fc5021a265ef2c9",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0182b1872be2": {
-      "name": "selectedLinearWorkspaceId",
-      "value": "linear-workspace"
-    },
     "0f9c77bd54ee": {
       "name": "github.countWorkItems#1",
       "args": [
@@ -48,6 +44,11 @@
           "result": 4
         }
       }
+    },
+    "0faba633b165": {
+      "name": "selectedLinearWorkspaceId",
+      "value": "linear-workspace",
+      "sent": 1
     },
     "413e4f429e18": {
       "status": "fulfilled",
@@ -95,13 +96,15 @@
         }
       }
     },
-    "50941ff8a9e3": {
-      "name": "linearConnected",
-      "value": true
-    },
-    "50f6d11bf12d": {
-      "name": "selectedLinearTeamIds",
-      "value": ["team-1"]
+    "552cce3107ea": {
+      "name": "linearWorkspaces",
+      "value": [
+        {
+          "id": "linear-workspace",
+          "name": "Workspace"
+        }
+      ],
+      "sent": 1
     },
     "67b5ebc67646": {
       "connected": true,
@@ -121,6 +124,11 @@
           "name": "Workspace"
         }
       ]
+    },
+    "69d74e72326c": {
+      "name": "linearConnected",
+      "value": true,
+      "sent": 1
     },
     "775d7e2fb99d": {
       "name": "linear.status#1",
@@ -217,7 +225,7 @@
         }
       }
     },
-    "89bbb50f70ec": {
+    "8e1216596b9c": {
       "name": "linearTeams",
       "value": [
         {
@@ -226,7 +234,8 @@
           "name": "Engineering",
           "workspaceId": "linear-workspace"
         }
-      ]
+      ],
+      "sent": 2
     },
     "a6bfe3e8ec00": {
       "name": "settings.update#1",
@@ -303,18 +312,14 @@
       "name": "settings.update#1",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultLinearTeamSelection\":[\"team-1\"]}}"
     },
-    "ba929d11c91c": {
-      "name": "linearWorkspaces",
-      "value": [
-        {
-          "id": "linear-workspace",
-          "name": "Workspace"
-        }
-      ]
-    },
     "bfba52c22ce2": {
       "name": "linear.listTeams#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\",\"params\":{\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "c1c057249f99": {
+      "name": "selectedLinearTeamIds",
+      "value": ["team-1"],
+      "sent": 2
     },
     "c1e3ae5492e1": {
       "name": "github.countWorkItems#1",
@@ -351,11 +356,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "69d74e72326c",
+            "552cce3107ea",
+            "0faba633b165",
+            "8e1216596b9c",
+            "c1c057249f99"
           ]
         }
       },
@@ -371,11 +376,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "69d74e72326c",
+            "552cce3107ea",
+            "0faba633b165",
+            "8e1216596b9c",
+            "c1c057249f99"
           ]
         }
       },
@@ -392,11 +397,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "69d74e72326c",
+            "552cce3107ea",
+            "0faba633b165",
+            "8e1216596b9c",
+            "c1c057249f99"
           ]
         }
       },
@@ -426,11 +431,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "69d74e72326c",
+            "552cce3107ea",
+            "0faba633b165",
+            "8e1216596b9c",
+            "c1c057249f99"
           ]
         }
       }

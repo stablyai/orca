@@ -1,4 +1,5 @@
 import type { RpcClient } from '../../transport/rpc-client'
+import type { DeclaredDeviceState } from './declared-device-state'
 import type { RecordedValue } from './recording-values'
 
 export type RpcRequestSender = Pick<RpcClient, 'sendRequest'>
@@ -18,7 +19,8 @@ export type ScenarioStep =
   | { bind: string; request: string; params: unknown; optional?: true }
   | { advance: number }
   | { checkpoint: string }
-export type RecordingScenario = {
+/** A scenario may declare device state; see `declared-device-state.ts` for what a declaration buys. */
+export type RecordingScenario = DeclaredDeviceState & {
   id: string
   operation: string
   version: number

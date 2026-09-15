@@ -3,9 +3,9 @@
   "family": "tasks.linear-item",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "97cfbcd82778ed6517ca2d10b2f3ad5a8d366e380d7846c1e89d5a5baf17e739",
   "scenarioSha256": "8a5c5b210459d3938bc010bc88c69696a631072cd5a6b7e1a3eb3e1fd0da9c8a",
   "platform": "darwin",
@@ -13,46 +13,20 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "066ce15717c8": {
+    "0c0d6ea592d5": {
       "name": "mutatingStatus",
-      "value": true
+      "value": false,
+      "sent": 3
     },
-    "127382fd146b": {
-      "name": "actionItem",
-      "value": {
-        "key": "linear:linear-workspace:issue-2",
-        "provider": "linear",
-        "source": {
-          "description": "a description",
-          "id": "issue-2",
-          "identifier": "ENG-2",
-          "labels": [],
-          "priority": 0,
-          "state": {
-            "color": "#000",
-            "name": "Todo",
-            "type": "unstarted"
-          },
-          "subIssues": [],
-          "team": {
-            "id": "team-1",
-            "key": "ENG",
-            "name": "Engineering"
-          },
-          "title": "A sub-issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z",
-          "url": "",
-          "workspaceId": "linear-workspace"
-        },
-        "status": "Todo",
-        "subtitle": "ENG-2 · Engineering",
-        "title": "A sub-issue",
-        "updatedAt": "2020-01-01T00:00:00.000Z"
-      }
+    "12b9ca6d3411": {
+      "name": "linearCommentDraft",
+      "value": "",
+      "sent": 1
     },
-    "186f44bc465a": {
+    "18d6aedd20c0": {
       "name": "error",
-      "value": "Unknown method"
+      "value": "outer refused",
+      "sent": 3
     },
     "1c50877ad554": {
       "error": "transport failure",
@@ -109,6 +83,11 @@
         },
         "provider": "linear"
       }
+    },
+    "1ca8ccb3785a": {
+      "name": "error",
+      "value": "Cannot read properties of undefined (reading 'ok')",
+      "sent": 3
     },
     "1dcf350b71f7": {
       "error": "",
@@ -207,9 +186,10 @@
       "name": "linear.addIssueComment#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.addIssueComment\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\",\"body\":\"a linear comment\"}}"
     },
-    "2b3e1c8e96c4": {
-      "name": "linearSubIssueTitle",
-      "value": ""
+    "26374b8263d6": {
+      "name": "error",
+      "value": "transport failure",
+      "sent": 3
     },
     "2c8f51509f45": {
       "name": "linear.getIssue#1",
@@ -264,9 +244,15 @@
         }
       }
     },
-    "2d711d96f190": {
-      "name": "error",
-      "value": "Cannot read properties of null (reading 'ok')"
+    "310aa929de22": {
+      "name": "linearSubIssueTitle",
+      "value": "",
+      "sent": 3
+    },
+    "32a3635e06a4": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 1
     },
     "3537547b034c": {
       "name": "linear.createIssue#1",
@@ -307,6 +293,11 @@
           "ok": false
         }
       }
+    },
+    "3bc7dc745e57": {
+      "name": "error",
+      "value": "[object Object]",
+      "sent": 3
     },
     "48107958be60": {
       "error": "",
@@ -370,6 +361,39 @@
         },
         "provider": "linear"
       }
+    },
+    "4b870cf7c216": {
+      "name": "detailPayload",
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [
+          {
+            "id": "issue-3",
+            "identifier": "ENG-3",
+            "title": "A sub-issue",
+            "url": ""
+          }
+        ],
+        "comments": [
+          {
+            "body": "a linear comment",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "comment-9",
+            "user": {
+              "displayName": "You"
+            }
+          }
+        ],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
+      },
+      "sent": 3
     },
     "4c69e7210f1a": {
       "name": "linear.addIssueComment#1",
@@ -467,6 +491,11 @@
       "name": "linear.getIssue#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-2\",\"workspaceId\":\"linear-workspace\"}}"
     },
+    "583b546bd557": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 1
+    },
     "6544d325ab6e": {
       "name": "linear.createIssue#1",
       "args": [
@@ -504,30 +533,10 @@
         }
       }
     },
-    "6eb786a2e054": {
-      "name": "detailPayload",
-      "value": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [
-          {
-            "body": "a linear comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "comment-9",
-            "user": {
-              "displayName": "You"
-            }
-          }
-        ],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
+    "6e6324634191": {
+      "name": "error",
+      "value": "inner refused",
+      "sent": 3
     },
     "6fbb2167a2a8": {
       "name": "linear.createIssue#1",
@@ -574,10 +583,6 @@
           }
         }
       }
-    },
-    "79d6e6aa0201": {
-      "name": "error",
-      "value": "refused"
     },
     "7a8140de3f8b": {
       "name": "linear.createIssue#1",
@@ -770,9 +775,10 @@
         "provider": "linear"
       }
     },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
+    "82983d26b169": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 2
     },
     "82e1d0775df9": {
       "name": "linear.createIssue#1",
@@ -906,6 +912,11 @@
         }
       }
     },
+    "8cde53a56cdf": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 2
+    },
     "910853564928": {
       "name": "linear.createIssue#1",
       "args": [
@@ -1005,10 +1016,6 @@
         "provider": "linear"
       }
     },
-    "945ea389c1ef": {
-      "name": "error",
-      "value": "transport failure"
-    },
     "95e8e6626c1f": {
       "error": "Cannot read properties of null (reading 'ok')",
       "item": {
@@ -1104,9 +1111,15 @@
         }
       }
     },
-    "9f82f10075a3": {
+    "9e263f5e91be": {
       "name": "error",
-      "value": "Connection closed"
+      "value": "",
+      "sent": 0
+    },
+    "a39be9459b2b": {
+      "name": "error",
+      "value": "refused",
+      "sent": 3
     },
     "a7f0744be826": {
       "error": "[object Object]",
@@ -1164,6 +1177,32 @@
         "provider": "linear"
       }
     },
+    "abeee718b4b5": {
+      "name": "detailPayload",
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a linear comment",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "comment-9",
+            "user": {
+              "displayName": "You"
+            }
+          }
+        ],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
+      },
+      "sent": 1
+    },
     "acebdd95fdf3": {
       "name": "linear.createIssue#1",
       "args": [
@@ -1204,21 +1243,74 @@
         }
       }
     },
-    "ae5be7de2632": {
+    "b57ded8a3ea3": {
       "name": "error",
-      "value": "Cannot read properties of undefined (reading 'ok')"
+      "value": "",
+      "sent": 2
     },
-    "ba65a7abe43b": {
+    "c68ce1c1e224": {
       "name": "error",
-      "value": "outer refused"
+      "value": "Unknown method",
+      "sent": 3
     },
-    "bb911bff1d1d": {
-      "name": "linearCommentDraft",
-      "value": ""
+    "cc96725d8f47": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 0
     },
-    "c008e85e2d06": {
+    "d48d5c49486c": {
       "name": "error",
-      "value": "inner refused"
+      "value": "",
+      "sent": 1
+    },
+    "d8557b0e0565": {
+      "name": "error",
+      "value": "Cannot read properties of null (reading 'ok')",
+      "sent": 3
+    },
+    "dabcddbeb1c5": {
+      "name": "error",
+      "value": "Connection closed",
+      "sent": 3
+    },
+    "db29b57926b1": {
+      "name": "actionItem",
+      "value": {
+        "key": "linear:linear-workspace:issue-2",
+        "provider": "linear",
+        "source": {
+          "description": "a description",
+          "id": "issue-2",
+          "identifier": "ENG-2",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "A sub-issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
+        },
+        "status": "Todo",
+        "subtitle": "ENG-2 · Engineering",
+        "title": "A sub-issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z"
+      },
+      "sent": 2
+    },
+    "dbbebbd74a18": {
+      "name": "error",
+      "value": "",
+      "sent": 3
     },
     "dcb5a0348220": {
       "error": "",
@@ -1321,46 +1413,6 @@
         "$rpc": "undefined"
       }
     },
-    "ecc1b4e0914f": {
-      "name": "error",
-      "value": "[object Object]"
-    },
-    "f02550278f6a": {
-      "name": "mutatingStatus",
-      "value": false
-    },
-    "f450feb912ee": {
-      "name": "detailPayload",
-      "value": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [
-          {
-            "id": "issue-3",
-            "identifier": "ENG-3",
-            "title": "A sub-issue",
-            "url": ""
-          }
-        ],
-        "comments": [
-          {
-            "body": "a linear comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "comment-9",
-            "user": {
-              "displayName": "You"
-            }
-          }
-        ],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
-    },
     "f4878d38b306": {
       "error": "refused",
       "item": {
@@ -1432,11 +1484,11 @@
           },
           "state": "dcb5a0348220",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4"
           ]
         }
       },
@@ -1452,15 +1504,15 @@
           },
           "state": "7c14fba8a1fe",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1477,19 +1529,19 @@
           },
           "state": "1dcf350b71f7",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "9f82f10075a3",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "dabcddbeb1c5",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1506,20 +1558,20 @@
           },
           "state": "48107958be60",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "2b3e1c8e96c4",
-            "f450feb912ee",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "310aa929de22",
+            "4b870cf7c216",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1536,19 +1588,19 @@
           },
           "state": "54b843bb4bf8",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ae5be7de2632",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "1ca8ccb3785a",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1565,19 +1617,19 @@
           },
           "state": "95e8e6626c1f",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "2d711d96f190",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "d8557b0e0565",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1594,19 +1646,19 @@
           },
           "state": "f4878d38b306",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "79d6e6aa0201",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "a39be9459b2b",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1623,19 +1675,19 @@
           },
           "state": "933d48089040",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "c008e85e2d06",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "6e6324634191",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1652,19 +1704,19 @@
           },
           "state": "a7f0744be826",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ecc1b4e0914f",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "3bc7dc745e57",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1681,19 +1733,19 @@
           },
           "state": "857b0f423a93",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ba65a7abe43b",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "18d6aedd20c0",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1710,19 +1762,19 @@
           },
           "state": "7c14fba8a1fe",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "82cd71d524c8",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "dbbebbd74a18",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1739,19 +1791,19 @@
           },
           "state": "7c4663c87131",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "186f44bc465a",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "c68ce1c1e224",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1768,19 +1820,19 @@
           },
           "state": "1c50877ad554",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "945ea389c1ef",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "26374b8263d6",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -1797,19 +1849,19 @@
           },
           "state": "7c14fba8a1fe",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "bb911bff1d1d",
-            "6eb786a2e054",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "127382fd146b",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "82cd71d524c8",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "12b9ca6d3411",
+            "abeee718b4b5",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "db29b57926b1",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "dbbebbd74a18",
+            "0c0d6ea592d5"
           ]
         }
       }

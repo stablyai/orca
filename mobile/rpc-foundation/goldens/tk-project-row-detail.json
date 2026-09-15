@@ -3,9 +3,9 @@
   "family": "tasks.project-row-detail",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
   "scenarioSha256": "f572b37cfd15f41f283e5f96b772a1055670f80e68064ac81477d9b768fc971a",
   "platform": "darwin",
@@ -13,85 +13,85 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "057a0b5a420b": {
-      "name": "projectRowDetailError",
-      "value": ""
-    },
-    "086a41047c19": {
-      "name": "projectCommentDraft",
-      "value": ""
-    },
-    "0c85499cb425": {
-      "name": "prFileLoadingPath",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "1057be813592": {
-      "name": "expandedPrFilePath",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "1782d901730e": {
-      "name": "projectEditingCommentDraft",
-      "value": ""
-    },
-    "188585c3859c": {
-      "name": "projectFieldDrafts",
-      "value": {}
-    },
-    "1ca3c6b62543": {
-      "name": "projectRowDetailLoading",
-      "value": true
-    },
-    "347cc433c473": {
-      "name": "projectRowDetail",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "3befcdf8b535": {
-      "name": "projectReviewersDraft",
-      "value": ""
-    },
-    "4f9b2f35c45f": {
-      "name": "projectRowDetail",
-      "value": {
-        "assignees": [],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [],
-        "files": [],
-        "headSha": "head-sha",
-        "labels": [],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "undefined"
-        },
-        "reviewRequests": []
-      }
-    },
-    "5e884949c856": {
-      "name": "prFileCommentDrafts",
-      "value": {}
-    },
-    "6918d0b7aab9": {
+    "049372f27933": {
       "name": "prFileContents",
-      "value": {}
+      "value": {},
+      "sent": 0
     },
-    "8f0c8ca9f6fc": {
-      "name": "projectBodyDraft",
-      "value": ""
+    "0e6d17a72b48": {
+      "name": "projectEditingCommentDraft",
+      "value": "",
+      "sent": 0
     },
-    "9348720697e0": {
+    "1948869d1aab": {
       "name": "projectTitleDraft",
       "value": {
         "$rpc": "undefined"
-      }
+      },
+      "sent": 0
+    },
+    "1ab0db6f980d": {
+      "name": "projectCommentDraft",
+      "value": "",
+      "sent": 0
+    },
+    "1e04ae13b692": {
+      "name": "expandedPrFilePath",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "228957b08ee5": {
+      "name": "projectReviewersDraft",
+      "value": "",
+      "sent": 0
+    },
+    "3690e3603bc7": {
+      "name": "projectEditingCommentId",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "3a8d8b837c22": {
+      "name": "projectRowDetailLoading",
+      "value": false,
+      "sent": 1
+    },
+    "4331036690d4": {
+      "name": "prFileLoadingPath",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "62fee54ba0b2": {
+      "name": "projectBodyDraft",
+      "value": "",
+      "sent": 0
+    },
+    "73fd5eb0550e": {
+      "name": "projectRowDetailLoading",
+      "value": true,
+      "sent": 0
+    },
+    "80d38ca65a5d": {
+      "name": "projectRowDetailError",
+      "value": "",
+      "sent": 0
+    },
+    "8e5298b22c5f": {
+      "name": "projectRowDetail",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "9b91f921fbb2": {
+      "name": "projectFieldDrafts",
+      "value": {},
+      "sent": 0
     },
     "b2a01ad6d4fe": {
       "detail": {
@@ -113,6 +113,32 @@
       },
       "error": "",
       "loading": false
+    },
+    "c3e75b813157": {
+      "name": "projectRowDetail",
+      "value": {
+        "assignees": [],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": [],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "undefined"
+        },
+        "reviewRequests": []
+      },
+      "sent": 1
+    },
+    "ce991ff5560d": {
+      "name": "prFileCommentDrafts",
+      "value": {},
+      "sent": 0
     },
     "d1f95449bb04": {
       "name": "github.project.workItemDetailsBySlug#1",
@@ -164,12 +190,6 @@
         }
       }
     },
-    "d33f5097e2ec": {
-      "name": "projectEditingCommentId",
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "e27d1a246a98": {
       "name": "github.project.workItemDetailsBySlug#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}"
@@ -181,10 +201,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f78c32654fc4": {
-      "name": "projectRowDetailLoading",
-      "value": false
     }
   },
   "recording": {
@@ -200,22 +216,22 @@
           },
           "state": "b2a01ad6d4fe",
           "effects": [
-            "9348720697e0",
-            "8f0c8ca9f6fc",
-            "086a41047c19",
-            "d33f5097e2ec",
-            "1782d901730e",
-            "3befcdf8b535",
-            "1057be813592",
-            "6918d0b7aab9",
-            "0c85499cb425",
-            "5e884949c856",
-            "188585c3859c",
-            "347cc433c473",
-            "057a0b5a420b",
-            "1ca3c6b62543",
-            "4f9b2f35c45f",
-            "f78c32654fc4"
+            "1948869d1aab",
+            "62fee54ba0b2",
+            "1ab0db6f980d",
+            "3690e3603bc7",
+            "0e6d17a72b48",
+            "228957b08ee5",
+            "1e04ae13b692",
+            "049372f27933",
+            "4331036690d4",
+            "ce991ff5560d",
+            "9b91f921fbb2",
+            "8e5298b22c5f",
+            "80d38ca65a5d",
+            "73fd5eb0550e",
+            "c3e75b813157",
+            "3a8d8b837c22"
           ]
         }
       }

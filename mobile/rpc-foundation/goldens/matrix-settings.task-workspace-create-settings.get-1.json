@@ -3,9 +3,9 @@
   "family": "settings.task-workspace-create",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
   "scenarioSha256": "7e4c5bb29e0f630cda8a09233575b9295e485f3d3e315ebdc0458c69515fcfc7",
   "platform": "darwin",
@@ -13,12 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "067cef118d9f": {
-      "name": "runtimeTaskSettings",
-      "value": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": []
-      }
+    "01533f698bc3": {
+      "name": "workspaceAgent",
+      "value": "codex",
+      "sent": 1
+    },
+    "05ed43b996fb": {
+      "name": "navigation",
+      "value": "/h/host-1/session/wt-1?name=ORC-1+Recorded+issue&created=1",
+      "sent": 2
     },
     "090c88478661": {
       "name": "settings.get#1",
@@ -158,11 +161,12 @@
         }
       }
     },
-    "180125f5d1a6": {
+    "1847f1d16cc3": {
       "name": "workspaceCreateDraft",
       "value": {
         "$rpc": "null"
-      }
+      },
+      "sent": 2
     },
     "2473f12c7cdd": {
       "name": "settings.get#1",
@@ -199,6 +203,11 @@
           }
         }
       }
+    },
+    "2a3409305e35": {
+      "name": "creatingKey",
+      "value": "linear:1",
+      "sent": 0
     },
     "2b3aa0da0852": {
       "name": "settings.get#1",
@@ -241,13 +250,12 @@
         "disabledTuiAgents": []
       }
     },
-    "3405a06dce84": {
-      "name": "error",
-      "value": "Selected agent is disabled. Choose an enabled agent before creating."
-    },
-    "3f453dd79b03": {
-      "name": "workspaceAgent",
-      "value": "codex"
+    "3542b2dc7cf4": {
+      "name": "creatingKey",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 1
     },
     "6a98511b6371": {
       "name": "settings.get#1",
@@ -283,16 +291,6 @@
         }
       }
     },
-    "6eb4e79ad99a": {
-      "name": "setupPrompt",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "730f92993963": {
-      "name": "creatingKey",
-      "value": "linear:1"
-    },
     "7abdfe20af50": {
       "creating": "linear:1",
       "error": "",
@@ -303,14 +301,6 @@
     "7ddcb1852b39": {
       "name": "settings.get#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "7ee99993a895": {
-      "name": "navigation",
-      "value": "/h/host-1/session/wt-1?name=ORC-1+Recorded+issue&created=1"
-    },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
     },
     "8b77098df0c3": {
       "name": "settings.get#1",
@@ -381,11 +371,29 @@
       "status": "pending",
       "startedAt": 0
     },
-    "ac9996319e05": {
-      "name": "actionItem",
+    "94d10e7369a8": {
+      "name": "setupPrompt",
       "value": {
         "$rpc": "null"
-      }
+      },
+      "sent": 2
+    },
+    "98260d6be053": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 1
+    },
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
+    },
+    "a1c21422795e": {
+      "name": "creatingKey",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 2
     },
     "adec34c2065c": {
       "creating": {
@@ -393,6 +401,13 @@
       },
       "error": "",
       "settings": {}
+    },
+    "b3786fd78eba": {
+      "name": "actionItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 2
     },
     "b759ab27e4dd": {
       "name": "settings.get#1",
@@ -431,12 +446,6 @@
     "baa74a0ec378": {
       "name": "worktree.create#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"orc-1\",\"displayName\":\"ORC-1 Recorded issue\",\"displayNameKind\":\"generated\",\"linkedLinearIssue\":\"ORC-1\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://linear.app/orca/issue/ORC-1\",\"createdWithAgent\":\"claude\"}}"
-    },
-    "c9cb32059b8d": {
-      "name": "creatingKey",
-      "value": {
-        "$rpc": "null"
-      }
     },
     "d27ce798af34": {
       "name": "settings.get#1",
@@ -481,9 +490,13 @@
         "disabledTuiAgents": ["claude"]
       }
     },
-    "dae7907f03cc": {
+    "d78d24fff8fb": {
       "name": "runtimeTaskSettings",
-      "value": {}
+      "value": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      },
+      "sent": 1
     },
     "e0cf1af55a54": {
       "name": "settings.get#1",
@@ -548,9 +561,10 @@
         }
       }
     },
-    "ea709e13f0f0": {
-      "name": "workspaceAgentOverridden",
-      "value": false
+    "eaf6fe088c19": {
+      "name": "error",
+      "value": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -559,6 +573,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f80ac8877eab": {
+      "name": "runtimeTaskSettings",
+      "value": {},
+      "sent": 1
     },
     "f84a8688af61": {
       "name": "settings.get#1",
@@ -605,7 +624,7 @@
             "submit": "9270aeb7d9c6"
           },
           "state": "7abdfe20af50",
-          "effects": ["730f92993963", "82cd71d524c8"]
+          "effects": ["2a3409305e35", "9e263f5e91be"]
         }
       },
       {
@@ -619,12 +638,12 @@
           },
           "state": "7abdfe20af50",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -639,14 +658,14 @@
           },
           "state": "33e3b949d4c5",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "067cef118d9f",
-            "ac9996319e05",
-            "180125f5d1a6",
-            "6eb4e79ad99a",
-            "7ee99993a895",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "d78d24fff8fb",
+            "b3786fd78eba",
+            "1847f1d16cc3",
+            "94d10e7369a8",
+            "05ed43b996fb",
+            "a1c21422795e"
           ]
         }
       },
@@ -661,12 +680,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -681,12 +700,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -701,14 +720,14 @@
           },
           "state": "adec34c2065c",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "dae7907f03cc",
-            "ac9996319e05",
-            "180125f5d1a6",
-            "6eb4e79ad99a",
-            "7ee99993a895",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "f80ac8877eab",
+            "b3786fd78eba",
+            "1847f1d16cc3",
+            "94d10e7369a8",
+            "05ed43b996fb",
+            "a1c21422795e"
           ]
         }
       },
@@ -723,14 +742,14 @@
           },
           "state": "adec34c2065c",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "dae7907f03cc",
-            "ac9996319e05",
-            "180125f5d1a6",
-            "6eb4e79ad99a",
-            "7ee99993a895",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "f80ac8877eab",
+            "b3786fd78eba",
+            "1847f1d16cc3",
+            "94d10e7369a8",
+            "05ed43b996fb",
+            "a1c21422795e"
           ]
         }
       },
@@ -745,14 +764,14 @@
           },
           "state": "adec34c2065c",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "dae7907f03cc",
-            "ac9996319e05",
-            "180125f5d1a6",
-            "6eb4e79ad99a",
-            "7ee99993a895",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "f80ac8877eab",
+            "b3786fd78eba",
+            "1847f1d16cc3",
+            "94d10e7369a8",
+            "05ed43b996fb",
+            "a1c21422795e"
           ]
         }
       },
@@ -767,12 +786,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -787,12 +806,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -807,12 +826,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -827,12 +846,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -847,12 +866,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       }

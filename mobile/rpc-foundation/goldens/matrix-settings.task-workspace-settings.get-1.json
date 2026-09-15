@@ -3,9 +3,9 @@
   "family": "settings.task-workspace",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
   "scenarioSha256": "994ea8b4ddb05774a8c2d5902bb68bf5e8f25399a787262b8f23f458f2790698",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "01533f698bc3": {
+      "name": "workspaceAgent",
+      "value": "codex",
+      "sent": 1
+    },
     "090c88478661": {
       "name": "settings.get#1",
       "args": [
@@ -107,6 +112,28 @@
         }
       }
     },
+    "2a3409305e35": {
+      "name": "creatingKey",
+      "value": "linear:1",
+      "sent": 0
+    },
+    "2a5e2689bf37": {
+      "name": "setupPrompt",
+      "value": {
+        "agentOverride": "claude",
+        "command": "setup",
+        "item": {
+          "key": "linear:1",
+          "provider": "linear",
+          "source": {
+            "id": "issue-1"
+          }
+        },
+        "repoName": "Repo",
+        "source": "repo"
+      },
+      "sent": 1
+    },
     "2b3aa0da0852": {
       "name": "settings.get#1",
       "args": [
@@ -138,7 +165,7 @@
         }
       }
     },
-    "326e3f8f7e0b": {
+    "2d957a8af6b3": {
       "name": "runtimeTaskSettings",
       "value": {
         "defaultTuiAgent": "codex",
@@ -146,15 +173,15 @@
         "hostSettingOverrides": {},
         "prBotAuthorOverrides": ["bot-user"],
         "visibleTaskProviders": ["github", "linear"]
-      }
+      },
+      "sent": 1
     },
-    "3405a06dce84": {
-      "name": "error",
-      "value": "Selected agent is disabled. Choose an enabled agent before creating."
-    },
-    "3f453dd79b03": {
-      "name": "workspaceAgent",
-      "value": "codex"
+    "3542b2dc7cf4": {
+      "name": "creatingKey",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 1
     },
     "6a98511b6371": {
       "name": "settings.get#1",
@@ -189,10 +216,6 @@
           "ok": false
         }
       }
-    },
-    "730f92993963": {
-      "name": "creatingKey",
-      "value": "linear:1"
     },
     "7abdfe20af50": {
       "creating": "linear:1",
@@ -243,10 +266,6 @@
     "7ddcb1852b39": {
       "name": "settings.get#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
     },
     "8b77098df0c3": {
       "name": "settings.get#1",
@@ -330,28 +349,22 @@
       "status": "pending",
       "startedAt": 0
     },
+    "98260d6be053": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 1
+    },
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
+    },
     "adec34c2065c": {
       "creating": {
         "$rpc": "null"
       },
       "error": "",
       "settings": {}
-    },
-    "b4aa36380c40": {
-      "name": "setupPrompt",
-      "value": {
-        "agentOverride": "claude",
-        "command": "setup",
-        "item": {
-          "key": "linear:1",
-          "provider": "linear",
-          "source": {
-            "id": "issue-1"
-          }
-        },
-        "repoName": "Repo",
-        "source": "repo"
-      }
     },
     "b759ab27e4dd": {
       "name": "settings.get#1",
@@ -385,12 +398,6 @@
           "id": "frame-1",
           "ok": false
         }
-      }
-    },
-    "c9cb32059b8d": {
-      "name": "creatingKey",
-      "value": {
-        "$rpc": "null"
       }
     },
     "d27ce798af34": {
@@ -435,10 +442,6 @@
       "settings": {
         "disabledTuiAgents": ["claude"]
       }
-    },
-    "dae7907f03cc": {
-      "name": "runtimeTaskSettings",
-      "value": {}
     },
     "e0cf1af55a54": {
       "name": "settings.get#1",
@@ -503,9 +506,10 @@
         }
       }
     },
-    "ea709e13f0f0": {
-      "name": "workspaceAgentOverridden",
-      "value": false
+    "eaf6fe088c19": {
+      "name": "error",
+      "value": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -514,6 +518,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f80ac8877eab": {
+      "name": "runtimeTaskSettings",
+      "value": {},
+      "sent": 1
     },
     "f84a8688af61": {
       "name": "settings.get#1",
@@ -560,7 +569,7 @@
             "submit": "9270aeb7d9c6"
           },
           "state": "7abdfe20af50",
-          "effects": ["730f92993963", "82cd71d524c8"]
+          "effects": ["2a3409305e35", "9e263f5e91be"]
         }
       },
       {
@@ -574,12 +583,12 @@
           },
           "state": "7abdfe20af50",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -594,13 +603,13 @@
           },
           "state": "8b8197eed660",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "326e3f8f7e0b",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "2d957a8af6b3",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -615,12 +624,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -635,12 +644,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -655,11 +664,11 @@
           },
           "state": "adec34c2065c",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "dae7907f03cc",
-            "b4aa36380c40",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "f80ac8877eab",
+            "2a5e2689bf37",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -674,11 +683,11 @@
           },
           "state": "adec34c2065c",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "dae7907f03cc",
-            "b4aa36380c40",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "f80ac8877eab",
+            "2a5e2689bf37",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -693,11 +702,11 @@
           },
           "state": "adec34c2065c",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "dae7907f03cc",
-            "b4aa36380c40",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "f80ac8877eab",
+            "2a5e2689bf37",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -712,12 +721,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -732,12 +741,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -752,12 +761,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -772,12 +781,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       },
@@ -792,12 +801,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       }

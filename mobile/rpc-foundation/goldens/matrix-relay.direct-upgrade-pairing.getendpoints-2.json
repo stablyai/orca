@@ -3,9 +3,9 @@
   "family": "relay.direct-upgrade",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
   "scenarioSha256": "d0c4dd34645308f30c0999ea74c16b53f20e9183832fdf016c3dc21434744b05",
   "platform": "darwin",
@@ -117,16 +117,6 @@
       "name": "pairing.provisionRelay#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}"
     },
-    "1da0bf924e75": {
-      "name": "bundle-written",
-      "value": {
-        "version": 4
-      }
-    },
-    "25b377db6629": {
-      "name": "host-saved",
-      "value": "host-1"
-    },
     "2b3f0d69e5c0": {
       "journal": "present",
       "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received null\"\n  }\n]"
@@ -174,6 +164,11 @@
         "message": "relay endpoint reconciliation became unavailable",
         "isRpcDeliveryUnknown": false
       }
+    },
+    "4683b84a57a2": {
+      "name": "host-saved",
+      "value": "host-1",
+      "sent": 3
     },
     "47728c6fb437": {
       "name": "pairing.getEndpoints#2",
@@ -343,6 +338,11 @@
       "name": "pairing.getEndpoints#2",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
     },
+    "7d023da12fdb": {
+      "name": "journal-cleared",
+      "value": "upgrade",
+      "sent": 3
+    },
     "83501517f8f9": {
       "name": "pairing.getEndpoints#2",
       "args": [
@@ -436,10 +436,6 @@
       },
       "outcome": "relay-host-0001x"
     },
-    "a2c193508948": {
-      "name": "journal-cleared",
-      "value": "upgrade"
-    },
     "a3865c87e54b": {
       "name": "pairing.provisionRelay#1",
       "args": [
@@ -499,6 +495,13 @@
     "ae02e37a943d": {
       "journal": "present",
       "outcome": "failed: relay endpoint reconciliation became unavailable"
+    },
+    "b991b2c7609f": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      },
+      "sent": 3
     },
     "ba95b28e3a94": {
       "name": "pairing.getEndpoints#1",
@@ -698,7 +701,7 @@
             "upgrade": "590b3311b0c4"
           },
           "state": "980bbba0b617",
-          "effects": ["1da0bf924e75", "25b377db6629", "a2c193508948"]
+          "effects": ["b991b2c7609f", "4683b84a57a2", "7d023da12fdb"]
         }
       },
       {

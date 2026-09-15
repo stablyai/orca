@@ -3,9 +3,9 @@
   "family": "tasks.task-list-linear",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "c589700af145f58c37292dafb891b3b7d50302fd4ec044155c044ccd48f79c74",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "000516aa083b": {
+      "name": "error",
+      "value": "outer refused",
+      "sent": 2
+    },
     "0914e9c666b1": {
       "name": "linear.searchIssues#1",
       "args": [
@@ -79,6 +84,11 @@
         }
       }
     },
+    "0d5d9243a0de": {
+      "name": "loading",
+      "value": false,
+      "sent": 1
+    },
     "0f4daa370be3": {
       "name": "linear.searchIssues#1",
       "args": [
@@ -115,6 +125,11 @@
         }
       }
     },
+    "113ccfa73078": {
+      "name": "refreshing",
+      "value": false,
+      "sent": 1
+    },
     "14b2c61abd6c": {
       "name": "linear.searchIssues#1",
       "args": [
@@ -150,10 +165,6 @@
           "ok": false
         }
       }
-    },
-    "186f44bc465a": {
-      "name": "error",
-      "value": "Unknown method"
     },
     "1e54d4dce85b": {
       "error": "",
@@ -203,9 +214,10 @@
       "loading": false,
       "refreshing": false
     },
-    "2e036e81354d": {
-      "name": "loading",
-      "value": true
+    "3133fa990514": {
+      "name": "items",
+      "value": [],
+      "sent": 2
     },
     "3edde845aed1": {
       "error": "",
@@ -248,6 +260,11 @@
       "items": [],
       "loading": false,
       "refreshing": false
+    },
+    "52d25e1f3035": {
+      "name": "error",
+      "value": "Connection closed",
+      "sent": 2
     },
     "5494ca4c103e": {
       "name": "linear.searchIssues#1",
@@ -308,7 +325,17 @@
       "name": "linear.listIssues#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
     },
-    "8080efdd19df": {
+    "5c2874ad80bc": {
+      "name": "error",
+      "value": "transport failure",
+      "sent": 2
+    },
+    "6143a28f5226": {
+      "name": "loading",
+      "value": true,
+      "sent": 1
+    },
+    "6fafebd34f71": {
       "name": "items",
       "value": [
         {
@@ -340,7 +367,8 @@
           "title": "A found issue",
           "updatedAt": "2020-01-01T00:00:00.000Z"
         }
-      ]
+      ],
+      "sent": 2
     },
     "820944a2683d": {
       "error": "outer refused",
@@ -348,9 +376,10 @@
       "loading": false,
       "refreshing": false
     },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
+    "840a8ad61602": {
+      "name": "loading",
+      "value": true,
+      "sent": 0
     },
     "86aeb72f48eb": {
       "name": "linear.listIssues#1",
@@ -413,10 +442,6 @@
       "name": "linear.searchIssues#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
     },
-    "8936cd17eb1c": {
-      "name": "items",
-      "value": []
-    },
     "8fc99972bdd2": {
       "name": "linear.searchIssues#1",
       "args": [
@@ -452,9 +477,10 @@
         }
       }
     },
-    "945ea389c1ef": {
-      "name": "error",
-      "value": "transport failure"
+    "92c28468d7be": {
+      "name": "refreshing",
+      "value": false,
+      "sent": 2
     },
     "94a885e6f790": {
       "name": "linear.searchIssues#1",
@@ -597,13 +623,10 @@
       "loading": true,
       "refreshing": false
     },
-    "9f82f10075a3": {
+    "9e263f5e91be": {
       "name": "error",
-      "value": "Connection closed"
-    },
-    "9fd1c1fdaba4": {
-      "name": "loading",
-      "value": false
+      "value": "",
+      "sent": 0
     },
     "a45f546835a8": {
       "name": "linear.searchIssues#1",
@@ -636,40 +659,6 @@
           "ok": true
         }
       }
-    },
-    "a807b2cced19": {
-      "name": "items",
-      "value": [
-        {
-          "key": "linear:linear-workspace:issue-1",
-          "provider": "linear",
-          "source": {
-            "description": "",
-            "id": "issue-1",
-            "identifier": "ENG-1",
-            "labels": [],
-            "priority": 0,
-            "state": {
-              "color": "#000",
-              "name": "Todo",
-              "type": "unstarted"
-            },
-            "team": {
-              "id": "team-1",
-              "key": "ENG",
-              "name": "Engineering"
-            },
-            "title": "A Linear issue",
-            "updatedAt": "2020-01-01T00:00:00.000Z",
-            "url": "",
-            "workspaceId": "linear-workspace"
-          },
-          "status": "Todo",
-          "subtitle": "ENG-1 · Engineering",
-          "title": "A Linear issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z"
-        }
-      ]
     },
     "ad3c905e6ecc": {
       "name": "linear.searchIssues#1",
@@ -709,13 +698,25 @@
         }
       }
     },
-    "b8cb056c2851": {
-      "name": "refreshing",
-      "value": false
-    },
-    "ba65a7abe43b": {
+    "b57ded8a3ea3": {
       "name": "error",
-      "value": "outer refused"
+      "value": "",
+      "sent": 2
+    },
+    "be487c948252": {
+      "name": "error",
+      "value": "Unexpected Linear tasks response",
+      "sent": 2
+    },
+    "c9db7514f5c5": {
+      "name": "loading",
+      "value": false,
+      "sent": 2
+    },
+    "d48d5c49486c": {
+      "name": "error",
+      "value": "",
+      "sent": 1
     },
     "e04d208486e7": {
       "name": "linear.searchIssues#1",
@@ -752,9 +753,40 @@
         }
       }
     },
-    "e9bfd0a82b94": {
-      "name": "error",
-      "value": "Unexpected Linear tasks response"
+    "e1bd9a521877": {
+      "name": "items",
+      "value": [
+        {
+          "key": "linear:linear-workspace:issue-1",
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A Linear issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          },
+          "status": "Todo",
+          "subtitle": "ENG-1 · Engineering",
+          "title": "A Linear issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ],
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -769,6 +801,11 @@
       "items": [],
       "loading": false,
       "refreshing": false
+    },
+    "f1cfc2d1bcc1": {
+      "name": "error",
+      "value": "Unknown method",
+      "sent": 2
     }
   },
   "recording": {
@@ -785,11 +822,11 @@
           },
           "state": "94f44b229d7d",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078"
           ]
         }
       },
@@ -805,11 +842,11 @@
           },
           "state": "94f44b229d7d",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078"
           ]
         }
       },
@@ -826,17 +863,17 @@
           },
           "state": "99f1aeb70deb",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "9f82f10075a3",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "52d25e1f3035",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -853,16 +890,16 @@
           },
           "state": "3edde845aed1",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8080efdd19df",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "6fafebd34f71",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -879,17 +916,17 @@
           },
           "state": "2ca7c411bba8",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "e9bfd0a82b94",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "be487c948252",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -906,17 +943,17 @@
           },
           "state": "2ca7c411bba8",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "e9bfd0a82b94",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "be487c948252",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -933,17 +970,17 @@
           },
           "state": "2ca7c411bba8",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "e9bfd0a82b94",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "be487c948252",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -960,17 +997,17 @@
           },
           "state": "2ca7c411bba8",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "e9bfd0a82b94",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "be487c948252",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -987,17 +1024,17 @@
           },
           "state": "2ca7c411bba8",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "e9bfd0a82b94",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "be487c948252",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -1014,17 +1051,17 @@
           },
           "state": "820944a2683d",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "ba65a7abe43b",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "000516aa083b",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -1041,17 +1078,17 @@
           },
           "state": "1e54d4dce85b",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "82cd71d524c8",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "b57ded8a3ea3",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -1068,17 +1105,17 @@
           },
           "state": "f11183466799",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "186f44bc465a",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "f1cfc2d1bcc1",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -1095,17 +1132,17 @@
           },
           "state": "40cf838c0930",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "945ea389c1ef",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "5c2874ad80bc",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       },
@@ -1122,17 +1159,17 @@
           },
           "state": "1e54d4dce85b",
           "effects": [
-            "82cd71d524c8",
-            "2e036e81354d",
-            "a807b2cced19",
-            "9fd1c1fdaba4",
-            "b8cb056c2851",
-            "82cd71d524c8",
-            "2e036e81354d",
-            "8936cd17eb1c",
-            "82cd71d524c8",
-            "9fd1c1fdaba4",
-            "b8cb056c2851"
+            "9e263f5e91be",
+            "840a8ad61602",
+            "e1bd9a521877",
+            "0d5d9243a0de",
+            "113ccfa73078",
+            "d48d5c49486c",
+            "6143a28f5226",
+            "3133fa990514",
+            "b57ded8a3ea3",
+            "c9db7514f5c5",
+            "92c28468d7be"
           ]
         }
       }

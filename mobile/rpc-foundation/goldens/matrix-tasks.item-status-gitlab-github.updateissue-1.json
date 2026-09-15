@@ -3,9 +3,9 @@
   "family": "tasks.item-status-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
   "scenarioSha256": "57c41b51e34e451975a9f28a6461aa3b8e9dcf04cbebaea80ddf14afc4b78edf",
   "platform": "darwin",
@@ -13,9 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "066ce15717c8": {
-      "name": "mutatingStatus",
-      "value": true
+    "000516aa083b": {
+      "name": "error",
+      "value": "outer refused",
+      "sent": 2
     },
     "0d406a5fe28c": {
       "name": "github.updateIssue#1",
@@ -97,9 +98,10 @@
       "name": "gitlab.updateIssue#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":4,\"updates\":{\"state\":\"closed\"},\"projectRef\":\"group/project\"}}"
     },
-    "186f44bc465a": {
-      "name": "error",
-      "value": "Unknown method"
+    "13b233a5bc5a": {
+      "name": "itemRemoveAssigneesDraft",
+      "value": "",
+      "sent": 2
     },
     "1a810f391376": {
       "name": "github.updateIssue#1",
@@ -178,10 +180,6 @@
         "provider": "gitlab"
       }
     },
-    "2d711d96f190": {
-      "name": "error",
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
     "2e4f742ab84f": {
       "error": "",
       "item": {
@@ -218,6 +216,21 @@
         "pipelineJobs": [],
         "provider": "gitlab"
       }
+    },
+    "32a3635e06a4": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 1
+    },
+    "3c6c54110c00": {
+      "name": "itemRemoveLabelsDraft",
+      "value": "",
+      "sent": 2
+    },
+    "3eecde91c360": {
+      "name": "error",
+      "value": "inner refused",
+      "sent": 2
     },
     "46938ed15335": {
       "name": "github.updateIssue#1",
@@ -328,6 +341,11 @@
         "pipelineJobs": [],
         "provider": "gitlab"
       }
+    },
+    "52d25e1f3035": {
+      "name": "error",
+      "value": "Connection closed",
+      "sent": 2
     },
     "53ddf1fb8329": {
       "name": "github.updateIssue#1",
@@ -446,6 +464,16 @@
         }
       }
     },
+    "583b546bd557": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 1
+    },
+    "5c2874ad80bc": {
+      "name": "error",
+      "value": "transport failure",
+      "sent": 2
+    },
     "6502de5a8b97": {
       "name": "github.updateIssue#1",
       "args": [
@@ -527,10 +555,6 @@
       "name": "github.updateIssue#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"updates\":{\"title\":\"Renamed\",\"addLabels\":[\"triage\"],\"removeLabels\":[\"bug\"]}}}"
     },
-    "7781b68e4a2b": {
-      "name": "itemAddLabelsDraft",
-      "value": ""
-    },
     "779cb33e2c39": {
       "name": "gitlab.updateIssue#1",
       "args": [
@@ -606,9 +630,17 @@
         "provider": "gitlab"
       }
     },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
+    "7ff9a871c9b4": {
+      "name": "itemAddLabelsDraft",
+      "value": "",
+      "sent": 2
+    },
+    "84465663f388": {
+      "name": "actionItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 1
     },
     "8803676e3004": {
       "error": "outer refused",
@@ -646,6 +678,35 @@
         "pipelineJobs": [],
         "provider": "gitlab"
       }
+    },
+    "893c7ff30ddf": {
+      "name": "items",
+      "value": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:issue:4",
+            "labels": ["bug"],
+            "number": 4,
+            "projectRef": "group/project",
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "issue"
+          },
+          "title": "A GitLab issue"
+        }
+      ],
+      "sent": 2
+    },
+    "8cb676b78862": {
+      "name": "error",
+      "value": "Cannot read properties of undefined (reading 'ok')",
+      "sent": 2
+    },
+    "8cde53a56cdf": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 2
     },
     "9206a8ba61dd": {
       "name": "github.updateIssue#1",
@@ -686,10 +747,6 @@
         }
       }
     },
-    "945ea389c1ef": {
-      "name": "error",
-      "value": "transport failure"
-    },
     "993c830982a5": {
       "error": "[object Object]",
       "item": {
@@ -727,9 +784,29 @@
         "provider": "gitlab"
       }
     },
-    "9f82f10075a3": {
+    "9999466f95f3": {
+      "name": "detailPayload",
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      },
+      "sent": 2
+    },
+    "9e263f5e91be": {
       "name": "error",
-      "value": "Connection closed"
+      "value": "",
+      "sent": 0
     },
     "9fb1b1ad3675": {
       "name": "github.updateIssue#1",
@@ -770,12 +847,6 @@
         }
       }
     },
-    "ac9996319e05": {
-      "name": "actionItem",
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "ad5f976dd33c": {
       "name": "github.updateIssue#1",
       "args": [
@@ -813,39 +884,37 @@
         }
       }
     },
-    "ae5be7de2632": {
-      "name": "error",
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
-    "ba65a7abe43b": {
-      "name": "error",
-      "value": "outer refused"
-    },
-    "c008e85e2d06": {
-      "name": "error",
-      "value": "inner refused"
-    },
-    "ce0c6ff56cf0": {
-      "name": "detailPayload",
+    "b3786fd78eba": {
+      "name": "actionItem",
       "value": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
+        "$rpc": "null"
+      },
+      "sent": 2
     },
-    "d2f3c0ccfef8": {
-      "name": "itemRemoveAssigneesDraft",
-      "value": ""
+    "b57ded8a3ea3": {
+      "name": "error",
+      "value": "",
+      "sent": 2
+    },
+    "c23d4fe1d079": {
+      "name": "error",
+      "value": "Cannot read properties of null (reading 'ok')",
+      "sent": 2
+    },
+    "cc96725d8f47": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 0
+    },
+    "cdbac770b5e9": {
+      "name": "error",
+      "value": "[object Object]",
+      "sent": 2
+    },
+    "d48d5c49486c": {
+      "name": "error",
+      "value": "",
+      "sent": 1
     },
     "d9d32e421d46": {
       "error": "",
@@ -883,28 +952,6 @@
         "pipelineJobs": [],
         "provider": "gitlab"
       }
-    },
-    "dadd4b06e486": {
-      "name": "itemAddAssigneesDraft",
-      "value": ""
-    },
-    "e1e995a34822": {
-      "name": "items",
-      "value": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ]
     },
     "e9d113f34a4a": {
       "name": "github.updateIssue#1",
@@ -956,17 +1003,15 @@
         "$rpc": "undefined"
       }
     },
-    "ecc1b4e0914f": {
+    "ec6aee3704e2": {
+      "name": "itemAddAssigneesDraft",
+      "value": "",
+      "sent": 2
+    },
+    "f1cfc2d1bcc1": {
       "name": "error",
-      "value": "[object Object]"
-    },
-    "f02550278f6a": {
-      "name": "mutatingStatus",
-      "value": false
-    },
-    "fca590f95bf2": {
-      "name": "itemRemoveLabelsDraft",
-      "value": ""
+      "value": "Unknown method",
+      "sent": 2
     }
   },
   "recording": {
@@ -982,7 +1027,7 @@
             "gitlab-status-0": "eb79a9b3682a"
           },
           "state": "d9d32e421d46",
-          "effects": ["066ce15717c8", "82cd71d524c8", "ac9996319e05", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "84465663f388", "32a3635e06a4"]
         }
       },
       {
@@ -997,14 +1042,14 @@
           },
           "state": "2e4f742ab84f",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "9f82f10075a3",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "52d25e1f3035",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1020,20 +1065,20 @@
           },
           "state": "d9d32e421d46",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "e1e995a34822",
-            "ce0c6ff56cf0",
-            "7781b68e4a2b",
-            "fca590f95bf2",
-            "dadd4b06e486",
-            "d2f3c0ccfef8",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "b3786fd78eba",
+            "893c7ff30ddf",
+            "9999466f95f3",
+            "7ff9a871c9b4",
+            "3c6c54110c00",
+            "ec6aee3704e2",
+            "13b233a5bc5a",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1049,14 +1094,14 @@
           },
           "state": "7aef08e33983",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ae5be7de2632",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "8cb676b78862",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1072,14 +1117,14 @@
           },
           "state": "11bc28dfeb05",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "2d711d96f190",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "c23d4fe1d079",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1095,20 +1140,20 @@
           },
           "state": "d9d32e421d46",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "e1e995a34822",
-            "ce0c6ff56cf0",
-            "7781b68e4a2b",
-            "fca590f95bf2",
-            "dadd4b06e486",
-            "d2f3c0ccfef8",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "b3786fd78eba",
+            "893c7ff30ddf",
+            "9999466f95f3",
+            "7ff9a871c9b4",
+            "3c6c54110c00",
+            "ec6aee3704e2",
+            "13b233a5bc5a",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1124,14 +1169,14 @@
           },
           "state": "51d9bbde2d12",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "c008e85e2d06",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "3eecde91c360",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1147,14 +1192,14 @@
           },
           "state": "993c830982a5",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ecc1b4e0914f",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "cdbac770b5e9",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1170,14 +1215,14 @@
           },
           "state": "8803676e3004",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ba65a7abe43b",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "000516aa083b",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1193,14 +1238,14 @@
           },
           "state": "d9d32e421d46",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "82cd71d524c8",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "b57ded8a3ea3",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1216,14 +1261,14 @@
           },
           "state": "214ca42de359",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "186f44bc465a",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "f1cfc2d1bcc1",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1239,14 +1284,14 @@
           },
           "state": "52b163f18d0b",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "945ea389c1ef",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "5c2874ad80bc",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -1262,14 +1307,14 @@
           },
           "state": "d9d32e421d46",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "82cd71d524c8",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "b57ded8a3ea3",
+            "8cde53a56cdf"
           ]
         }
       }

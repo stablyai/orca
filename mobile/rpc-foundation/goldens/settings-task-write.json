@@ -3,9 +3,9 @@
   "family": "settings-best-effort",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "bbcdefe16b07068a81f3c46ae60df01ccb0fbe5a7c1eade3f584f6f0130c23fe",
   "platform": "darwin",
@@ -76,9 +76,10 @@
         "startedAt": 0
       }
     },
-    "b2897d5daa49": {
+    "8bdf90b8099a": {
       "name": "defaultGitHubPreset",
-      "value": "assigned"
+      "value": "assigned",
+      "sent": 0
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -102,7 +103,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -115,7 +116,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       }
     ]

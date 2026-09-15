@@ -3,9 +3,9 @@
   "family": "tasks.project-repo-slugs",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "a83d5768892764af2dd6866f03d51c09aef63d1c5d3e0645bd5e1c16454b201f",
   "platform": "darwin",
@@ -52,7 +52,7 @@
       "name": "github.repoSlug#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
-    "a21757eb73fd": {
+    "a357afc033aa": {
       "name": "githubRepoSlugCache",
       "value": {
         "repo-1": {
@@ -63,7 +63,8 @@
             "repo": "repo"
           }
         }
-      }
+      },
+      "sent": 1
     },
     "bdec8bbb3c04": {
       "cache": {
@@ -98,7 +99,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "bdec8bbb3c04",
-          "effects": ["a21757eb73fd"]
+          "effects": ["a357afc033aa"]
         }
       }
     ]

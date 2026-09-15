@@ -32,7 +32,7 @@ describe('RPC main recordings', () => {
     it(pilot.title, async () => {
       let first = ''
       for (let run = 0; run < determinismRuns(); run++) {
-        const { adapters } = pilotMountAdapters(root)
+        const { adapters } = pilotMountAdapters(root, { device: scenario })
         const recording = await runRecording(
           scenario,
           adapters[scenario.operation],

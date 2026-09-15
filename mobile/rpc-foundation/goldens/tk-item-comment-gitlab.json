@@ -3,9 +3,9 @@
   "family": "tasks.item-comment-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "d993b9f74cf8c5d7af8d31a73cf19d97141c54f6fcf009e98ca5b9106f3ba35b",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "066ce15717c8": {
-      "name": "mutatingStatus",
-      "value": true
-    },
     "1f27ffccd3c3": {
       "name": "gitlab.addIssueComment#1",
       "args": [
@@ -59,6 +55,11 @@
         }
       }
     },
+    "32a3635e06a4": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 1
+    },
     "48a9b4deaa5b": {
       "draft": "",
       "error": "",
@@ -98,15 +99,7 @@
         "provider": "gitlab"
       }
     },
-    "7251019fd224": {
-      "name": "gitlab.addIssueComment#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":4,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}"
-    },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
-    },
-    "92ea6ed9109e": {
+    "59727d722699": {
       "name": "detailPayload",
       "value": {
         "assignees": [],
@@ -128,11 +121,22 @@
         "labels": ["bug"],
         "pipelineJobs": [],
         "provider": "gitlab"
-      }
+      },
+      "sent": 1
     },
-    "a36b80f7b048": {
-      "name": "itemCommentDraft",
-      "value": ""
+    "7251019fd224": {
+      "name": "gitlab.addIssueComment#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":4,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}"
+    },
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
+    },
+    "cc96725d8f47": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 0
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -142,9 +146,10 @@
         "$rpc": "undefined"
       }
     },
-    "f02550278f6a": {
-      "name": "mutatingStatus",
-      "value": false
+    "ffdb6c1abbef": {
+      "name": "itemCommentDraft",
+      "value": "",
+      "sent": 1
     }
   },
   "recording": {
@@ -161,11 +166,11 @@
           },
           "state": "48a9b4deaa5b",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "a36b80f7b048",
-            "92ea6ed9109e",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "ffdb6c1abbef",
+            "59727d722699",
+            "32a3635e06a4"
           ]
         }
       }

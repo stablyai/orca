@@ -3,9 +3,9 @@
   "family": "transport.pairing-race",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
   "scenarioSha256": "1d032c86e7cc12efa3d5044339cb990bd258d830119d0e7b61d1b995b4df29a3",
   "platform": "darwin",
@@ -357,6 +357,11 @@
     "a7d5becc0aed": {
       "outcome": "relay"
     },
+    "b2a8517fe750": {
+      "name": "candidate-closed",
+      "value": "direct",
+      "sent": 2
+    },
     "c0c86e67c300": {
       "name": "status.get#2",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
@@ -425,10 +430,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "f203320e31e9": {
-      "name": "candidate-closed",
-      "value": "direct"
     }
   },
   "recording": {
@@ -443,7 +444,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -455,7 +456,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -467,7 +468,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -479,7 +480,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -491,7 +492,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -503,7 +504,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -515,7 +516,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -527,7 +528,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -539,7 +540,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -551,7 +552,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       },
       {
@@ -563,7 +564,7 @@
             "race": "416024b9c436"
           },
           "state": "a7d5becc0aed",
-          "effects": ["f203320e31e9"]
+          "effects": ["b2a8517fe750"]
         }
       }
     ]

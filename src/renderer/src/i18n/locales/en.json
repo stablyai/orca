@@ -828,7 +828,7 @@
           "flow": {
             "structured": {
               "launch": {
-                "unknown": "Could not confirm whether Codex chat opened. Retry to check again."
+                "unknown": "Could not confirm whether {{value0}} chat opened. Retry to check again."
               }
             }
           }
@@ -16906,6 +16906,11 @@
             "1f772bb5d0": "Message delivery is unconfirmed.",
             "93ef441197": "Message was not sent.",
             "a5e7f14068": "Retry"
+          },
+          "NativeChatLaunchRetry": {
+            "failed": "Chat could not be started.",
+            "unknown": "Chat connection could not be confirmed.",
+            "retry": "Retry"
           }
         }
       },
@@ -17284,7 +17289,6 @@
       "launchPromptNotDelivered": "Not delivered — check the terminal",
       "structuredSessionCloseFailed": "Could not close this chat session",
       "structuredSessionLaunchFailed": "Could not open {{value0}} chat",
-      "structuredSessionLaunchPending": "Starting {{value0}} chat…",
       "structuredSessionCloseFailedDescription": "The terminal stayed open so the provider remains recoverable.",
       "handoff": {
         "stage": {
@@ -17318,8 +17322,6 @@
         "retry": "Retry",
         "details": "Details"
       },
-      "structuredSessionFellBackToTerminal": "Structured chat isn't available",
-      "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
       "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details.",
       "subagents": {
         "state": {

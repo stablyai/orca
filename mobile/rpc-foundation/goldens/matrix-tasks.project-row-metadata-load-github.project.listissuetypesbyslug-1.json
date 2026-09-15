@@ -3,9 +3,9 @@
   "family": "tasks.project-row-metadata-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
   "scenarioSha256": "8b75854487566ca6da98d391b6822c81c99e61011fc094458ae038905c1c9287",
   "platform": "darwin",
@@ -13,9 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0ec535506ef6": {
+    "0329856b8162": {
+      "name": "projectIssueTypesError",
+      "value": "Unknown method",
+      "sent": 3
+    },
+    "09f12e10766e": {
       "name": "projectIssueTypesLoading",
-      "value": true
+      "value": false,
+      "sent": 3
     },
     "10e6f0eb4832": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -84,13 +90,10 @@
         }
       }
     },
-    "13110f6c348f": {
-      "name": "projectAvailableLabels",
-      "value": ["bug"]
-    },
-    "15a2c52c35d3": {
-      "name": "projectAvailableLabels",
-      "value": []
+    "1dbe4f4ee3a9": {
+      "name": "projectIssueTypesError",
+      "value": "Cannot read properties of undefined (reading 'ok')",
+      "sent": 3
     },
     "1e4a42e12fe1": {
       "labels": ["bug"],
@@ -105,22 +108,10 @@
       ],
       "usersError": ""
     },
-    "1ea80133c336": {
-      "name": "projectAssignableUsers",
-      "value": [
-        {
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ]
-    },
-    "20a3073fc5ae": {
+    "240e8dbe86a2": {
       "name": "projectIssueTypesError",
-      "value": "transport failure"
-    },
-    "2210882137a5": {
-      "name": "projectIssueTypesError",
-      "value": "outer refused"
+      "value": "outer refused",
+      "sent": 3
     },
     "2654bf3eaeb5": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -160,9 +151,25 @@
         }
       }
     },
-    "3d9f892630c2": {
-      "name": "projectAssignableUsersLoading",
-      "value": false
+    "2ef615f214b1": {
+      "name": "projectAssignableUsers",
+      "value": [
+        {
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "sent": 3
+    },
+    "3172adfa8033": {
+      "name": "projectIssueTypesError",
+      "value": "Failed to load issue types",
+      "sent": 3
+    },
+    "32b4277def9a": {
+      "name": "projectAvailableLabels",
+      "value": ["bug"],
+      "sent": 3
     },
     "3f5d8df504de": {
       "name": "github.project.listLabelsBySlug#1",
@@ -213,10 +220,6 @@
       ],
       "usersError": ""
     },
-    "4532c39efcc5": {
-      "name": "projectLabelsLoading",
-      "value": false
-    },
     "470cb6d8e135": {
       "name": "github.project.listIssueTypesBySlug#1",
       "args": [
@@ -252,6 +255,21 @@
           "ok": false
         }
       }
+    },
+    "48ae65ccd05f": {
+      "name": "projectIssueTypesError",
+      "value": "inner refused",
+      "sent": 3
+    },
+    "57d4746ddb82": {
+      "name": "projectAssignableUsersLoading",
+      "value": true,
+      "sent": 1
+    },
+    "5fd1b0e4ca3a": {
+      "name": "projectAssignableUsersLoading",
+      "value": false,
+      "sent": 3
     },
     "61b9b973f3c5": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -319,9 +337,10 @@
         }
       }
     },
-    "6a3a5470c82e": {
+    "6c910b6dc2fa": {
       "name": "projectIssueTypesError",
-      "value": "Cannot read properties of null (reading 'ok')"
+      "value": "",
+      "sent": 2
     },
     "6d0473328c78": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -359,6 +378,16 @@
         }
       }
     },
+    "7122de433e6a": {
+      "name": "projectIssueTypes",
+      "value": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "sent": 3
+    },
     "78836b1c1374": {
       "labels": ["bug"],
       "labelsError": "",
@@ -371,10 +400,6 @@
         }
       ],
       "usersError": ""
-    },
-    "7b69f54a8a5a": {
-      "name": "projectAssignableUsers",
-      "value": []
     },
     "7c837b386969": {
       "labels": ["bug"],
@@ -389,29 +414,14 @@
       ],
       "usersError": ""
     },
-    "7d235c436696": {
+    "7dce712a128e": {
       "name": "projectIssueTypesError",
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
-    "822c655b8d01": {
-      "name": "projectLabelsError",
-      "value": ""
-    },
-    "83bfe2deb7bf": {
-      "name": "projectAssignableUsersError",
-      "value": ""
-    },
-    "83c1f676e233": {
-      "name": "projectIssueTypes",
-      "value": []
+      "value": "Cannot read properties of null (reading 'ok')",
+      "sent": 3
     },
     "84c3fb2868bd": {
       "name": "github.project.listIssueTypesBySlug#1",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listIssueTypesBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"}}"
-    },
-    "84cd73de9431": {
-      "name": "projectIssueTypesError",
-      "value": "Failed to load issue types"
     },
     "85dea4f0ec45": {
       "labels": ["bug"],
@@ -439,9 +449,10 @@
       ],
       "usersError": ""
     },
-    "8d8599f1ba0f": {
-      "name": "projectIssueTypesError",
-      "value": ""
+    "8f395e09a24b": {
+      "name": "projectAvailableLabels",
+      "value": [],
+      "sent": 0
     },
     "8fbb806f8730": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -488,18 +499,6 @@
       "name": "github.project.listAssignableUsersBySlug#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listAssignableUsersBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"seedLogins\":[\"octocat\"]}}"
     },
-    "a149427e545f": {
-      "name": "projectLabelsLoading",
-      "value": true
-    },
-    "a1ecaf05ee5c": {
-      "name": "projectIssueTypesLoading",
-      "value": false
-    },
-    "a52f2267470a": {
-      "name": "projectIssueTypesError",
-      "value": "inner refused"
-    },
     "a5fc70778afe": {
       "labels": ["bug"],
       "labelsError": "",
@@ -513,14 +512,30 @@
       ],
       "usersError": ""
     },
-    "b65199d523ec": {
-      "name": "projectIssueTypes",
-      "value": [
-        {
-          "id": "type-1",
-          "name": "Bug"
-        }
-      ]
+    "a9da2a563a6c": {
+      "name": "projectLabelsLoading",
+      "value": false,
+      "sent": 3
+    },
+    "bf0887cbf7f3": {
+      "name": "projectAssignableUsersError",
+      "value": "",
+      "sent": 1
+    },
+    "bfd812ba86c3": {
+      "name": "projectIssueTypesLoading",
+      "value": true,
+      "sent": 2
+    },
+    "bfdd7df58f9b": {
+      "name": "projectLabelsError",
+      "value": "",
+      "sent": 0
+    },
+    "c573e0717658": {
+      "name": "projectIssueTypesError",
+      "value": "",
+      "sent": 3
     },
     "ce078ca67d81": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -558,6 +573,11 @@
         }
       }
     },
+    "d14a772531e0": {
+      "name": "projectLabelsLoading",
+      "value": true,
+      "sent": 0
+    },
     "d174aa9012c0": {
       "labels": ["bug"],
       "labelsError": "",
@@ -570,6 +590,11 @@
         }
       ],
       "usersError": ""
+    },
+    "d17d55e4fee3": {
+      "name": "projectAssignableUsers",
+      "value": [],
+      "sent": 1
     },
     "d5d91d8a5bac": {
       "labels": ["bug"],
@@ -588,10 +613,6 @@
         }
       ],
       "usersError": ""
-    },
-    "d6be96273c26": {
-      "name": "projectAssignableUsersLoading",
-      "value": true
     },
     "da36de1a5410": {
       "name": "github.project.listLabelsBySlug#1",
@@ -676,6 +697,11 @@
         "$rpc": "undefined"
       }
     },
+    "ee43aa13c95f": {
+      "name": "projectIssueTypes",
+      "value": [],
+      "sent": 2
+    },
     "ef507c348d21": {
       "name": "github.project.listAssignableUsersBySlug#1",
       "args": [
@@ -718,9 +744,10 @@
         }
       }
     },
-    "faa936060915": {
+    "f0ab50bf91b1": {
       "name": "projectIssueTypesError",
-      "value": "Unknown method"
+      "value": "transport failure",
+      "sent": 3
     }
   },
   "recording": {
@@ -736,21 +763,21 @@
           },
           "state": "d5d91d8a5bac",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -764,21 +791,21 @@
           },
           "state": "78836b1c1374",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "7d235c436696",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "1dbe4f4ee3a9",
+            "09f12e10766e"
           ]
         }
       },
@@ -792,21 +819,21 @@
           },
           "state": "8cec5485d355",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "6a3a5470c82e",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "7dce712a128e",
+            "09f12e10766e"
           ]
         }
       },
@@ -820,21 +847,21 @@
           },
           "state": "a5fc70778afe",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "84cd73de9431",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "3172adfa8033",
+            "09f12e10766e"
           ]
         }
       },
@@ -848,21 +875,21 @@
           },
           "state": "a5fc70778afe",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "84cd73de9431",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "3172adfa8033",
+            "09f12e10766e"
           ]
         }
       },
@@ -876,21 +903,21 @@
           },
           "state": "85dea4f0ec45",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "a52f2267470a",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "48ae65ccd05f",
+            "09f12e10766e"
           ]
         }
       },
@@ -904,21 +931,21 @@
           },
           "state": "1e4a42e12fe1",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "2210882137a5",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "240e8dbe86a2",
+            "09f12e10766e"
           ]
         }
       },
@@ -932,21 +959,21 @@
           },
           "state": "404aee2280bc",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "8d8599f1ba0f",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "c573e0717658",
+            "09f12e10766e"
           ]
         }
       },
@@ -960,21 +987,21 @@
           },
           "state": "7c837b386969",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "faa936060915",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "0329856b8162",
+            "09f12e10766e"
           ]
         }
       },
@@ -988,21 +1015,21 @@
           },
           "state": "d174aa9012c0",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "20a3073fc5ae",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "f0ab50bf91b1",
+            "09f12e10766e"
           ]
         }
       },
@@ -1016,21 +1043,21 @@
           },
           "state": "404aee2280bc",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "8d8599f1ba0f",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "c573e0717658",
+            "09f12e10766e"
           ]
         }
       }

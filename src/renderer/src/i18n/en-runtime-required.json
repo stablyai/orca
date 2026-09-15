@@ -2571,6 +2571,15 @@
         }
       },
       "worktree": {
+        "creation": {
+          "flow": {
+            "structured": {
+              "launch": {
+                "unknown": "Could not confirm whether {{value0}} chat opened. Retry to check again."
+              }
+            }
+          }
+        },
         "palette": {
           "search": {
             "0b01ff98d2": "Port",

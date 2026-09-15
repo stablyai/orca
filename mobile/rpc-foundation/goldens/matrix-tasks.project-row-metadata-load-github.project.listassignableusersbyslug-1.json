@@ -3,9 +3,9 @@
   "family": "tasks.project-row-metadata-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
   "scenarioSha256": "2303fc902e5a6cf6a43db58ef2938538a7b770d1509cc22a9811f4c83051aea1",
   "platform": "darwin",
@@ -13,34 +13,40 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0ec535506ef6": {
-      "name": "projectIssueTypesLoading",
-      "value": true
-    },
-    "13110f6c348f": {
-      "name": "projectAvailableLabels",
-      "value": ["bug"]
-    },
-    "15a2c52c35d3": {
-      "name": "projectAvailableLabels",
-      "value": []
-    },
-    "1dbbc2014563": {
+    "019b572d889b": {
       "name": "projectAssignableUsersError",
-      "value": "outer refused"
+      "value": "Cannot read properties of undefined (reading 'ok')",
+      "sent": 3
     },
-    "1ea80133c336": {
+    "09f12e10766e": {
+      "name": "projectIssueTypesLoading",
+      "value": false,
+      "sent": 3
+    },
+    "193e408831dc": {
+      "name": "projectAssignableUsersError",
+      "value": "Unknown method",
+      "sent": 3
+    },
+    "26e63cedd53f": {
+      "name": "projectAssignableUsersError",
+      "value": "transport failure",
+      "sent": 3
+    },
+    "2ef615f214b1": {
       "name": "projectAssignableUsers",
       "value": [
         {
           "login": "octocat",
           "name": "Octo"
         }
-      ]
+      ],
+      "sent": 3
     },
-    "3d9f892630c2": {
-      "name": "projectAssignableUsersLoading",
-      "value": false
+    "32b4277def9a": {
+      "name": "projectAvailableLabels",
+      "value": ["bug"],
+      "sent": 3
     },
     "3f5d8df504de": {
       "name": "github.project.listLabelsBySlug#1",
@@ -77,10 +83,6 @@
           }
         }
       }
-    },
-    "3f82f874744e": {
-      "name": "projectAssignableUsersError",
-      "value": "Unknown method"
     },
     "422b5b394c6c": {
       "name": "github.project.listAssignableUsersBySlug#1",
@@ -156,10 +158,6 @@
           }
         }
       }
-    },
-    "4532c39efcc5": {
-      "name": "projectLabelsLoading",
-      "value": false
     },
     "45c516d96c02": {
       "name": "github.project.listAssignableUsersBySlug#1",
@@ -244,6 +242,11 @@
         }
       }
     },
+    "57d4746ddb82": {
+      "name": "projectAssignableUsersLoading",
+      "value": true,
+      "sent": 1
+    },
     "580a93d48297": {
       "labels": ["bug"],
       "labelsError": "",
@@ -256,6 +259,11 @@
       "typesError": "",
       "users": [],
       "usersError": "Unknown method"
+    },
+    "5fd1b0e4ca3a": {
+      "name": "projectAssignableUsersLoading",
+      "value": false,
+      "sent": 3
     },
     "63501635672a": {
       "labels": ["bug"],
@@ -270,9 +278,25 @@
       "users": [],
       "usersError": "Cannot read properties of null (reading 'ok')"
     },
-    "6b42f445e370": {
+    "6375bbcea315": {
       "name": "projectAssignableUsersError",
-      "value": "Cannot read properties of undefined (reading 'ok')"
+      "value": "inner refused",
+      "sent": 3
+    },
+    "6c910b6dc2fa": {
+      "name": "projectIssueTypesError",
+      "value": "",
+      "sent": 2
+    },
+    "7122de433e6a": {
+      "name": "projectIssueTypes",
+      "value": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "sent": 3
     },
     "739399640862": {
       "name": "github.project.listAssignableUsersBySlug#1",
@@ -348,10 +372,6 @@
         }
       }
     },
-    "7b69f54a8a5a": {
-      "name": "projectAssignableUsers",
-      "value": []
-    },
     "7e5e42c91283": {
       "name": "github.project.listAssignableUsersBySlug#1",
       "args": [
@@ -388,18 +408,6 @@
           "ok": false
         }
       }
-    },
-    "822c655b8d01": {
-      "name": "projectLabelsError",
-      "value": ""
-    },
-    "83bfe2deb7bf": {
-      "name": "projectAssignableUsersError",
-      "value": ""
-    },
-    "83c1f676e233": {
-      "name": "projectIssueTypes",
-      "value": []
     },
     "84c3fb2868bd": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -439,9 +447,15 @@
         }
       }
     },
-    "8d8599f1ba0f": {
-      "name": "projectIssueTypesError",
-      "value": ""
+    "8ebe151a4e7c": {
+      "name": "projectAssignableUsersError",
+      "value": "Cannot read properties of null (reading 'ok')",
+      "sent": 3
+    },
+    "8f395e09a24b": {
+      "name": "projectAvailableLabels",
+      "value": [],
+      "sent": 0
     },
     "8fbb806f8730": {
       "name": "github.project.listIssueTypesBySlug#1",
@@ -535,22 +549,25 @@
       "users": [],
       "usersError": ""
     },
-    "a149427e545f": {
+    "a9da2a563a6c": {
       "name": "projectLabelsLoading",
-      "value": true
+      "value": false,
+      "sent": 3
     },
-    "a1ecaf05ee5c": {
+    "bf0887cbf7f3": {
+      "name": "projectAssignableUsersError",
+      "value": "",
+      "sent": 1
+    },
+    "bfd812ba86c3": {
       "name": "projectIssueTypesLoading",
-      "value": false
+      "value": true,
+      "sent": 2
     },
-    "b65199d523ec": {
-      "name": "projectIssueTypes",
-      "value": [
-        {
-          "id": "type-1",
-          "name": "Bug"
-        }
-      ]
+    "bfdd7df58f9b": {
+      "name": "projectLabelsError",
+      "value": "",
+      "sent": 0
     },
     "c1ec04d6cffb": {
       "labels": ["bug"],
@@ -565,9 +582,15 @@
       "users": [],
       "usersError": "inner refused"
     },
-    "c5b7a97798ac": {
-      "name": "projectAssignableUsersError",
-      "value": "inner refused"
+    "d14a772531e0": {
+      "name": "projectLabelsLoading",
+      "value": true,
+      "sent": 0
+    },
+    "d17d55e4fee3": {
+      "name": "projectAssignableUsers",
+      "value": [],
+      "sent": 1
     },
     "d41a9829423a": {
       "labels": ["bug"],
@@ -600,21 +623,24 @@
       ],
       "usersError": ""
     },
-    "d6be96273c26": {
-      "name": "projectAssignableUsersLoading",
-      "value": true
+    "d8ccdd1938bf": {
+      "name": "projectAssignableUsersError",
+      "value": "",
+      "sent": 3
     },
     "da36de1a5410": {
       "name": "github.project.listLabelsBySlug#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listLabelsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"}}"
     },
-    "df4e8bbcb961": {
+    "de5d251f09d0": {
       "name": "projectAssignableUsersError",
-      "value": "Cannot read properties of null (reading 'ok')"
+      "value": "Failed to load assignees",
+      "sent": 3
     },
-    "e08296c9ec58": {
+    "ea3458d66e88": {
       "name": "projectAssignableUsersError",
-      "value": "Failed to load assignees"
+      "value": "outer refused",
+      "sent": 3
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -623,6 +649,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ee43aa13c95f": {
+      "name": "projectIssueTypes",
+      "value": [],
+      "sent": 2
     },
     "ef507c348d21": {
       "name": "github.project.listAssignableUsersBySlug#1",
@@ -727,10 +758,6 @@
       "typesError": "",
       "users": [],
       "usersError": "transport failure"
-    },
-    "fb7de183d1dc": {
-      "name": "projectAssignableUsersError",
-      "value": "transport failure"
     }
   },
   "recording": {
@@ -746,21 +773,21 @@
           },
           "state": "d5d91d8a5bac",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1ea80133c336",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "2ef615f214b1",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -774,21 +801,21 @@
           },
           "state": "554d6896d32c",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "6b42f445e370",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "019b572d889b",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -802,21 +829,21 @@
           },
           "state": "63501635672a",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "df4e8bbcb961",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "8ebe151a4e7c",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -830,21 +857,21 @@
           },
           "state": "d41a9829423a",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "e08296c9ec58",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "de5d251f09d0",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -858,21 +885,21 @@
           },
           "state": "d41a9829423a",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "e08296c9ec58",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "de5d251f09d0",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -886,21 +913,21 @@
           },
           "state": "c1ec04d6cffb",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "c5b7a97798ac",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "6375bbcea315",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -914,21 +941,21 @@
           },
           "state": "f1e41c753708",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "1dbbc2014563",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "ea3458d66e88",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -942,21 +969,21 @@
           },
           "state": "9b3320d7d510",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "83bfe2deb7bf",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "d8ccdd1938bf",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -970,21 +997,21 @@
           },
           "state": "580a93d48297",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "3f82f874744e",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "193e408831dc",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -998,21 +1025,21 @@
           },
           "state": "faf207372749",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "fb7de183d1dc",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "26e63cedd53f",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       },
@@ -1026,21 +1053,21 @@
           },
           "state": "9b3320d7d510",
           "effects": [
-            "15a2c52c35d3",
-            "822c655b8d01",
-            "a149427e545f",
-            "7b69f54a8a5a",
-            "83bfe2deb7bf",
-            "d6be96273c26",
-            "83c1f676e233",
-            "8d8599f1ba0f",
-            "0ec535506ef6",
-            "13110f6c348f",
-            "4532c39efcc5",
-            "83bfe2deb7bf",
-            "3d9f892630c2",
-            "b65199d523ec",
-            "a1ecaf05ee5c"
+            "8f395e09a24b",
+            "bfdd7df58f9b",
+            "d14a772531e0",
+            "d17d55e4fee3",
+            "bf0887cbf7f3",
+            "57d4746ddb82",
+            "ee43aa13c95f",
+            "6c910b6dc2fa",
+            "bfd812ba86c3",
+            "32b4277def9a",
+            "a9da2a563a6c",
+            "d8ccdd1938bf",
+            "5fd1b0e4ca3a",
+            "7122de433e6a",
+            "09f12e10766e"
           ]
         }
       }

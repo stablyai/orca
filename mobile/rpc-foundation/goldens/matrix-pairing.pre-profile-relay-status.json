@@ -3,9 +3,9 @@
   "family": "pairing.pre-profile",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "14931cc23cd0e6d850f596c880014c606834898acbeee4abff3dc83a94b0c6c0",
   "platform": "darwin",
@@ -13,14 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0193ae4dbb38": {
-      "name": "candidate-closed",
-      "value": "relay"
-    },
-    "0799d165f56e": {
-      "name": "journal-saved",
-      "value": "pair-fixture-1"
-    },
     "088babc6e1f7": {
       "name": "status.get#2",
       "args": [
@@ -51,6 +43,16 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "0b595cd54ac3": {
+      "name": "journal-saved",
+      "value": "pair-fixture-1",
+      "sent": 0
+    },
+    "12869cc488be": {
+      "name": "host-saved",
+      "value": "relay-host-0001x",
+      "sent": 4
     },
     "18654b1dc666": {
       "name": "status.get#2",
@@ -83,12 +85,6 @@
             "$rpc": "null"
           }
         }
-      }
-    },
-    "1da0bf924e75": {
-      "name": "bundle-written",
-      "value": {
-        "version": 4
       }
     },
     "1e5b32902af7": {
@@ -203,9 +199,15 @@
         }
       }
     },
-    "4030a59932c1": {
-      "name": "journal-updated",
-      "value": "pair-fixture-1"
+    "477b001b0374": {
+      "name": "candidate-closed",
+      "value": "direct",
+      "sent": 4
+    },
+    "47dedea61355": {
+      "name": "journal-cleared",
+      "value": "pair-fixture-1",
+      "sent": 4
     },
     "53412dd89894": {
       "name": "pairing.provisionRelay#1",
@@ -368,6 +370,13 @@
         }
       }
     },
+    "6b9f1bf73e55": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      },
+      "sent": 4
+    },
     "6cb74a535419": {
       "name": "status.get#2",
       "args": [
@@ -504,17 +513,19 @@
         }
       }
     },
-    "b8549409f4a9": {
-      "name": "journal-cleared",
-      "value": "pair-fixture-1"
-    },
-    "bc627d34e0d0": {
-      "name": "host-saved",
-      "value": "relay-host-0001x"
+    "b96f13a39e18": {
+      "name": "journal-updated",
+      "value": "pair-fixture-1",
+      "sent": 2
     },
     "c0c86e67c300": {
       "name": "status.get#2",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "ca7cb1785a59": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 4
     },
     "cf2b86e124ae": {
       "name": "status.get#2",
@@ -555,9 +566,10 @@
         "hostId": "host-1"
       }
     },
-    "f203320e31e9": {
+    "d433a326314e": {
       "name": "candidate-closed",
-      "value": "direct"
+      "value": "relay",
+      "sent": 2
     }
   },
   "recording": {
@@ -573,14 +585,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -594,14 +606,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -615,14 +627,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -636,14 +648,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -657,14 +669,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -678,14 +690,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -699,14 +711,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -720,14 +732,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -741,14 +753,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -762,14 +774,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -783,14 +795,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       }

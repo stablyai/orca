@@ -22,11 +22,14 @@ export async function runRecording(
 ): Promise<Recording> {
   scheduler.start()
   const transport = new ScriptedRpcTransport(scheduler.elapsed)
-  const effects: { name: string; value: RecordedValue }[] = []
+  const effects: { name: string; value: RecordedValue; sent: number }[] = []
   const settlements: Record<string, Settlement> = {}
   const recording: Recording = { scenario: scenario.id, checkpoints: [] }
   const effect = (name: string, value: unknown) => {
-    effects.push({ name, value: captureValue(value) })
+    // Why the send count: sender and effects are two independent lists, so a send reordered ahead of
+    // a device write moves neither of them. Stamping the count at push time orders them against
+    // each other, and that reordering becomes a golden diff.
+    effects.push({ name, value: captureValue(value), sent: transport.requests.length })
   }
   const stopUnhandled = recordUnhandledRejections(effect)
   let mounted: MountedOperation | undefined

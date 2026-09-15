@@ -3,9 +3,9 @@
   "family": "hostedReview.create-intent",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "658eb7bbf63b3a4b38eca0b1733e523962b6b6943644d65aab6f5c7e62534d6a",
   "platform": "darwin",
@@ -98,6 +98,16 @@
     "0a191e58baef": {
       "name": "hostedReview.create#1",
       "json": "{\"id\":\"frame-11\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Host title\",\"body\":\"Host body\",\"draft\":false}}"
+    },
+    "0b80f2766914": {
+      "name": "progress",
+      "value": "generating_commit_message",
+      "sent": 3
+    },
+    "0d7681dfb908": {
+      "name": "progress",
+      "value": "pushing",
+      "sent": 7
     },
     "125fbea5f50a": {
       "name": "git.generateCommitMessage#1",
@@ -412,9 +422,10 @@
       "name": "git.bulkStage#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.bulkStage\",\"params\":{\"worktree\":\"id:repo42::/p\",\"filePaths\":[\"src/new.ts\"]}}"
     },
-    "368b0b9ce80a": {
+    "3a3a688f828b": {
       "name": "progress",
-      "value": "staging"
+      "value": "staging",
+      "sent": 1
     },
     "43ccfe31d2a4": {
       "outcome": {
@@ -549,10 +560,6 @@
         }
       }
     },
-    "5975e0bdd4a4": {
-      "name": "progress",
-      "value": "creating_review"
-    },
     "5b46f52533a0": {
       "name": "hostedReview.create#1",
       "args": [
@@ -638,10 +645,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "60421d882fd2": {
-      "name": "progress",
-      "value": "pushing"
     },
     "6538ade0d25d": {
       "name": "hostedReview.getCreationEligibility#1",
@@ -737,10 +740,6 @@
         }
       }
     },
-    "6a5c9570c542": {
-      "name": "progress",
-      "value": "generating_commit_message"
-    },
     "6df8e4961ee3": {
       "name": "git.generateCommitMessage#1",
       "args": [
@@ -778,13 +777,14 @@
     "72b388fd3302": {
       "outcome": "unrun"
     },
+    "7349acf3d5b8": {
+      "name": "progress",
+      "value": "committing",
+      "sent": 4
+    },
     "7679f4e521d1": {
       "name": "git.push#1",
       "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "7778d4c43a58": {
-      "name": "progress",
-      "value": "committing"
     },
     "788869e46db6": {
       "name": "git.push#1",
@@ -1189,6 +1189,11 @@
       "name": "git.generateCommitMessage#1",
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"git.generateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
+    "bbf5b6093f56": {
+      "name": "progress",
+      "value": "creating_review",
+      "sent": 10
+    },
     "c444aeacec59": {
       "name": "git.status#3",
       "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
@@ -1502,7 +1507,7 @@
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a"]
+          "effects": ["3a3a688f828b"]
         }
       },
       {
@@ -1514,7 +1519,7 @@
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a", "6a5c9570c542"]
+          "effects": ["3a3a688f828b", "0b80f2766914"]
         }
       },
       {
@@ -1538,7 +1543,7 @@
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1566,7 +1571,7 @@
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1596,7 +1601,7 @@
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8", "0d7681dfb908"]
         }
       },
       {
@@ -1633,11 +1638,11 @@
           },
           "state": "72b388fd3302",
           "effects": [
-            "368b0b9ce80a",
-            "6a5c9570c542",
-            "7778d4c43a58",
-            "60421d882fd2",
-            "5975e0bdd4a4"
+            "3a3a688f828b",
+            "0b80f2766914",
+            "7349acf3d5b8",
+            "0d7681dfb908",
+            "bbf5b6093f56"
           ]
         }
       },
@@ -1677,11 +1682,11 @@
           },
           "state": "43ccfe31d2a4",
           "effects": [
-            "368b0b9ce80a",
-            "6a5c9570c542",
-            "7778d4c43a58",
-            "60421d882fd2",
-            "5975e0bdd4a4"
+            "3a3a688f828b",
+            "0b80f2766914",
+            "7349acf3d5b8",
+            "0d7681dfb908",
+            "bbf5b6093f56"
           ]
         }
       },
@@ -1710,7 +1715,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1738,7 +1743,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1766,7 +1771,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1794,7 +1799,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1822,7 +1827,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1850,7 +1855,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1878,7 +1883,7 @@
             "run": "83e80c98d259"
           },
           "state": "dd5d9b4070b7",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1906,7 +1911,7 @@
             "run": "83e80c98d259"
           },
           "state": "dd5d9b4070b7",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1934,7 +1939,7 @@
             "run": "83e80c98d259"
           },
           "state": "dd5d9b4070b7",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1962,7 +1967,7 @@
             "run": "83e80c98d259"
           },
           "state": "dd5d9b4070b7",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -1990,7 +1995,7 @@
             "run": "83e80c98d259"
           },
           "state": "dd5d9b4070b7",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2018,7 +2023,7 @@
             "run": "83e80c98d259"
           },
           "state": "dd5d9b4070b7",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2046,7 +2051,7 @@
             "run": "83e80c98d259"
           },
           "state": "dd5d9b4070b7",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2074,7 +2079,7 @@
             "run": "83e80c98d259"
           },
           "state": "dd5d9b4070b7",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2102,7 +2107,7 @@
             "run": "83e80c98d259"
           },
           "state": "dd5d9b4070b7",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2130,7 +2135,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2158,7 +2163,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2186,7 +2191,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2214,7 +2219,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2242,7 +2247,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2270,7 +2275,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2298,7 +2303,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2326,7 +2331,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2354,7 +2359,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2382,7 +2387,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2410,7 +2415,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2438,7 +2443,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2466,7 +2471,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2494,7 +2499,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       },
       {
@@ -2522,7 +2527,7 @@
             "run": "e6f94c399ee4"
           },
           "state": "1bfbb544c337",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["3a3a688f828b", "0b80f2766914", "7349acf3d5b8"]
         }
       }
     ]

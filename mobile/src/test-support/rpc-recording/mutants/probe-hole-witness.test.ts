@@ -40,6 +40,7 @@ const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonl
 async function verdict(id: string, mutation: Mutation): Promise<string> {
   const scenario = input.scenarios.find((candidate) => candidate.id === id)!
   const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
+    device: scenario,
     mutation: operationMutation(mutation)
   })
   const result = await runRecordingMutant(

@@ -3,9 +3,9 @@
   "family": "tasks.item-detail-metadata",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
   "scenarioSha256": "a2ecf4ddc2c9870a8d73cbd920b46bb0663a958ac156dc6de092be3c9474ea2b",
   "platform": "darwin",
@@ -13,14 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0358aa4ddd2c": {
-      "name": "itemAssignableUsers",
-      "value": []
-    },
-    "04ddb42260d2": {
-      "name": "itemLabelsError",
-      "value": "Unknown method"
-    },
     "0512455a3440": {
       "name": "github.listLabels#1",
       "args": [
@@ -119,9 +111,10 @@
       "usersError": "",
       "usersLoading": false
     },
-    "1258dfee6d26": {
-      "name": "itemLabelsError",
-      "value": "transport failure"
+    "14b04c3d1156": {
+      "name": "itemAssignableUsersLoading",
+      "value": true,
+      "sent": 1
     },
     "187a6bd82efe": {
       "labels": ["bug", "chore"],
@@ -138,10 +131,6 @@
       ],
       "usersError": "",
       "usersLoading": false
-    },
-    "226ea8e4b98b": {
-      "name": "itemAssignableUsersError",
-      "value": ""
     },
     "26a2b4de39d4": {
       "name": "github.listLabels#1",
@@ -174,6 +163,18 @@
         }
       }
     },
+    "2f84a8101a09": {
+      "name": "itemAvailableLabels",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 2
+    },
+    "30554accaab5": {
+      "name": "itemAvailableLabels",
+      "value": ["bug", "chore"],
+      "sent": 2
+    },
     "31a9aea0d54a": {
       "name": "github.listLabels#1",
       "args": [
@@ -205,9 +206,10 @@
         }
       }
     },
-    "3b9ce19a0449": {
-      "name": "itemBodyDraft",
-      "value": "body"
+    "3af8e2a236cf": {
+      "name": "itemAssignableUsersError",
+      "value": "",
+      "sent": 1
     },
     "3de77e6e6dc2": {
       "name": "github.listLabels#1",
@@ -276,16 +278,6 @@
         }
       }
     },
-    "419cde8cf391": {
-      "name": "itemLabelsError",
-      "value": ""
-    },
-    "46fd44a31167": {
-      "name": "itemAvailableLabels",
-      "value": {
-        "error": "refused"
-      }
-    },
     "476e11905643": {
       "labels": [],
       "labelsError": "Unknown method",
@@ -302,9 +294,15 @@
       "usersError": "",
       "usersLoading": false
     },
-    "50ab150a7632": {
-      "name": "itemAssignableUsersLoading",
-      "value": true
+    "49a2a2210aec": {
+      "name": "itemLabelsError",
+      "value": "",
+      "sent": 2
+    },
+    "4be2a2e21bd0": {
+      "name": "itemBodyDraft",
+      "value": "body",
+      "sent": 0
     },
     "57c277b6556c": {
       "labels": {
@@ -327,6 +325,11 @@
     "594a2904a1bc": {
       "name": "github.listAssignableUsers#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "60ab7459b747": {
+      "name": "itemLabelsLoading",
+      "value": true,
+      "sent": 0
     },
     "687824c5a987": {
       "labels": {
@@ -367,23 +370,20 @@
       "usersError": "",
       "usersLoading": false
     },
-    "8e18bb94a047": {
-      "name": "itemLabelsError",
-      "value": "outer refused"
+    "763cfed9792e": {
+      "name": "itemAssignableUsers",
+      "value": [],
+      "sent": 1
     },
-    "903a54a21708": {
-      "name": "itemAvailableLabels",
-      "value": ["bug", "chore"]
-    },
-    "98a776cd38a3": {
+    "996ab44a0693": {
       "name": "itemAvailableLabels",
       "value": {
-        "$rpc": "null"
-      }
-    },
-    "a05b630b1ca2": {
-      "name": "itemAssignableUsersLoading",
-      "value": false
+        "error": {
+          "message": "inner refused"
+        },
+        "ok": false
+      },
+      "sent": 2
     },
     "a268d5d92265": {
       "name": "github.listAssignableUsers#1",
@@ -424,15 +424,23 @@
         }
       }
     },
-    "aa97d0d3a0e8": {
-      "name": "itemLabelsLoading",
-      "value": true
+    "a37497fa506c": {
+      "name": "itemAssignableUsers",
+      "value": [
+        {
+          "avatarUrl": {
+            "$rpc": "null"
+          },
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "sent": 2
     },
-    "acc60bbecb3b": {
-      "name": "itemAvailableLabels",
-      "value": {
-        "$rpc": "undefined"
-      }
+    "a94b160e0a27": {
+      "name": "itemLabelsError",
+      "value": "Unknown method",
+      "sent": 2
     },
     "b041f1e6a2ab": {
       "name": "github.listLabels#1",
@@ -470,9 +478,13 @@
         }
       }
     },
-    "b7f5069690eb": {
+    "b0a4cc69238b": {
       "name": "itemAvailableLabels",
-      "value": []
+      "value": {
+        "error": "inner refused",
+        "ok": false
+      },
+      "sent": 2
     },
     "b807e8ed0345": {
       "name": "github.listLabels#1",
@@ -508,14 +520,12 @@
         }
       }
     },
-    "c0863d661f33": {
+    "c1c0cc03119d": {
       "name": "itemAvailableLabels",
       "value": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      }
+        "$rpc": "undefined"
+      },
+      "sent": 2
     },
     "c5ab6c4bd0c5": {
       "labels": {
@@ -566,6 +576,11 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "cb284f09e5d4": {
+      "name": "itemLabelsError",
+      "value": "outer refused",
+      "sent": 2
     },
     "d1182c2be3cf": {
       "labels": [],
@@ -666,6 +681,16 @@
         }
       }
     },
+    "e4421084ff39": {
+      "name": "itemLabelsLoading",
+      "value": false,
+      "sent": 2
+    },
+    "e54717a435ad": {
+      "name": "itemLabelsError",
+      "value": "transport failure",
+      "sent": 2
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -678,28 +703,27 @@
       "name": "github.listLabels#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
-    "f300e2f57121": {
+    "f06d897d7f6d": {
       "name": "itemAvailableLabels",
       "value": {
-        "error": "inner refused",
-        "ok": false
-      }
+        "error": "refused"
+      },
+      "sent": 2
     },
-    "f9cadd6cfc38": {
-      "name": "itemAssignableUsers",
-      "value": [
-        {
-          "avatarUrl": {
-            "$rpc": "null"
-          },
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ]
+    "f70626574f7a": {
+      "name": "itemAvailableLabels",
+      "value": [],
+      "sent": 0
     },
-    "fd6c595204e3": {
-      "name": "itemLabelsLoading",
-      "value": false
+    "f991510500df": {
+      "name": "itemAssignableUsersLoading",
+      "value": false,
+      "sent": 2
+    },
+    "fc060a38ddda": {
+      "name": "itemLabelsError",
+      "value": "",
+      "sent": 0
     }
   },
   "recording": {
@@ -715,17 +739,17 @@
           },
           "state": "187a6bd82efe",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "903a54a21708",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "30554accaab5",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -739,17 +763,17 @@
           },
           "state": "09c5c8d10325",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "acc60bbecb3b",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "c1c0cc03119d",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -763,17 +787,17 @@
           },
           "state": "57c277b6556c",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "98a776cd38a3",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "2f84a8101a09",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -787,17 +811,17 @@
           },
           "state": "687824c5a987",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "46fd44a31167",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "f06d897d7f6d",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -811,17 +835,17 @@
           },
           "state": "c5ab6c4bd0c5",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "f300e2f57121",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "b0a4cc69238b",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -835,17 +859,17 @@
           },
           "state": "7357dc0a4b99",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "c0863d661f33",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "996ab44a0693",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -859,17 +883,17 @@
           },
           "state": "d1182c2be3cf",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "8e18bb94a047",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "cb284f09e5d4",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -883,17 +907,17 @@
           },
           "state": "d79f6e922f48",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "419cde8cf391",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "49a2a2210aec",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -907,17 +931,17 @@
           },
           "state": "476e11905643",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "04ddb42260d2",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "a94b160e0a27",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -931,17 +955,17 @@
           },
           "state": "0d670a7b256b",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "1258dfee6d26",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "e54717a435ad",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       },
@@ -955,17 +979,17 @@
           },
           "state": "d79f6e922f48",
           "effects": [
-            "3b9ce19a0449",
-            "b7f5069690eb",
-            "419cde8cf391",
-            "aa97d0d3a0e8",
-            "0358aa4ddd2c",
-            "226ea8e4b98b",
-            "50ab150a7632",
-            "419cde8cf391",
-            "fd6c595204e3",
-            "f9cadd6cfc38",
-            "a05b630b1ca2"
+            "4be2a2e21bd0",
+            "f70626574f7a",
+            "fc060a38ddda",
+            "60ab7459b747",
+            "763cfed9792e",
+            "3af8e2a236cf",
+            "14b04c3d1156",
+            "49a2a2210aec",
+            "e4421084ff39",
+            "a37497fa506c",
+            "f991510500df"
           ]
         }
       }

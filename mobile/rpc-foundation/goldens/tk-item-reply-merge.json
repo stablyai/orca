@@ -3,9 +3,9 @@
   "family": "tasks.item-reply-merge",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "b8e60092a29ea4944a891adc026444cc1da18c52221876f9e7c07b450b34cea8",
   "platform": "darwin",
@@ -52,70 +52,19 @@
         }
       }
     },
-    "066ce15717c8": {
-      "name": "mutatingStatus",
-      "value": true
-    },
     "08f1b4229a2c": {
       "name": "github.addIssueComment#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12,\"body\":\"@octocat a reply\",\"type\":\"pr\"}}"
     },
-    "0eeeeae9df15": {
-      "name": "detailPayload",
-      "value": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": false,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a reply",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 903,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      }
+    "0be9101a1dfc": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 3
+    },
+    "0c0d6ea592d5": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 3
     },
     "19e3a37362dc": {
       "error": "",
@@ -217,15 +166,7 @@
         "reviewRequests": []
       }
     },
-    "240fb5bf0f1e": {
-      "name": "itemReplyDrafts",
-      "value": {}
-    },
-    "6bd857c36deb": {
-      "name": "github.mergePR#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"method\":\"squash\"}}"
-    },
-    "71a30d754356": {
+    "2b89f7945bce": {
       "name": "items",
       "value": [
         {
@@ -245,50 +186,34 @@
           },
           "title": "A pull request"
         }
-      ]
-    },
-    "7df24cf10f99": {
-      "name": "linear.updateIssue#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.updateIssue"
-        },
-        {
-          "name": "params",
-          "value": {
-            "id": "issue-1",
-            "updates": {
-              "stateId": "state-2"
-            },
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
       ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
+      "sent": 4
     },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
+    "2f84f3228054": {
+      "name": "itemReplyDrafts",
+      "value": {},
+      "sent": 2
     },
-    "92083670ec3e": {
+    "32a3635e06a4": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 1
+    },
+    "583b546bd557": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 1
+    },
+    "6bd857c36deb": {
+      "name": "github.mergePR#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"method\":\"squash\"}}"
+    },
+    "70678ab6df9a": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 4
+    },
+    "7bbc96cd8511": {
       "name": "detailPayload",
       "value": {
         "assignees": ["octocat"],
@@ -349,7 +274,62 @@
           "$rpc": "null"
         },
         "reviewRequests": []
+      },
+      "sent": 2
+    },
+    "7df24cf10f99": {
+      "name": "linear.updateIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.updateIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "id": "issue-1",
+            "updates": {
+              "stateId": "state-2"
+            },
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
       }
+    },
+    "82983d26b169": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 2
+    },
+    "8cde53a56cdf": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 2
+    },
+    "8f08c9b94011": {
+      "name": "actionItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 3
     },
     "976ce137a1ed": {
       "name": "github.addIssueComment#1",
@@ -393,11 +373,10 @@
         }
       }
     },
-    "ac9996319e05": {
-      "name": "actionItem",
-      "value": {
-        "$rpc": "null"
-      }
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
     },
     "ae78fb6dcf29": {
       "name": "github.addPRReviewCommentReply#1",
@@ -447,15 +426,96 @@
         }
       }
     },
+    "b19de2486603": {
+      "name": "itemReplyDrafts",
+      "value": {
+        "comment-2": "a reply"
+      },
+      "sent": 1
+    },
+    "b57ded8a3ea3": {
+      "name": "error",
+      "value": "",
+      "sent": 2
+    },
     "b959a668e307": {
       "name": "linear.updateIssue#1",
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"linear.updateIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\",\"updates\":{\"stateId\":\"state-2\"}}}"
     },
-    "c9ebd6cbea9b": {
-      "name": "itemReplyDrafts",
+    "bc3f6bcb8a5e": {
+      "name": "detailPayload",
       "value": {
-        "comment-2": "a reply"
-      }
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a reply",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 903,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      },
+      "sent": 1
+    },
+    "c22bc4151f3c": {
+      "name": "actionItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 4
+    },
+    "cc96725d8f47": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 0
+    },
+    "d48d5c49486c": {
+      "name": "error",
+      "value": "",
+      "sent": 1
     },
     "d640b8e687fa": {
       "error": "",
@@ -542,6 +602,11 @@
         },
         "reviewRequests": []
       }
+    },
+    "dbbebbd74a18": {
+      "name": "error",
+      "value": "",
+      "sent": 3
     },
     "e079a4228dc8": {
       "error": "",
@@ -644,10 +709,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f02550278f6a": {
-      "name": "mutatingStatus",
-      "value": false
     }
   },
   "recording": {
@@ -664,11 +725,11 @@
           },
           "state": "e079a4228dc8",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "c9ebd6cbea9b",
-            "0eeeeae9df15",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "b19de2486603",
+            "bc3f6bcb8a5e",
+            "32a3635e06a4"
           ]
         }
       },
@@ -684,16 +745,16 @@
           },
           "state": "19e3a37362dc",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "c9ebd6cbea9b",
-            "0eeeeae9df15",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "240fb5bf0f1e",
-            "92083670ec3e",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "b19de2486603",
+            "bc3f6bcb8a5e",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "2f84f3228054",
+            "7bbc96cd8511",
+            "8cde53a56cdf"
           ]
         }
       },
@@ -710,20 +771,20 @@
           },
           "state": "d640b8e687fa",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "c9ebd6cbea9b",
-            "0eeeeae9df15",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "240fb5bf0f1e",
-            "92083670ec3e",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "b19de2486603",
+            "bc3f6bcb8a5e",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "2f84f3228054",
+            "7bbc96cd8511",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "8f08c9b94011",
+            "0c0d6ea592d5"
           ]
         }
       },
@@ -741,25 +802,25 @@
           },
           "state": "d640b8e687fa",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "c9ebd6cbea9b",
-            "0eeeeae9df15",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "240fb5bf0f1e",
-            "92083670ec3e",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "71a30d754356",
-            "ac9996319e05",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "b19de2486603",
+            "bc3f6bcb8a5e",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "2f84f3228054",
+            "7bbc96cd8511",
+            "8cde53a56cdf",
+            "82983d26b169",
+            "b57ded8a3ea3",
+            "8f08c9b94011",
+            "0c0d6ea592d5",
+            "0be9101a1dfc",
+            "dbbebbd74a18",
+            "2b89f7945bce",
+            "c22bc4151f3c",
+            "70678ab6df9a"
           ]
         }
       }

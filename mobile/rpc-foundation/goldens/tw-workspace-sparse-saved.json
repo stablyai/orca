@@ -3,9 +3,9 @@
   "family": "tasks.workspace-sparse",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "124f664e339bfd83a1d892e1cd953a78fdf0dc4b20c4272356d24079c72a3e04",
   "platform": "darwin",
@@ -13,13 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1d9a7d969446": {
-      "name": "workspaceSparsePresetsLoaded",
-      "value": true
-    },
-    "312ed3cbf468": {
-      "name": "workspaceSparsePresetId",
-      "value": "p1"
+    "3f2baafe9f80": {
+      "name": "workspaceSparseSaving",
+      "value": false,
+      "sent": 2
     },
     "404305aa2e3a": {
       "presets": [
@@ -40,21 +37,27 @@
         "targetId": "ssh-1"
       }
     },
-    "42bbd034563e": {
-      "name": "workspaceSparseDraft",
+    "452edc62bce0": {
+      "name": "workspaceSshState",
       "value": {
-        "$rpc": "null"
-      }
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
     },
-    "4856f62b3650": {
-      "name": "workspaceSparsePresets",
-      "value": [
-        {
-          "directories": ["docs"],
-          "id": "p1",
-          "name": "docs"
-        }
-      ]
+    "594fac1293d4": {
+      "name": "workspaceSparsePresetsError",
+      "value": "",
+      "sent": 1
+    },
+    "5b8f6c626989": {
+      "name": "workspaceSparsePresetId",
+      "value": "p1",
+      "sent": 2
     },
     "5c44ff5f6877": {
       "name": "repo.saveSparsePreset#1",
@@ -94,10 +97,6 @@
           }
         }
       }
-    },
-    "7fd0cde62993": {
-      "name": "workspaceSparseSaving",
-      "value": false
     },
     "89aa7a3bd619": {
       "name": "ssh.getState#1",
@@ -139,24 +138,26 @@
         }
       }
     },
-    "921f72d7827e": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": {
-          "$rpc": "null"
-        },
-        "reconnectAttempt": 0,
-        "status": "connected",
-        "targetId": "ssh-1"
-      }
+    "8a48f96e40fe": {
+      "name": "workspaceSparsePresets",
+      "value": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "sent": 2
     },
-    "cea9d7e8986e": {
+    "8ff2b79a90fb": {
+      "name": "workspaceSparsePresetsLoaded",
+      "value": true,
+      "sent": 2
+    },
+    "c74f5fe12440": {
       "name": "workspaceSparseSaving",
-      "value": true
-    },
-    "dba381378b08": {
-      "name": "workspaceSparsePresetsError",
-      "value": ""
+      "value": true,
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -179,6 +180,13 @@
         "targetId": "ssh-1"
       }
     },
+    "ef39f35afb7f": {
+      "name": "workspaceSparseDraft",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 2
+    },
     "f9dfbe0c0ea7": {
       "name": "ssh.getState#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
@@ -200,7 +208,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "ee3a941d5e9c",
-          "effects": ["921f72d7827e"]
+          "effects": ["452edc62bce0"]
         }
       },
       {
@@ -214,14 +222,14 @@
           },
           "state": "404305aa2e3a",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       }

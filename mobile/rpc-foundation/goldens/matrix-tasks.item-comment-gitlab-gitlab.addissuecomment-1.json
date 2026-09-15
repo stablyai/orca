@@ -3,9 +3,9 @@
   "family": "tasks.item-comment-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "154d91d00db23ea2718a6ee0b6c5cafc7233084532b3d561731b059d58e006f5",
   "platform": "darwin",
@@ -46,10 +46,6 @@
         "provider": "gitlab"
       }
     },
-    "066ce15717c8": {
-      "name": "mutatingStatus",
-      "value": true
-    },
     "13cad23ebd19": {
       "name": "gitlab.addIssueComment#1",
       "args": [
@@ -87,10 +83,6 @@
         }
       }
     },
-    "186f44bc465a": {
-      "name": "error",
-      "value": "Unknown method"
-    },
     "18cc1a09cdf1": {
       "draft": "a comment",
       "error": "Unknown method",
@@ -123,6 +115,11 @@
         "pipelineJobs": [],
         "provider": "gitlab"
       }
+    },
+    "198ac889ae28": {
+      "name": "error",
+      "value": "transport failure",
+      "sent": 1
     },
     "1f27ffccd3c3": {
       "name": "gitlab.addIssueComment#1",
@@ -238,10 +235,6 @@
         "provider": "gitlab"
       }
     },
-    "2d711d96f190": {
-      "name": "error",
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
     "2fcb406ea267": {
       "name": "gitlab.addIssueComment#1",
       "args": [
@@ -274,6 +267,11 @@
           "ok": true
         }
       }
+    },
+    "32a3635e06a4": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 1
     },
     "34aadd6fe168": {
       "draft": "a comment",
@@ -420,6 +418,31 @@
         "provider": "gitlab"
       }
     },
+    "59727d722699": {
+      "name": "detailPayload",
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 904
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      },
+      "sent": 1
+    },
     "597a2de36c85": {
       "draft": "",
       "error": "",
@@ -563,37 +586,15 @@
         "provider": "gitlab"
       }
     },
-    "82cd71d524c8": {
+    "7d901d60a01a": {
       "name": "error",
-      "value": ""
+      "value": "[object Object]",
+      "sent": 1
     },
-    "92ea6ed9109e": {
-      "name": "detailPayload",
-      "value": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 904
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
-    "945ea389c1ef": {
+    "9e263f5e91be": {
       "name": "error",
-      "value": "transport failure"
+      "value": "",
+      "sent": 0
     },
     "a0921dd0e496": {
       "name": "gitlab.addIssueComment#1",
@@ -629,13 +630,35 @@
         }
       }
     },
-    "a36b80f7b048": {
-      "name": "itemCommentDraft",
-      "value": ""
+    "a5c1f8783879": {
+      "name": "detailPayload",
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "local-1767225600000"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      },
+      "sent": 1
     },
-    "ae5be7de2632": {
+    "b53c339a3854": {
       "name": "error",
-      "value": "Cannot read properties of undefined (reading 'ok')"
+      "value": "Unknown method",
+      "sent": 1
     },
     "b658c69cf462": {
       "draft": "a comment",
@@ -670,10 +693,6 @@
         "provider": "gitlab"
       }
     },
-    "ba65a7abe43b": {
-      "name": "error",
-      "value": "outer refused"
-    },
     "bf67cac66565": {
       "draft": "a comment",
       "error": "transport failure",
@@ -707,9 +726,15 @@
         "provider": "gitlab"
       }
     },
-    "c008e85e2d06": {
+    "c4f585980acf": {
       "name": "error",
-      "value": "inner refused"
+      "value": "inner refused",
+      "sent": 1
+    },
+    "c939abf83c6c": {
+      "name": "error",
+      "value": "Cannot read properties of undefined (reading 'ok')",
+      "sent": 1
     },
     "cb18508bfe06": {
       "name": "gitlab.addIssueComment#1",
@@ -747,6 +772,16 @@
         }
       }
     },
+    "cc96725d8f47": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 0
+    },
+    "d48d5c49486c": {
+      "name": "error",
+      "value": "",
+      "sent": 1
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -755,13 +790,10 @@
         "$rpc": "undefined"
       }
     },
-    "ecc1b4e0914f": {
+    "f791567b212f": {
       "name": "error",
-      "value": "[object Object]"
-    },
-    "f02550278f6a": {
-      "name": "mutatingStatus",
-      "value": false
+      "value": "outer refused",
+      "sent": 1
     },
     "f7fdfa8aaddb": {
       "name": "gitlab.addIssueComment#1",
@@ -800,6 +832,11 @@
         }
       }
     },
+    "faf0249fca3c": {
+      "name": "error",
+      "value": "Cannot read properties of null (reading 'ok')",
+      "sent": 1
+    },
     "fe21c61cf6a3": {
       "name": "gitlab.addIssueComment#1",
       "args": [
@@ -837,29 +874,10 @@
         }
       }
     },
-    "ffa3e217cfc9": {
-      "name": "detailPayload",
-      "value": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "local-1767225600000"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
+    "ffdb6c1abbef": {
+      "name": "itemCommentDraft",
+      "value": "",
+      "sent": 1
     }
   },
   "recording": {
@@ -876,11 +894,11 @@
           },
           "state": "48a9b4deaa5b",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "a36b80f7b048",
-            "92ea6ed9109e",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "ffdb6c1abbef",
+            "59727d722699",
+            "32a3635e06a4"
           ]
         }
       },
@@ -894,7 +912,7 @@
             "comment-0": "eb79a9b3682a"
           },
           "state": "b658c69cf462",
-          "effects": ["066ce15717c8", "82cd71d524c8", "ae5be7de2632", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "c939abf83c6c", "32a3635e06a4"]
         }
       },
       {
@@ -907,7 +925,7 @@
             "comment-0": "eb79a9b3682a"
           },
           "state": "34aadd6fe168",
-          "effects": ["066ce15717c8", "82cd71d524c8", "2d711d96f190", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "faf0249fca3c", "32a3635e06a4"]
         }
       },
       {
@@ -921,11 +939,11 @@
           },
           "state": "597a2de36c85",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "a36b80f7b048",
-            "ffa3e217cfc9",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "ffdb6c1abbef",
+            "a5c1f8783879",
+            "32a3635e06a4"
           ]
         }
       },
@@ -939,7 +957,7 @@
             "comment-0": "eb79a9b3682a"
           },
           "state": "62e2ee2207c3",
-          "effects": ["066ce15717c8", "82cd71d524c8", "c008e85e2d06", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "c4f585980acf", "32a3635e06a4"]
         }
       },
       {
@@ -952,7 +970,7 @@
             "comment-0": "eb79a9b3682a"
           },
           "state": "27e26e9d4ca3",
-          "effects": ["066ce15717c8", "82cd71d524c8", "ecc1b4e0914f", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "7d901d60a01a", "32a3635e06a4"]
         }
       },
       {
@@ -965,7 +983,7 @@
             "comment-0": "eb79a9b3682a"
           },
           "state": "7a6c84318727",
-          "effects": ["066ce15717c8", "82cd71d524c8", "ba65a7abe43b", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "f791567b212f", "32a3635e06a4"]
         }
       },
       {
@@ -978,7 +996,7 @@
             "comment-0": "eb79a9b3682a"
           },
           "state": "034e6a1ee295",
-          "effects": ["066ce15717c8", "82cd71d524c8", "82cd71d524c8", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "d48d5c49486c", "32a3635e06a4"]
         }
       },
       {
@@ -991,7 +1009,7 @@
             "comment-0": "eb79a9b3682a"
           },
           "state": "18cc1a09cdf1",
-          "effects": ["066ce15717c8", "82cd71d524c8", "186f44bc465a", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "b53c339a3854", "32a3635e06a4"]
         }
       },
       {
@@ -1004,7 +1022,7 @@
             "comment-0": "eb79a9b3682a"
           },
           "state": "bf67cac66565",
-          "effects": ["066ce15717c8", "82cd71d524c8", "945ea389c1ef", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "198ac889ae28", "32a3635e06a4"]
         }
       },
       {
@@ -1017,7 +1035,7 @@
             "comment-0": "eb79a9b3682a"
           },
           "state": "034e6a1ee295",
-          "effects": ["066ce15717c8", "82cd71d524c8", "82cd71d524c8", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "d48d5c49486c", "32a3635e06a4"]
         }
       }
     ]

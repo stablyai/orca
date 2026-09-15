@@ -1,13 +1,21 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react'
-import { vi, type Mock } from 'vitest'
+import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
+import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
+import type {
+  SessionOptionSetResult,
+  SessionOptionValue
+} from '../../../../shared/native-chat-session-options'
 
-// Why: a named spy type keeps the harness's inferred return type portable across the test files.
-type StructuredSessionSpy = Mock
+type StopBackgroundTaskSpy = (sessionId: string, taskId?: string) => unknown
+
+function nullable<T>(): T | null {
+  return null
+}
 
 type StructuredSessionMessageListProps = {
   allowFileUriLinks?: boolean
@@ -28,8 +36,11 @@ const initialApprovalCardProps: NativeChatApprovalCardProps | null = null
  */
 export function createStructuredSessionMocks() {
   const mocks = {
-    call: vi.fn() as StructuredSessionSpy,
-    fileLinkClick: vi.fn() as StructuredSessionSpy,
+    call: vi.fn<(...args: never[]) => unknown>(),
+    fileLinkClick: vi.fn<(...args: never[]) => unknown>(),
+    launchLifecycle: nullable<StructuredAgentSessionLaunchLifecycle>(),
+    retryLaunch: vi.fn<(...args: never[]) => unknown>(),
+    controllerProps: nullable<{ transportEnabled?: boolean }>(),
     mode: 'static' as 'static' | 'outbox',
     status: 'ready' as 'idle' | 'loading' | 'ready' | 'error',
     messages: null as null | unknown[],
@@ -42,10 +53,10 @@ export function createStructuredSessionMocks() {
     approvalCardProps: initialApprovalCardProps,
     questionCardProps: null as NativeChatQuestionCardProps | null,
     promptItems: [] as AgentJournalRenderItem[],
-    respond: vi.fn() as StructuredSessionSpy,
-    cancel: vi.fn() as StructuredSessionSpy,
-    handlePasteEvent: vi.fn() as StructuredSessionSpy,
-    pasteFromClipboard: vi.fn() as StructuredSessionSpy,
+    respond: vi.fn<(...args: never[]) => unknown>(),
+    cancel: vi.fn<(...args: never[]) => unknown>(),
+    handlePasteEvent: vi.fn<(...args: never[]) => unknown>(),
+    pasteFromClipboard: vi.fn<(...args: never[]) => unknown>(),
     submissions: [] as unknown[],
     monitoringBackgroundTasks: false,
     showBackgroundTasks: false,
@@ -55,7 +66,7 @@ export function createStructuredSessionMocks() {
     supportsBackgroundTaskStopAll: true,
     backgroundTasks: [] as AgentSessionBackgroundTask[],
     settledBackgroundTasks: [] as AgentSessionBackgroundTask[],
-    stopBackgroundTask: vi.fn() as StructuredSessionSpy
+    stopBackgroundTask: vi.fn<StopBackgroundTaskSpy>()
   }
 
   const moduleFactories = {
@@ -69,11 +80,13 @@ export function createStructuredSessionMocks() {
         useStructuredAgentSession: (props: {
           sessionId: string
           target: { kind: 'local' } | { kind: 'environment'; environmentId: string }
+          transportEnabled?: boolean
         }) => {
+          mocks.controllerProps = props
           const outbox = useStructuredAgentSessionOutbox({
             sessionId: props.sessionId,
             target: props.target,
-            fence: 1,
+            fence: props.transportEnabled === false ? null : 1,
             submissions: mocks.submissions as never
           })
           return {
@@ -99,7 +112,7 @@ export function createStructuredSessionMocks() {
             error: outbox.error,
             hasOlder: false,
             loadingOlder: false,
-            loadOlder: vi.fn() as StructuredSessionSpy,
+            loadOlder: vi.fn<() => Promise<void>>(),
             prompts: mocks.promptItems,
             outbox: outbox.outbox,
             blockedClientMessageId: outbox.blockedClientMessageId,
@@ -135,15 +148,21 @@ export function createStructuredSessionMocks() {
             ],
             optionSurface: {
               getSnapshot: () => [],
-              setOption: vi.fn() as StructuredSessionSpy,
-              invokeAction: vi.fn() as StructuredSessionSpy,
+              setOption:
+                vi.fn<(id: string, value: SessionOptionValue) => Promise<SessionOptionSetResult>>(),
+              invokeAction: vi.fn<(id: string) => Promise<SessionOptionSetResult>>(),
               subscribe: () => () => {}
             },
-            setStructuredOption: vi.fn() as StructuredSessionSpy
+            setStructuredOption:
+              vi.fn<(id: string, value: SessionOptionValue) => Promise<boolean>>()
           }
         }
       }
     },
+    structuredAgentSessionLaunch: () => ({
+      retryStructuredAgentSessionLaunch: mocks.retryLaunch,
+      useStructuredAgentSessionLaunchLifecycle: () => mocks.launchLifecycle
+    }),
     useNativeChatFontScale: () => ({
       useNativeChatFontScale: () => ({ scale: 1 })
     }),
@@ -197,6 +216,9 @@ export function createStructuredSessionMocks() {
 
   const resetStructuredSessionMocks = (): void => {
     mocks.call.mockReset()
+    mocks.launchLifecycle = null
+    mocks.retryLaunch.mockReset()
+    mocks.controllerProps = null
     mocks.mode = 'static'
     mocks.status = 'ready'
     mocks.messages = null

@@ -3,9 +3,9 @@
   "family": "host.worktree-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "92c29bd78ca0c0d5917e9386fc447bb9a1698b1d1ffaba0db7546eaac60da639",
   "scenarioSha256": "c47656a4ca21762e4b5a247ddf9a96efb746bec81e942ffa308a774bab1449e2",
   "platform": "darwin",
@@ -90,9 +90,27 @@
         }
       ]
     },
-    "0ebfc1859f18": {
-      "name": "pinnedIds",
-      "value": ["wt-1"]
+    "088a989c038b": {
+      "name": "worktrees",
+      "value": [
+        {
+          "branch": "feature/pin",
+          "displayName": "marlin",
+          "hasAttachedPty": false,
+          "isPinned": true,
+          "linkedPR": {
+            "$rpc": "null"
+          },
+          "liveTerminalCount": 0,
+          "path": "/repos/marlin/wt-1",
+          "preview": "",
+          "repo": "marlin",
+          "repoId": "repo-1",
+          "unread": false,
+          "worktreeId": "wt-1"
+        }
+      ],
+      "sent": 0
     },
     "11e971c034ae": {
       "name": "worktree.rm#1",
@@ -200,6 +218,28 @@
         }
       }
     },
+    "3e27f9568029": {
+      "name": "lastKnownWorktrees",
+      "value": [
+        {
+          "branch": "feature/pin",
+          "displayName": "marlin",
+          "hasAttachedPty": false,
+          "isPinned": true,
+          "linkedPR": {
+            "$rpc": "null"
+          },
+          "liveTerminalCount": 0,
+          "path": "/repos/marlin/wt-1",
+          "preview": "",
+          "repo": "marlin",
+          "repoId": "repo-1",
+          "unread": false,
+          "worktreeId": "wt-1"
+        }
+      ],
+      "sent": 0
+    },
     "4caf7515e224": {
       "name": "worktree.set#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}"
@@ -273,10 +313,6 @@
         }
       }
     },
-    "5c186d67b84c": {
-      "name": "lastKnownWorktrees",
-      "value": []
-    },
     "60cb8c68db7d": {
       "name": "worktree.rm#1",
       "args": [
@@ -313,14 +349,27 @@
       "name": "worktree.rm#1",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}"
     },
-    "6cfdae6737f2": {
-      "name": "lastKnownWorktrees",
+    "6e959a9dd70e": {
+      "confirmRemoveHost": false,
+      "lastKnownWorktrees": [],
+      "optimisticActiveWorktreeIdentity": "|wt-1",
+      "pinnedIds": ["wt-1"],
+      "routeActionState": {},
+      "worktrees": []
+    },
+    "71246d169f18": {
+      "name": "worktrees",
+      "value": [],
+      "sent": 2
+    },
+    "76533c02700f": {
+      "name": "worktrees",
       "value": [
         {
           "branch": "feature/pin",
           "displayName": "marlin",
           "hasAttachedPty": false,
-          "isPinned": true,
+          "isPinned": false,
           "linkedPR": {
             "$rpc": "null"
           },
@@ -332,15 +381,8 @@
           "unread": false,
           "worktreeId": "wt-1"
         }
-      ]
-    },
-    "6e959a9dd70e": {
-      "confirmRemoveHost": false,
-      "lastKnownWorktrees": [],
-      "optimisticActiveWorktreeIdentity": "|wt-1",
-      "pinnedIds": ["wt-1"],
-      "routeActionState": {},
-      "worktrees": []
+      ],
+      "sent": 3
     },
     "7ce7ff16ad9e": {
       "name": "worktree.rm#1",
@@ -411,6 +453,11 @@
           "ok": false
         }
       }
+    },
+    "8839215bd1a5": {
+      "name": "lastKnownWorktrees",
+      "value": [],
+      "sent": 2
     },
     "909c8bc23636": {
       "name": "worktree.rm#1",
@@ -525,8 +572,13 @@
         }
       ]
     },
-    "a7c564546e94": {
-      "name": "worktrees",
+    "a970c9a870bb": {
+      "name": "pinnedIds",
+      "value": ["wt-1"],
+      "sent": 0
+    },
+    "b9380463fe37": {
+      "name": "lastKnownWorktrees",
       "value": [
         {
           "branch": "feature/pin",
@@ -544,11 +596,13 @@
           "unread": false,
           "worktreeId": "wt-1"
         }
-      ]
+      ],
+      "sent": 3
     },
-    "b1509905fc66": {
+    "bb44ad78848e": {
       "name": "optimisticActiveWorktreeIdentity",
-      "value": "|wt-1"
+      "value": "|wt-1",
+      "sent": 1
     },
     "bf2b36bda2d2": {
       "name": "worktree.set#1",
@@ -579,48 +633,6 @@
     "c3eecb0c6e96": {
       "name": "worktree.activate#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
-    },
-    "c777b17081dd": {
-      "name": "lastKnownWorktrees",
-      "value": [
-        {
-          "branch": "feature/pin",
-          "displayName": "marlin",
-          "hasAttachedPty": false,
-          "isPinned": false,
-          "linkedPR": {
-            "$rpc": "null"
-          },
-          "liveTerminalCount": 0,
-          "path": "/repos/marlin/wt-1",
-          "preview": "",
-          "repo": "marlin",
-          "repoId": "repo-1",
-          "unread": false,
-          "worktreeId": "wt-1"
-        }
-      ]
-    },
-    "cbf8280fdbe7": {
-      "name": "worktrees",
-      "value": [
-        {
-          "branch": "feature/pin",
-          "displayName": "marlin",
-          "hasAttachedPty": false,
-          "isPinned": true,
-          "linkedPR": {
-            "$rpc": "null"
-          },
-          "liveTerminalCount": 0,
-          "path": "/repos/marlin/wt-1",
-          "preview": "",
-          "repo": "marlin",
-          "repoId": "repo-1",
-          "unread": false,
-          "worktreeId": "wt-1"
-        }
-      ]
     },
     "ce97d2eedacb": {
       "name": "worktree.rm#1",
@@ -685,10 +697,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "d440bd87d1ce": {
-      "name": "worktrees",
-      "value": []
     },
     "e3e3c397a66a": {
       "name": "worktree.rm#1",
@@ -772,7 +780,7 @@
             "toggle-pin": "eb79a9b3682a"
           },
           "state": "9a9b0d6699b2",
-          "effects": ["cbf8280fdbe7", "6cfdae6737f2", "0ebfc1859f18"]
+          "effects": ["088a989c038b", "3e27f9568029", "a970c9a870bb"]
         }
       },
       {
@@ -788,12 +796,12 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5"
           ]
         }
       },
@@ -810,14 +818,14 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c",
-            "a7c564546e94",
-            "c777b17081dd"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5",
+            "76533c02700f",
+            "b9380463fe37"
           ]
         }
       },
@@ -834,12 +842,12 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5"
           ]
         }
       },
@@ -856,12 +864,12 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5"
           ]
         }
       },
@@ -878,12 +886,12 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5"
           ]
         }
       },
@@ -900,12 +908,12 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5"
           ]
         }
       },
@@ -922,12 +930,12 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5"
           ]
         }
       },
@@ -944,12 +952,12 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5"
           ]
         }
       },
@@ -966,14 +974,14 @@
           },
           "state": "064a538f6c1c",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c",
-            "a7c564546e94",
-            "c777b17081dd"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5",
+            "76533c02700f",
+            "b9380463fe37"
           ]
         }
       },
@@ -990,14 +998,14 @@
           },
           "state": "064a538f6c1c",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c",
-            "a7c564546e94",
-            "c777b17081dd"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5",
+            "76533c02700f",
+            "b9380463fe37"
           ]
         }
       },
@@ -1014,14 +1022,14 @@
           },
           "state": "064a538f6c1c",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c",
-            "a7c564546e94",
-            "c777b17081dd"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5",
+            "76533c02700f",
+            "b9380463fe37"
           ]
         }
       },
@@ -1038,14 +1046,14 @@
           },
           "state": "064a538f6c1c",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c",
-            "a7c564546e94",
-            "c777b17081dd"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5",
+            "76533c02700f",
+            "b9380463fe37"
           ]
         }
       },
@@ -1062,14 +1070,14 @@
           },
           "state": "064a538f6c1c",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c",
-            "a7c564546e94",
-            "c777b17081dd"
+            "088a989c038b",
+            "3e27f9568029",
+            "a970c9a870bb",
+            "bb44ad78848e",
+            "71246d169f18",
+            "8839215bd1a5",
+            "76533c02700f",
+            "b9380463fe37"
           ]
         }
       }

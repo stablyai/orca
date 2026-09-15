@@ -3,9 +3,9 @@
   "family": "tasks.task-create-github",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "260a84280f69c43ac582149d9befe6ae547b2ad2b5f56a181d8e3a1314a0a071",
   "platform": "darwin",
@@ -54,13 +54,10 @@
       "name": "github.createIssue#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}"
     },
-    "3e610f908f29": {
-      "name": "showCreateTask",
-      "value": false
-    },
-    "4a66cf72bc8f": {
+    "46bbfadb0481": {
       "name": "creatingTask",
-      "value": false
+      "value": true,
+      "sent": 0
     },
     "5ab5b62983be": {
       "composer": false,
@@ -90,21 +87,42 @@
         "updatedAt": "2026-01-01T00:00:00.000Z"
       }
     },
-    "5b8e3a96030e": {
+    "6652745ed1c6": {
       "name": "createBody",
-      "value": ""
+      "value": "",
+      "sent": 1
     },
-    "791f05938c43": {
-      "name": "creatingTask",
-      "value": true
+    "781721955405": {
+      "name": "showCreateTask",
+      "value": false,
+      "sent": 1
     },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
-    },
-    "871b62dd230b": {
-      "name": "createTitle",
-      "value": ""
+    "873de7fc7ff8": {
+      "name": "actionItem",
+      "value": {
+        "key": "github:repo-1:issue:11",
+        "provider": "github",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:11",
+          "labels": [],
+          "number": 11,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "open",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://github.com/owner/repo/issues/11"
+        },
+        "status": "Open",
+        "subtitle": "Repo #11",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      "sent": 1
     },
     "98e33157a9f2": {
       "name": "repo.update#1",
@@ -142,35 +160,24 @@
         }
       }
     },
-    "a10650cc438b": {
-      "name": "actionItem",
-      "value": {
-        "key": "github:repo-1:issue:11",
-        "provider": "github",
-        "source": {
-          "author": {
-            "$rpc": "null"
-          },
-          "id": "issue:11",
-          "labels": [],
-          "number": 11,
-          "repoId": "repo-1",
-          "repoName": "Repo",
-          "state": "open",
-          "title": "A new task",
-          "type": "issue",
-          "updatedAt": "2026-01-01T00:00:00.000Z",
-          "url": "https://github.com/owner/repo/issues/11"
-        },
-        "status": "Open",
-        "subtitle": "Repo #11",
-        "title": "A new task",
-        "updatedAt": "2026-01-01T00:00:00.000Z"
-      }
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
+    },
+    "c0c0f9a6037e": {
+      "name": "createTitle",
+      "value": "",
+      "sent": 1
     },
     "c41296ee02f7": {
       "name": "repo.update#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.update\",\"params\":{\"repo\":\"id:repo-1\",\"updates\":{\"issueSourcePreference\":\"upstream\"}}}"
+    },
+    "d48d5c49486c": {
+      "name": "error",
+      "value": "",
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -179,6 +186,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "fc7f792d6e89": {
+      "name": "creatingTask",
+      "value": false,
+      "sent": 1
     }
   },
   "recording": {
@@ -195,13 +207,13 @@
           },
           "state": "5ab5b62983be",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "a10650cc438b",
-            "3e610f908f29",
-            "871b62dd230b",
-            "5b8e3a96030e",
-            "4a66cf72bc8f"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "873de7fc7ff8",
+            "781721955405",
+            "c0c0f9a6037e",
+            "6652745ed1c6",
+            "fc7f792d6e89"
           ]
         }
       },
@@ -217,14 +229,14 @@
           },
           "state": "5ab5b62983be",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "a10650cc438b",
-            "3e610f908f29",
-            "871b62dd230b",
-            "5b8e3a96030e",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "873de7fc7ff8",
+            "781721955405",
+            "c0c0f9a6037e",
+            "6652745ed1c6",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       }

@@ -3,9 +3,9 @@
   "family": "git.remote-prerequisite",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "5009c22df7e74a850bcea41fc110ea7d7eb4bdada623837279f32eaa5149a9b8",
   "platform": "darwin",
@@ -187,10 +187,6 @@
         }
       }
     },
-    "60421d882fd2": {
-      "name": "progress",
-      "value": "pushing"
-    },
     "6c0349218dd0": {
       "name": "git.push#1",
       "args": [
@@ -254,6 +250,11 @@
           "ok": true
         }
       }
+    },
+    "8c74af79c1cf": {
+      "name": "progress",
+      "value": "pushing",
+      "sent": 0
     },
     "9270aeb7d9c6": {
       "status": "pending",
@@ -519,7 +520,7 @@
             "apply": "9270aeb7d9c6"
           },
           "state": "cf19981c2114",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -531,7 +532,7 @@
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -543,7 +544,7 @@
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -555,7 +556,7 @@
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -567,7 +568,7 @@
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -579,7 +580,7 @@
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -591,7 +592,7 @@
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -603,7 +604,7 @@
             "apply": "1b2778bf67a2"
           },
           "state": "aa8b30457cff",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -615,7 +616,7 @@
             "apply": "3e6cf1f04a9c"
           },
           "state": "34eee892be9b",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -627,7 +628,7 @@
             "apply": "fa93ca01f266"
           },
           "state": "e157741a28a1",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -639,7 +640,7 @@
             "apply": "a197c20578aa"
           },
           "state": "f4ca76ee9f22",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       },
       {
@@ -651,7 +652,7 @@
             "apply": "fb4429083480"
           },
           "state": "3c6a5a164e8a",
-          "effects": ["60421d882fd2"]
+          "effects": ["8c74af79c1cf"]
         }
       }
     ]

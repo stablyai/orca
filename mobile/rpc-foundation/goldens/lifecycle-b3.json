@@ -3,9 +3,9 @@
   "family": "linear-detail-barrier",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "8be12d116865d27e8dfd37921d2c723d63da101ec1197b1f5b2d9510838e1943",
   "platform": "darwin",
@@ -48,17 +48,19 @@
         }
       }
     },
-    "1696f2f90218": {
+    "0e0abca05602": {
       "name": "detailError",
-      "value": "comments transport error"
+      "value": "comments transport error",
+      "sent": 2
     },
     "2b9e0df88a93": {
       "name": "linear.getIssue#2",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
     },
-    "3b01c25bcd45": {
+    "39ca42c97176": {
       "name": "detailError",
-      "value": ""
+      "value": "",
+      "sent": 2
     },
     "3cb9a384ce0e": {
       "name": "linear.issueComments#1",
@@ -125,20 +127,27 @@
         }
       }
     },
+    "56d172ecd2fe": {
+      "name": "detailLoading",
+      "value": true,
+      "sent": 0
+    },
+    "5ca77e9853cb": {
+      "name": "detailPayload",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 2
+    },
+    "73a4beace1f0": {
+      "name": "detailLoading",
+      "value": true,
+      "sent": 2
+    },
     "780aaf1d97be": {
       "error": "",
       "loading": true,
       "payload": {
-        "$rpc": "null"
-      }
-    },
-    "7d21147e56c1": {
-      "name": "detailLoading",
-      "value": true
-    },
-    "7d341b2cb946": {
-      "name": "detailPayload",
-      "value": {
         "$rpc": "null"
       }
     },
@@ -168,9 +177,17 @@
         "startedAt": 0
       }
     },
-    "91a1c8142e23": {
-      "name": "detailLoading",
-      "value": false
+    "9bd1de5d9753": {
+      "name": "detailPayload",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "9d6ce9f28401": {
+      "name": "detailError",
+      "value": "",
+      "sent": 0
     },
     "9ea1594bdfc8": {
       "name": "linear.issueComments#2",
@@ -218,6 +235,11 @@
         "$rpc": "undefined"
       }
     },
+    "ee0c4638d266": {
+      "name": "detailLoading",
+      "value": false,
+      "sent": 2
+    },
     "fc4ce176400a": {
       "name": "linear.getIssue#1",
       "args": [
@@ -257,7 +279,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -269,7 +291,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -283,12 +305,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -303,12 +325,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -323,12 +345,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -343,12 +365,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -363,12 +385,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -383,12 +405,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -403,12 +425,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -423,12 +445,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -443,14 +465,14 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -465,14 +487,14 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -486,7 +508,7 @@
             "lifecycle-unmount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -499,7 +521,7 @@
             "lifecycle-unmount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -512,7 +534,7 @@
             "lifecycle-unmount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -527,12 +549,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -546,7 +568,7 @@
             "lifecycle-unmount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -559,7 +581,7 @@
             "lifecycle-unmount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -572,7 +594,7 @@
             "lifecycle-unmount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -587,12 +609,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -606,7 +628,7 @@
             "lifecycle-unmount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -619,7 +641,7 @@
             "lifecycle-unmount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -634,12 +656,12 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -654,11 +676,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       },
@@ -673,11 +695,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       },
@@ -693,14 +715,14 @@
           },
           "state": "780aaf1d97be",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23",
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266",
+            "5ca77e9853cb",
+            "39ca42c97176",
+            "73a4beace1f0"
           ]
         }
       },
@@ -714,7 +736,7 @@
             "lifecycle-blur": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -727,7 +749,7 @@
             "lifecycle-blur": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -741,11 +763,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       },
@@ -759,7 +781,7 @@
             "lifecycle-blur": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -772,7 +794,7 @@
             "lifecycle-blur": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -786,11 +808,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       },
@@ -804,7 +826,7 @@
             "lifecycle-blur": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -818,11 +840,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       },
@@ -837,11 +859,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       },
@@ -856,11 +878,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       }

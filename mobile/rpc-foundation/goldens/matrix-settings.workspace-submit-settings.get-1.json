@@ -3,9 +3,9 @@
   "family": "settings.workspace-submit",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
   "scenarioSha256": "a89bdf93df71a958810aba72c80e42f663644781a29e934898e2ddf86c5dd5d5",
   "platform": "darwin",
@@ -152,9 +152,23 @@
         "disabledTuiAgents": ["claude"]
       }
     },
-    "3405a06dce84": {
+    "3af6dc91992c": {
+      "name": "agentOverridden",
+      "value": false,
+      "sent": 1
+    },
+    "4c38e416e041": {
+      "name": "selectedAgent",
+      "value": {
+        "id": "codex",
+        "label": "Codex"
+      },
+      "sent": 1
+    },
+    "52d25e1f3035": {
       "name": "error",
-      "value": "Selected agent is disabled. Choose an enabled agent before creating."
+      "value": "Connection closed",
+      "sent": 2
     },
     "588949297c83": {
       "name": "worktree.create#1",
@@ -238,22 +252,6 @@
         }
       }
     },
-    "6c2789ab0e4b": {
-      "name": "runtimeSettings",
-      "value": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": ["claude"],
-        "hostSettingOverrides": {},
-        "prBotAuthorOverrides": ["bot-user"],
-        "visibleTaskProviders": ["github", "linear"]
-      }
-    },
-    "6f447a389087": {
-      "name": "runtimeSettings",
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
     "7b1c9637063f": {
       "creating": true,
       "error": "",
@@ -303,10 +301,6 @@
     "7ddcb1852b39": {
       "name": "settings.get#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
     },
     "8b77098df0c3": {
       "name": "settings.get#1",
@@ -377,13 +371,10 @@
       "status": "pending",
       "startedAt": 0
     },
-    "9f82f10075a3": {
+    "9e263f5e91be": {
       "name": "error",
-      "value": "Connection closed"
-    },
-    "ae291b5dba88": {
-      "name": "agentOverridden",
-      "value": false
+      "value": "",
+      "sent": 0
     },
     "b759ab27e4dd": {
       "name": "settings.get#1",
@@ -418,6 +409,13 @@
           "ok": false
         }
       }
+    },
+    "bc17a88609c2": {
+      "name": "runtimeSettings",
+      "value": {
+        "$rpc": "undefined"
+      },
+      "sent": 1
     },
     "d27ce798af34": {
       "name": "settings.get#1",
@@ -516,12 +514,21 @@
         }
       }
     },
-    "eb6f7a9c5bf1": {
-      "name": "selectedAgent",
+    "ea718cd95024": {
+      "name": "runtimeSettings",
       "value": {
-        "id": "codex",
-        "label": "Codex"
-      }
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      },
+      "sent": 1
+    },
+    "eaf6fe088c19": {
+      "name": "error",
+      "value": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -611,7 +618,7 @@
             "submit": "9270aeb7d9c6"
           },
           "state": "13c996e4ec2b",
-          "effects": ["82cd71d524c8"]
+          "effects": ["9e263f5e91be"]
         }
       },
       {
@@ -624,7 +631,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "13c996e4ec2b",
-          "effects": ["82cd71d524c8", "eb6f7a9c5bf1", "ae291b5dba88", "3405a06dce84"]
+          "effects": ["9e263f5e91be", "4c38e416e041", "3af6dc91992c", "eaf6fe088c19"]
         }
       },
       {
@@ -638,11 +645,11 @@
           },
           "state": "5efbd884ea5a",
           "effects": [
-            "82cd71d524c8",
-            "6c2789ab0e4b",
-            "eb6f7a9c5bf1",
-            "ae291b5dba88",
-            "3405a06dce84"
+            "9e263f5e91be",
+            "ea718cd95024",
+            "4c38e416e041",
+            "3af6dc91992c",
+            "eaf6fe088c19"
           ]
         }
       },
@@ -656,7 +663,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "2e8e352c8dd1",
-          "effects": ["82cd71d524c8", "eb6f7a9c5bf1", "ae291b5dba88", "3405a06dce84"]
+          "effects": ["9e263f5e91be", "4c38e416e041", "3af6dc91992c", "eaf6fe088c19"]
         }
       },
       {
@@ -669,7 +676,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "2e8e352c8dd1",
-          "effects": ["82cd71d524c8", "eb6f7a9c5bf1", "ae291b5dba88", "3405a06dce84"]
+          "effects": ["9e263f5e91be", "4c38e416e041", "3af6dc91992c", "eaf6fe088c19"]
         }
       },
       {
@@ -682,7 +689,7 @@
             "submit": "9270aeb7d9c6"
           },
           "state": "7b1c9637063f",
-          "effects": ["82cd71d524c8", "6f447a389087"]
+          "effects": ["9e263f5e91be", "bc17a88609c2"]
         }
       },
       {
@@ -695,7 +702,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "7b1c9637063f",
-          "effects": ["82cd71d524c8", "6f447a389087", "9f82f10075a3"]
+          "effects": ["9e263f5e91be", "bc17a88609c2", "52d25e1f3035"]
         }
       },
       {
@@ -708,7 +715,7 @@
             "submit": "9270aeb7d9c6"
           },
           "state": "7b1c9637063f",
-          "effects": ["82cd71d524c8", "6f447a389087"]
+          "effects": ["9e263f5e91be", "bc17a88609c2"]
         }
       },
       {
@@ -721,7 +728,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "7b1c9637063f",
-          "effects": ["82cd71d524c8", "6f447a389087", "9f82f10075a3"]
+          "effects": ["9e263f5e91be", "bc17a88609c2", "52d25e1f3035"]
         }
       },
       {
@@ -734,7 +741,7 @@
             "submit": "9270aeb7d9c6"
           },
           "state": "7b1c9637063f",
-          "effects": ["82cd71d524c8", "6f447a389087"]
+          "effects": ["9e263f5e91be", "bc17a88609c2"]
         }
       },
       {
@@ -747,7 +754,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "7b1c9637063f",
-          "effects": ["82cd71d524c8", "6f447a389087", "9f82f10075a3"]
+          "effects": ["9e263f5e91be", "bc17a88609c2", "52d25e1f3035"]
         }
       },
       {
@@ -760,7 +767,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "2e8e352c8dd1",
-          "effects": ["82cd71d524c8", "eb6f7a9c5bf1", "ae291b5dba88", "3405a06dce84"]
+          "effects": ["9e263f5e91be", "4c38e416e041", "3af6dc91992c", "eaf6fe088c19"]
         }
       },
       {
@@ -773,7 +780,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "2e8e352c8dd1",
-          "effects": ["82cd71d524c8", "eb6f7a9c5bf1", "ae291b5dba88", "3405a06dce84"]
+          "effects": ["9e263f5e91be", "4c38e416e041", "3af6dc91992c", "eaf6fe088c19"]
         }
       },
       {
@@ -786,7 +793,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "2e8e352c8dd1",
-          "effects": ["82cd71d524c8", "eb6f7a9c5bf1", "ae291b5dba88", "3405a06dce84"]
+          "effects": ["9e263f5e91be", "4c38e416e041", "3af6dc91992c", "eaf6fe088c19"]
         }
       },
       {
@@ -799,7 +806,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "2e8e352c8dd1",
-          "effects": ["82cd71d524c8", "eb6f7a9c5bf1", "ae291b5dba88", "3405a06dce84"]
+          "effects": ["9e263f5e91be", "4c38e416e041", "3af6dc91992c", "eaf6fe088c19"]
         }
       },
       {
@@ -812,7 +819,7 @@
             "submit": "eb79a9b3682a"
           },
           "state": "2e8e352c8dd1",
-          "effects": ["82cd71d524c8", "eb6f7a9c5bf1", "ae291b5dba88", "3405a06dce84"]
+          "effects": ["9e263f5e91be", "4c38e416e041", "3af6dc91992c", "eaf6fe088c19"]
         }
       }
     ]

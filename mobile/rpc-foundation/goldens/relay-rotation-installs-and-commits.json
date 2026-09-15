@@ -3,9 +3,9 @@
   "family": "relay.credential-rotation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
   "scenarioSha256": "c786fb19f9593ee60238e42813561edf6f5e976fcf217dff8de977a333fe8451",
   "platform": "darwin",
@@ -78,16 +78,6 @@
       "name": "pairing.provisionRelay#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"rotate-VftjjHf-4Lb1-Sdfryl-LA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\",\"expectedCurrentHash\":\"r_9byaBlTZTXS3aLLlWTKwss-nmx4vGRrjKskxWyP30\"}}"
     },
-    "6fc6c751d8be": {
-      "name": "bundle-written",
-      "value": {
-        "grace": {
-          "$rpc": "null"
-        },
-        "pending": true,
-        "version": 3
-      }
-    },
     "8336e309abb8": {
       "name": "pairing.getEndpoints#1",
       "args": [
@@ -134,6 +124,17 @@
         }
       }
     },
+    "85b38f117802": {
+      "name": "bundle-written",
+      "value": {
+        "grace": {
+          "$rpc": "null"
+        },
+        "pending": true,
+        "version": 3
+      },
+      "sent": 0
+    },
     "9ade8126917f": {
       "name": "pairing.provisionRelay#1",
       "args": [
@@ -173,7 +174,7 @@
         }
       }
     },
-    "bcef5f2116bb": {
+    "eee85d194a6b": {
       "name": "bundle-written",
       "value": {
         "grace": {
@@ -181,7 +182,8 @@
         },
         "pending": false,
         "version": 4
-      }
+      },
+      "sent": 3
     },
     "f2c843a9b548": {
       "status": "fulfilled",
@@ -236,7 +238,7 @@
             "rotate": "f2c843a9b548"
           },
           "state": "fdf764b375ae",
-          "effects": ["6fc6c751d8be", "bcef5f2116bb"]
+          "effects": ["85b38f117802", "eee85d194a6b"]
         }
       }
     ]

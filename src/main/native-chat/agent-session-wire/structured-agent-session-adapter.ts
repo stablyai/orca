@@ -30,6 +30,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 
 export class AgentSessionAcquisitionRefusal extends Error {
   constructor(
@@ -139,6 +140,7 @@ export type StructuredAgentSessionAcquireInput = {
   options?: Readonly<Record<string, string>>
   /** Provider events may begin before acquisition returns. */
   events?: StructuredAgentSessionEventSink
+  recordPhase?: AgentSessionCreatePhaseRecorder
 }
 
 export type StructuredAgentSessionSetOptionInput = {

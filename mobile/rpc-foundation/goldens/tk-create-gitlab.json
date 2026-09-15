@@ -3,9 +3,9 @@
   "family": "tasks.task-create-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "a4d3d1f322d49593056bd20f4122bbf0309d2161123e404161950bcab65decd5",
   "platform": "darwin",
@@ -13,39 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0357d0481a9f": {
-      "name": "actionItem",
-      "value": {
-        "key": "gitlab:repo-1:issue:6",
-        "provider": "gitlab",
-        "source": {
-          "author": {
-            "$rpc": "null"
-          },
-          "id": "issue:6",
-          "labels": [],
-          "number": 6,
-          "repoId": "repo-1",
-          "repoName": "Repo",
-          "state": "opened",
-          "title": "A new task",
-          "type": "issue",
-          "updatedAt": "2026-01-01T00:00:00.000Z",
-          "url": "https://gitlab.com/group/project/-/issues/6"
-        },
-        "status": "Open",
-        "subtitle": "Repo #6",
-        "title": "A new task",
-        "updatedAt": "2026-01-01T00:00:00.000Z"
-      }
-    },
-    "3e610f908f29": {
-      "name": "showCreateTask",
-      "value": false
-    },
-    "4a66cf72bc8f": {
+    "46bbfadb0481": {
       "name": "creatingTask",
-      "value": false
+      "value": true,
+      "sent": 0
     },
     "580f3724d37b": {
       "composer": false,
@@ -75,21 +46,25 @@
         "updatedAt": "2026-01-01T00:00:00.000Z"
       }
     },
-    "5b8e3a96030e": {
+    "6652745ed1c6": {
       "name": "createBody",
-      "value": ""
+      "value": "",
+      "sent": 1
     },
-    "791f05938c43": {
-      "name": "creatingTask",
-      "value": true
+    "781721955405": {
+      "name": "showCreateTask",
+      "value": false,
+      "sent": 1
     },
-    "82cd71d524c8": {
+    "9e263f5e91be": {
       "name": "error",
-      "value": ""
+      "value": "",
+      "sent": 0
     },
-    "871b62dd230b": {
+    "c0c0f9a6037e": {
       "name": "createTitle",
-      "value": ""
+      "value": "",
+      "sent": 1
     },
     "c9c89070b638": {
       "name": "gitlab.createIssue#1",
@@ -136,9 +111,41 @@
         "$rpc": "undefined"
       }
     },
+    "f4790c11c55e": {
+      "name": "actionItem",
+      "value": {
+        "key": "gitlab:repo-1:issue:6",
+        "provider": "gitlab",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:6",
+          "labels": [],
+          "number": 6,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "opened",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://gitlab.com/group/project/-/issues/6"
+        },
+        "status": "Open",
+        "subtitle": "Repo #6",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      "sent": 1
+    },
     "f5bc6cfd470a": {
       "name": "gitlab.createIssue#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}"
+    },
+    "fc7f792d6e89": {
+      "name": "creatingTask",
+      "value": false,
+      "sent": 1
     }
   },
   "recording": {
@@ -155,13 +162,13 @@
           },
           "state": "580f3724d37b",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "0357d0481a9f",
-            "3e610f908f29",
-            "871b62dd230b",
-            "5b8e3a96030e",
-            "4a66cf72bc8f"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "f4790c11c55e",
+            "781721955405",
+            "c0c0f9a6037e",
+            "6652745ed1c6",
+            "fc7f792d6e89"
           ]
         }
       }

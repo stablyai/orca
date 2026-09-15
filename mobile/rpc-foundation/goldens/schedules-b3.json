@@ -3,9 +3,9 @@
   "family": "linear-detail-barrier",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "b59fb599dd3a5fbc79bb8602dcec4b1c51a392c662efab7efc8324fc718ce8de",
   "platform": "darwin",
@@ -48,13 +48,10 @@
         }
       }
     },
-    "1474fb688cbe": {
+    "0e0abca05602": {
       "name": "detailError",
-      "value": "RPC interrupted by connection migration"
-    },
-    "1696f2f90218": {
-      "name": "detailError",
-      "value": "comments transport error"
+      "value": "comments transport error",
+      "sent": 2
     },
     "210ccd4fdd98": {
       "name": "linear.getIssue#1",
@@ -131,10 +128,6 @@
           }
         }
       }
-    },
-    "3b01c25bcd45": {
-      "name": "detailError",
-      "value": ""
     },
     "3cb9a384ce0e": {
       "name": "linear.issueComments#1",
@@ -265,6 +258,11 @@
         }
       }
     },
+    "56d172ecd2fe": {
+      "name": "detailLoading",
+      "value": true,
+      "sent": 0
+    },
     "58b60616b373": {
       "name": "linear.issueComments#1",
       "args": [
@@ -297,24 +295,15 @@
         }
       }
     },
-    "71339c38458c": {
+    "760b8f2ae31c": {
       "name": "detailError",
-      "value": "Request timed out: linear.getIssue"
+      "value": "Request timed out: linear.getIssue",
+      "sent": 2
     },
     "780aaf1d97be": {
       "error": "",
       "loading": true,
       "payload": {
-        "$rpc": "null"
-      }
-    },
-    "7d21147e56c1": {
-      "name": "detailLoading",
-      "value": true
-    },
-    "7d341b2cb946": {
-      "name": "detailPayload",
-      "value": {
         "$rpc": "null"
       }
     },
@@ -325,13 +314,22 @@
         "$rpc": "null"
       }
     },
-    "91a1c8142e23": {
-      "name": "detailLoading",
-      "value": false
-    },
-    "99253302972b": {
+    "99482bc5b01e": {
       "name": "detailError",
-      "value": "linear.getIssue#1 rejected"
+      "value": "RPC interrupted by connection migration",
+      "sent": 2
+    },
+    "9bd1de5d9753": {
+      "name": "detailPayload",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
+    },
+    "9d6ce9f28401": {
+      "name": "detailError",
+      "value": "",
+      "sent": 0
     },
     "a778223fed77": {
       "error": "linear.getIssue#1 rejected",
@@ -375,6 +373,11 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "cb552eff11a1": {
+      "name": "detailError",
+      "value": "linear.issueComments#1 rejected",
+      "sent": 2
     },
     "cc1d7d1a2a81": {
       "name": "linear.getIssue#1",
@@ -452,17 +455,19 @@
         "$rpc": "null"
       }
     },
-    "dbf8961c1dc1": {
+    "df409b3cc9c2": {
       "name": "detailError",
-      "value": "linear.issueComments#1 rejected"
+      "value": "Connection lost",
+      "sent": 2
+    },
+    "e4f04d0c9aea": {
+      "name": "detailError",
+      "value": "linear.getIssue#1 rejected",
+      "sent": 2
     },
     "e7f73629d075": {
       "name": "linear.issueComments#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
-    },
-    "ea91918fd5a8": {
-      "name": "detailError",
-      "value": "Connection lost"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -471,6 +476,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ee0c4638d266": {
+      "name": "detailLoading",
+      "value": false,
+      "sent": 2
     },
     "fc4ce176400a": {
       "name": "linear.getIssue#1",
@@ -518,7 +528,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "780aaf1d97be",
-          "effects": ["7d341b2cb946", "3b01c25bcd45", "7d21147e56c1"]
+          "effects": ["9bd1de5d9753", "9d6ce9f28401", "56d172ecd2fe"]
         }
       },
       {
@@ -531,11 +541,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       },
@@ -549,11 +559,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       },
@@ -567,11 +577,11 @@
           },
           "state": "42903545f0f8",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1696f2f90218",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "0e0abca05602",
+            "ee0c4638d266"
           ]
         }
       },
@@ -585,11 +595,11 @@
           },
           "state": "a778223fed77",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "99253302972b",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "e4f04d0c9aea",
+            "ee0c4638d266"
           ]
         }
       },
@@ -603,11 +613,11 @@
           },
           "state": "a778223fed77",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "99253302972b",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "e4f04d0c9aea",
+            "ee0c4638d266"
           ]
         }
       },
@@ -621,11 +631,11 @@
           },
           "state": "24f3de063dfd",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "dbf8961c1dc1",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "cb552eff11a1",
+            "ee0c4638d266"
           ]
         }
       },
@@ -639,11 +649,11 @@
           },
           "state": "24f3de063dfd",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "dbf8961c1dc1",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "cb552eff11a1",
+            "ee0c4638d266"
           ]
         }
       },
@@ -657,11 +667,11 @@
           },
           "state": "a778223fed77",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "99253302972b",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "e4f04d0c9aea",
+            "ee0c4638d266"
           ]
         }
       },
@@ -675,11 +685,11 @@
           },
           "state": "a778223fed77",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "99253302972b",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "e4f04d0c9aea",
+            "ee0c4638d266"
           ]
         }
       },
@@ -693,11 +703,11 @@
           },
           "state": "fc6d55bc97ed",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "71339c38458c",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "760b8f2ae31c",
+            "ee0c4638d266"
           ]
         }
       },
@@ -712,11 +722,11 @@
           },
           "state": "d40dd5c93d21",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "ea91918fd5a8",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "df409b3cc9c2",
+            "ee0c4638d266"
           ]
         }
       },
@@ -731,11 +741,11 @@
           },
           "state": "88573133f7d5",
           "effects": [
-            "7d341b2cb946",
-            "3b01c25bcd45",
-            "7d21147e56c1",
-            "1474fb688cbe",
-            "91a1c8142e23"
+            "9bd1de5d9753",
+            "9d6ce9f28401",
+            "56d172ecd2fe",
+            "99482bc5b01e",
+            "ee0c4638d266"
           ]
         }
       }

@@ -3,9 +3,9 @@
   "family": "tasks.workspace-sparse",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "3453024581230908d1e0e9335f5310e7b4ae03faf50d93654b9ff28c464fb95f",
   "platform": "darwin",
@@ -45,6 +45,16 @@
           }
         }
       }
+    },
+    "0c138770731d": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": "Cannot read properties of null (reading 'state')",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
     },
     "0eabd872f405": {
       "name": "ssh.getState#1",
@@ -109,29 +119,15 @@
         }
       }
     },
-    "1703db1e81e4": {
+    "1db4236fbf9f": {
       "name": "workspaceSshState",
       "value": {
-        "error": "Cannot read properties of undefined (reading 'state')",
+        "error": "",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
-      }
-    },
-    "1d9a7d969446": {
-      "name": "workspaceSparsePresetsLoaded",
-      "value": true
-    },
-    "25352a4de532": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": {
-          "$rpc": "null"
-        },
-        "reconnectAttempt": 0,
-        "status": "disconnected",
-        "targetId": "ssh-1"
-      }
+      },
+      "sent": 1
     },
     "2d910059043a": {
       "name": "ssh.getState#1",
@@ -164,9 +160,20 @@
         }
       }
     },
-    "312ed3cbf468": {
-      "name": "workspaceSparsePresetId",
-      "value": "p1"
+    "370294f90804": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": "outer refused",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
+    },
+    "3f2baafe9f80": {
+      "name": "workspaceSparseSaving",
+      "value": false,
+      "sent": 2
     },
     "404305aa2e3a": {
       "presets": [
@@ -187,12 +194,6 @@
         "targetId": "ssh-1"
       }
     },
-    "42bbd034563e": {
-      "name": "workspaceSparseDraft",
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "44ca8518769a": {
       "presets": [],
       "presetsError": "",
@@ -204,15 +205,17 @@
         "targetId": "ssh-1"
       }
     },
-    "4856f62b3650": {
-      "name": "workspaceSparsePresets",
-      "value": [
-        {
-          "directories": ["docs"],
-          "id": "p1",
-          "name": "docs"
-        }
-      ]
+    "452edc62bce0": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
     },
     "57be9babbecd": {
       "presets": [
@@ -230,6 +233,16 @@
         "status": "error",
         "targetId": "ssh-1"
       }
+    },
+    "594fac1293d4": {
+      "name": "workspaceSparsePresetsError",
+      "value": "",
+      "sent": 1
+    },
+    "5b8f6c626989": {
+      "name": "workspaceSparsePresetId",
+      "value": "p1",
+      "sent": 2
     },
     "5c44ff5f6877": {
       "name": "repo.saveSparsePreset#1",
@@ -270,6 +283,16 @@
         }
       }
     },
+    "5f1454731b28": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": "Unknown method",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
+    },
     "68ca812c8120": {
       "presets": [],
       "presetsError": "",
@@ -282,6 +305,16 @@
         "status": "disconnected",
         "targetId": "ssh-1"
       }
+    },
+    "6afb106ee68e": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": "Cannot read properties of undefined (reading 'state')",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
     },
     "6daeb33f37f8": {
       "presets": [],
@@ -322,10 +355,6 @@
         "targetId": "ssh-1"
       }
     },
-    "7fd0cde62993": {
-      "name": "workspaceSparseSaving",
-      "value": false
-    },
     "80431b2fc9cd": {
       "presets": [
         {
@@ -365,14 +394,27 @@
         "targetId": "ssh-1"
       }
     },
-    "86cc01b1e541": {
+    "82748a6e3f42": {
       "name": "workspaceSshState",
       "value": {
-        "error": "",
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "disconnected",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
+    },
+    "88164d04dbe0": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": "transport failure",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
-      }
+      },
+      "sent": 1
     },
     "89aa7a3bd619": {
       "name": "ssh.getState#1",
@@ -414,25 +456,21 @@
         }
       }
     },
-    "9164e806ca12": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": "Cannot read properties of null (reading 'state')",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
+    "8a48f96e40fe": {
+      "name": "workspaceSparsePresets",
+      "value": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "sent": 2
     },
-    "921f72d7827e": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": {
-          "$rpc": "null"
-        },
-        "reconnectAttempt": 0,
-        "status": "connected",
-        "targetId": "ssh-1"
-      }
+    "8ff2b79a90fb": {
+      "name": "workspaceSparsePresetsLoaded",
+      "value": true,
+      "sent": 2
     },
     "9367b086d487": {
       "presets": [
@@ -451,30 +489,12 @@
         "targetId": "ssh-1"
       }
     },
-    "93dfd351c771": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": "outer refused",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
     "a16210531185": {
       "presets": [],
       "presetsError": "",
       "saving": false,
       "ssh": {
         "error": "outer refused",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
-    "a209f2c7160e": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": "Unknown method",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
@@ -548,14 +568,10 @@
         }
       }
     },
-    "b7fa4557dcfa": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": "transport failure",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
+    "c74f5fe12440": {
+      "name": "workspaceSparseSaving",
+      "value": true,
+      "sent": 1
     },
     "cd050477e049": {
       "presets": [
@@ -573,10 +589,6 @@
         "status": "error",
         "targetId": "ssh-1"
       }
-    },
-    "cea9d7e8986e": {
-      "name": "workspaceSparseSaving",
-      "value": true
     },
     "d0fad8f739ca": {
       "name": "ssh.getState#1",
@@ -611,10 +623,6 @@
           "ok": false
         }
       }
-    },
-    "dba381378b08": {
-      "name": "workspaceSparsePresetsError",
-      "value": ""
     },
     "e18278fce524": {
       "name": "ssh.getState#1",
@@ -689,6 +697,13 @@
         "status": "error",
         "targetId": "ssh-1"
       }
+    },
+    "ef39f35afb7f": {
+      "name": "workspaceSparseDraft",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 2
     },
     "f36f17f8d448": {
       "name": "ssh.getState#1",
@@ -795,7 +810,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "ee3a941d5e9c",
-          "effects": ["921f72d7827e"]
+          "effects": ["452edc62bce0"]
         }
       },
       {
@@ -809,14 +824,14 @@
           },
           "state": "404305aa2e3a",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -829,7 +844,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "44ca8518769a",
-          "effects": ["1703db1e81e4"]
+          "effects": ["6afb106ee68e"]
         }
       },
       {
@@ -843,14 +858,14 @@
           },
           "state": "7a26c9dceb4c",
           "effects": [
-            "1703db1e81e4",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "6afb106ee68e",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -863,7 +878,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "81af687a998a",
-          "effects": ["9164e806ca12"]
+          "effects": ["0c138770731d"]
         }
       },
       {
@@ -877,14 +892,14 @@
           },
           "state": "80431b2fc9cd",
           "effects": [
-            "9164e806ca12",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "0c138770731d",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -897,7 +912,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "68ca812c8120",
-          "effects": ["25352a4de532"]
+          "effects": ["82748a6e3f42"]
         }
       },
       {
@@ -911,14 +926,14 @@
           },
           "state": "f7885da6b9c0",
           "effects": [
-            "25352a4de532",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "82748a6e3f42",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -931,7 +946,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "68ca812c8120",
-          "effects": ["25352a4de532"]
+          "effects": ["82748a6e3f42"]
         }
       },
       {
@@ -945,14 +960,14 @@
           },
           "state": "f7885da6b9c0",
           "effects": [
-            "25352a4de532",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "82748a6e3f42",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -965,7 +980,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "68ca812c8120",
-          "effects": ["25352a4de532"]
+          "effects": ["82748a6e3f42"]
         }
       },
       {
@@ -979,14 +994,14 @@
           },
           "state": "f7885da6b9c0",
           "effects": [
-            "25352a4de532",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "82748a6e3f42",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -999,7 +1014,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "a16210531185",
-          "effects": ["93dfd351c771"]
+          "effects": ["370294f90804"]
         }
       },
       {
@@ -1013,14 +1028,14 @@
           },
           "state": "9367b086d487",
           "effects": [
-            "93dfd351c771",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "370294f90804",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -1033,7 +1048,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "813df5a46a4a",
-          "effects": ["86cc01b1e541"]
+          "effects": ["1db4236fbf9f"]
         }
       },
       {
@@ -1047,14 +1062,14 @@
           },
           "state": "cd050477e049",
           "effects": [
-            "86cc01b1e541",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "1db4236fbf9f",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -1067,7 +1082,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "7e5ba73897a1",
-          "effects": ["a209f2c7160e"]
+          "effects": ["5f1454731b28"]
         }
       },
       {
@@ -1081,14 +1096,14 @@
           },
           "state": "57be9babbecd",
           "effects": [
-            "a209f2c7160e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "5f1454731b28",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -1101,7 +1116,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "6daeb33f37f8",
-          "effects": ["b7fa4557dcfa"]
+          "effects": ["88164d04dbe0"]
         }
       },
       {
@@ -1115,14 +1130,14 @@
           },
           "state": "ef27a7ecb258",
           "effects": [
-            "b7fa4557dcfa",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "88164d04dbe0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -1135,7 +1150,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "813df5a46a4a",
-          "effects": ["86cc01b1e541"]
+          "effects": ["1db4236fbf9f"]
         }
       },
       {
@@ -1149,14 +1164,14 @@
           },
           "state": "cd050477e049",
           "effects": [
-            "86cc01b1e541",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "1db4236fbf9f",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       }

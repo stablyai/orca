@@ -3,9 +3,9 @@
   "family": "tasks.project-board-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "7840e811e81d3645f1c874b871158202a53432989f3b5c849df12550b082813b",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "02310a132254": {
-      "name": "githubProjectPartialFailures",
-      "value": []
-    },
     "02a4a58d8dfb": {
       "name": "github.project.listViews#2",
       "args": [
@@ -60,10 +56,6 @@
           }
         }
       }
-    },
-    "03a767961869": {
-      "name": "githubProjectLoading",
-      "value": true
     },
     "09d1a467c534": {
       "name": "github.project.listViews#1",
@@ -113,23 +105,24 @@
       "name": "github.project.listViews#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listViews\",\"params\":{\"owner\":\"owner\",\"host\":\"github.enterprise.test\",\"ownerType\":\"organization\",\"projectNumber\":3}}"
     },
-    "11b132a242c1": {
-      "name": "githubProjectTable",
-      "value": {
-        "$rpc": "null"
-      }
+    "156064e9724d": {
+      "name": "githubProjectPasteBusy",
+      "value": true,
+      "sent": 3
     },
-    "1296da8e044e": {
+    "16712ed539ad": {
       "name": "githubProjectSearch",
-      "value": ""
+      "value": "",
+      "sent": 5
     },
     "1d3552e91192": {
       "name": "github.project.listAccessible#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listAccessible\",\"params\":{\"host\":\"github.com\"}}"
     },
-    "27ed3970f7fb": {
-      "name": "githubProjectPasteBusy",
-      "value": true
+    "25b0ac550549": {
+      "name": "githubProjectPartialFailures",
+      "value": [],
+      "sent": 1
     },
     "2ab1b35ff194": {
       "error": "",
@@ -169,9 +162,10 @@
         }
       ]
     },
-    "2ae6c4fc165d": {
+    "32b1426d14c0": {
       "name": "githubProjectLoading",
-      "value": false
+      "value": false,
+      "sent": 3
     },
     "376c9e8bd72a": {
       "error": "",
@@ -198,6 +192,11 @@
         }
       ]
     },
+    "383da1c2fa1c": {
+      "name": "githubProjectLoading",
+      "value": true,
+      "sent": 4
+    },
     "39bc2fd66e3d": {
       "name": "github.project.viewTable#1",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.viewTable\",\"params\":{\"owner\":\"owner\",\"host\":\"github.enterprise.test\",\"ownerType\":\"organization\",\"projectNumber\":3,\"viewId\":\"view-1\"}}"
@@ -205,6 +204,11 @@
     "3e904e0d43b4": {
       "name": "github.project.listViews#2",
       "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listViews\",\"params\":{\"owner\":\"owner\",\"host\":\"github.com\",\"ownerType\":\"organization\",\"projectNumber\":3}}"
+    },
+    "42d96f8f44ae": {
+      "name": "githubProjectError",
+      "value": "",
+      "sent": 3
     },
     "43d044e8caea": {
       "name": "github.project.listAccessible#1",
@@ -249,7 +253,60 @@
         }
       }
     },
-    "520e0f81bc2a": {
+    "47ebe03e8b7f": {
+      "name": "githubProjectViews",
+      "value": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ],
+      "sent": 5
+    },
+    "4d6bf1149ea4": {
+      "name": "githubProjectError",
+      "value": "",
+      "sent": 4
+    },
+    "54b9c49c04a8": {
+      "name": "githubProjectError",
+      "value": "",
+      "sent": 0
+    },
+    "57acdd86193b": {
+      "name": "githubProjectSearch",
+      "value": "is:open",
+      "sent": 3
+    },
+    "5bd0110906b9": {
+      "name": "githubProjectPartialFailures",
+      "value": [],
+      "sent": 0
+    },
+    "6579ec5a7d8f": {
+      "name": "githubProjectLoading",
+      "value": false,
+      "sent": 5
+    },
+    "6820b76533c9": {
+      "name": "githubProjectLoading",
+      "value": true,
+      "sent": 2
+    },
+    "6e64e24c633d": {
+      "name": "appliedGithubProjectSearch",
+      "value": {
+        "$rpc": "undefined"
+      },
+      "sent": 5
+    },
+    "6f73e51854d5": {
+      "name": "github.project.resolveRef#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.resolveRef\",\"params\":{\"input\":\"https://github.com/orgs/owner/projects/3\",\"host\":\"github.com\"}}"
+    },
+    "80ceb7c32703": {
       "name": "githubProjects",
       "value": [
         {
@@ -259,28 +316,20 @@
           "ownerType": "organization",
           "title": "Board"
         }
-      ]
+      ],
+      "sent": 1
     },
-    "54ea0f0a1191": {
-      "name": "githubProjectTable",
-      "value": {
-        "fields": [],
-        "project": {
-          "id": "project-1",
-          "number": 3,
-          "title": "Board"
-        },
-        "rows": [],
-        "selectedView": {
-          "filter": "is:open",
-          "id": "view-1",
-          "layout": "TABLE_LAYOUT",
-          "name": "Table",
-          "number": 1
-        }
-      }
+    "900becffe437": {
+      "name": "showGitHubProjectPicker",
+      "value": false,
+      "sent": 4
     },
-    "560b9ae7cb02": {
+    "b05e50b1dc22": {
+      "name": "githubProjectPasteBusy",
+      "value": false,
+      "sent": 5
+    },
+    "b2ddd7451862": {
       "name": "githubProjectViews",
       "value": [
         {
@@ -289,21 +338,20 @@
           "name": "Table",
           "number": 1
         }
-      ]
+      ],
+      "sent": 2
     },
-    "6f73e51854d5": {
-      "name": "github.project.resolveRef#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.resolveRef\",\"params\":{\"input\":\"https://github.com/orgs/owner/projects/3\",\"host\":\"github.com\"}}"
-    },
-    "abd075971f7c": {
-      "name": "githubProjectPasteError",
-      "value": ""
-    },
-    "b14931fed627": {
-      "name": "appliedGithubProjectSearch",
-      "value": {
-        "$rpc": "undefined"
-      }
+    "b6255b367ac4": {
+      "name": "githubProjectViews",
+      "value": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ],
+      "sent": 3
     },
     "be0da5b53ffb": {
       "status": "fulfilled",
@@ -358,9 +406,12 @@
         }
       }
     },
-    "dbe747c32c99": {
-      "name": "githubProjectError",
-      "value": ""
+    "ddc3cac1e389": {
+      "name": "githubProjectTable",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 5
     },
     "dec0f3dc00c9": {
       "name": "github.project.viewTable#1",
@@ -415,17 +466,15 @@
         }
       }
     },
-    "e32cd29f23cb": {
+    "e59d16f6cde5": {
+      "name": "githubProjectPasteError",
+      "value": "",
+      "sent": 3
+    },
+    "e8b0899e8eb2": {
       "name": "githubProjectPasteInput",
-      "value": ""
-    },
-    "e42224cf3520": {
-      "name": "githubProjectSearch",
-      "value": "is:open"
-    },
-    "e542d7c9af9f": {
-      "name": "showGitHubProjectPicker",
-      "value": false
+      "value": "",
+      "sent": 4
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -435,9 +484,30 @@
         "$rpc": "undefined"
       }
     },
-    "fe4574f4cf7a": {
-      "name": "githubProjectPasteBusy",
-      "value": false
+    "ebf1d6b98d33": {
+      "name": "githubProjectTable",
+      "value": {
+        "fields": [],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
+        },
+        "rows": [],
+        "selectedView": {
+          "filter": "is:open",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      },
+      "sent": 3
+    },
+    "f3e4bb3c6cb0": {
+      "name": "githubProjectError",
+      "value": "",
+      "sent": 2
     },
     "ff43b5ec92a9": {
       "error": "",
@@ -471,7 +541,7 @@
             "projects-0": "eb79a9b3682a"
           },
           "state": "ff43b5ec92a9",
-          "effects": ["dbe747c32c99", "02310a132254", "520e0f81bc2a", "02310a132254"]
+          "effects": ["54b9c49c04a8", "5bd0110906b9", "80ceb7c32703", "25b0ac550549"]
         }
       },
       {
@@ -486,11 +556,11 @@
           },
           "state": "376c9e8bd72a",
           "effects": [
-            "dbe747c32c99",
-            "02310a132254",
-            "520e0f81bc2a",
-            "02310a132254",
-            "560b9ae7cb02"
+            "54b9c49c04a8",
+            "5bd0110906b9",
+            "80ceb7c32703",
+            "25b0ac550549",
+            "b2ddd7451862"
           ]
         }
       },
@@ -507,17 +577,17 @@
           },
           "state": "2ab1b35ff194",
           "effects": [
-            "dbe747c32c99",
-            "02310a132254",
-            "520e0f81bc2a",
-            "02310a132254",
-            "560b9ae7cb02",
-            "03a767961869",
-            "dbe747c32c99",
-            "54ea0f0a1191",
-            "e42224cf3520",
-            "560b9ae7cb02",
-            "2ae6c4fc165d"
+            "54b9c49c04a8",
+            "5bd0110906b9",
+            "80ceb7c32703",
+            "25b0ac550549",
+            "b2ddd7451862",
+            "6820b76533c9",
+            "f3e4bb3c6cb0",
+            "ebf1d6b98d33",
+            "57acdd86193b",
+            "b6255b367ac4",
+            "32b1426d14c0"
           ]
         }
       },
@@ -547,30 +617,30 @@
           },
           "state": "376c9e8bd72a",
           "effects": [
-            "dbe747c32c99",
-            "02310a132254",
-            "520e0f81bc2a",
-            "02310a132254",
-            "560b9ae7cb02",
-            "03a767961869",
-            "dbe747c32c99",
-            "54ea0f0a1191",
-            "e42224cf3520",
-            "560b9ae7cb02",
-            "2ae6c4fc165d",
-            "27ed3970f7fb",
-            "abd075971f7c",
-            "dbe747c32c99",
-            "e32cd29f23cb",
-            "e542d7c9af9f",
-            "03a767961869",
-            "dbe747c32c99",
-            "560b9ae7cb02",
-            "b14931fed627",
-            "1296da8e044e",
-            "11b132a242c1",
-            "2ae6c4fc165d",
-            "fe4574f4cf7a"
+            "54b9c49c04a8",
+            "5bd0110906b9",
+            "80ceb7c32703",
+            "25b0ac550549",
+            "b2ddd7451862",
+            "6820b76533c9",
+            "f3e4bb3c6cb0",
+            "ebf1d6b98d33",
+            "57acdd86193b",
+            "b6255b367ac4",
+            "32b1426d14c0",
+            "156064e9724d",
+            "e59d16f6cde5",
+            "42d96f8f44ae",
+            "e8b0899e8eb2",
+            "900becffe437",
+            "383da1c2fa1c",
+            "4d6bf1149ea4",
+            "47ebe03e8b7f",
+            "6e64e24c633d",
+            "16712ed539ad",
+            "ddc3cac1e389",
+            "6579ec5a7d8f",
+            "b05e50b1dc22"
           ]
         }
       }

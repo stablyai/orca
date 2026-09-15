@@ -3,9 +3,9 @@
   "family": "tasks.project-repo-slugs",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
   "scenarioSha256": "667a06cf9ff8129eee64327566012448abe1fe31f58c0d9b882b13e74db5a877",
   "platform": "darwin",
@@ -49,26 +49,24 @@
         }
       }
     },
+    "067e0f525ca4": {
+      "name": "githubRepoSlugCache",
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "$rpc": "undefined"
+          }
+        }
+      },
+      "sent": 1
+    },
     "0caf56550963": {
       "cache": {
         "repo-1": {
           "path": "/repo",
           "repository": {
             "error": "refused"
-          }
-        }
-      }
-    },
-    "1442b25019e2": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
           }
         }
       }
@@ -83,6 +81,19 @@
           }
         }
       }
+    },
+    "204880c5c7ff": {
+      "name": "githubRepoSlugCache",
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      },
+      "sent": 1
     },
     "436770d5f8a8": {
       "name": "github.repoSlug#1",
@@ -231,6 +242,46 @@
         }
       }
     },
+    "7686fc340030": {
+      "name": "githubRepoSlugCache",
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "$rpc": "null"
+          }
+        }
+      },
+      "sent": 1
+    },
+    "76be317ac0fc": {
+      "name": "githubRepoSlugCache",
+      "value": {
+        "repo-1": {
+          "failed": true,
+          "path": "/repo",
+          "repository": {
+            "$rpc": "null"
+          }
+        }
+      },
+      "sent": 1
+    },
+    "788ba90c1898": {
+      "name": "githubRepoSlugCache",
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      },
+      "sent": 1
+    },
     "7de03629a406": {
       "name": "github.repoSlug#1",
       "args": [
@@ -307,7 +358,7 @@
         }
       }
     },
-    "a21757eb73fd": {
+    "a357afc033aa": {
       "name": "githubRepoSlugCache",
       "value": {
         "repo-1": {
@@ -318,7 +369,8 @@
             "repo": "repo"
           }
         }
-      }
+      },
+      "sent": 1
     },
     "a4483defdd13": {
       "cache": {
@@ -364,18 +416,6 @@
         }
       }
     },
-    "b2fd6f936f49": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
     "bdec8bbb3c04": {
       "cache": {
         "repo-1": {
@@ -384,18 +424,6 @@
             "host": "github.com",
             "owner": "owner",
             "repo": "repo"
-          }
-        }
-      }
-    },
-    "c3850497d116": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "failed": true,
-          "path": "/repo",
-          "repository": {
-            "$rpc": "null"
           }
         }
       }
@@ -431,17 +459,6 @@
           },
           "id": "frame-1",
           "ok": false
-        }
-      }
-    },
-    "e2b2399bb17c": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "$rpc": "undefined"
-          }
         }
       }
     },
@@ -483,7 +500,7 @@
         "$rpc": "undefined"
       }
     },
-    "ed19813b2541": {
+    "efa8d7457ce2": {
       "name": "githubRepoSlugCache",
       "value": {
         "repo-1": {
@@ -492,18 +509,8 @@
             "error": "refused"
           }
         }
-      }
-    },
-    "fd2aa51746f4": {
-      "name": "githubRepoSlugCache",
-      "value": {
-        "repo-1": {
-          "path": "/repo",
-          "repository": {
-            "$rpc": "null"
-          }
-        }
-      }
+      },
+      "sent": 1
     },
     "ffa0fb99ddcc": {
       "cache": {
@@ -564,7 +571,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "bdec8bbb3c04",
-          "effects": ["a21757eb73fd"]
+          "effects": ["a357afc033aa"]
         }
       },
       {
@@ -576,7 +583,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "4cfa99d7eefa",
-          "effects": ["e2b2399bb17c"]
+          "effects": ["067e0f525ca4"]
         }
       },
       {
@@ -588,7 +595,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "a4483defdd13",
-          "effects": ["fd2aa51746f4"]
+          "effects": ["7686fc340030"]
         }
       },
       {
@@ -600,7 +607,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "0caf56550963",
-          "effects": ["ed19813b2541"]
+          "effects": ["efa8d7457ce2"]
         }
       },
       {
@@ -612,7 +619,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "8a9b6f06911d",
-          "effects": ["b2fd6f936f49"]
+          "effects": ["204880c5c7ff"]
         }
       },
       {
@@ -624,7 +631,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "ffa0fb99ddcc",
-          "effects": ["1442b25019e2"]
+          "effects": ["788ba90c1898"]
         }
       },
       {
@@ -636,7 +643,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["c3850497d116"]
+          "effects": ["76be317ac0fc"]
         }
       },
       {
@@ -648,7 +655,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["c3850497d116"]
+          "effects": ["76be317ac0fc"]
         }
       },
       {
@@ -660,7 +667,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["c3850497d116"]
+          "effects": ["76be317ac0fc"]
         }
       },
       {
@@ -672,7 +679,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["c3850497d116"]
+          "effects": ["76be317ac0fc"]
         }
       },
       {
@@ -684,7 +691,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "1b6c8cbfdc90",
-          "effects": ["c3850497d116"]
+          "effects": ["76be317ac0fc"]
         }
       }
     ]

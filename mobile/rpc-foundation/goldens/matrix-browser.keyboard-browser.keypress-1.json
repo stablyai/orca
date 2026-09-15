@@ -3,9 +3,9 @@
   "family": "browser.keyboard",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "c1df871e84d4399e9a447caaff244241933c0dfc7c3d5e114d022e54b0ed7ed4",
   "platform": "darwin",
@@ -90,6 +90,13 @@
           }
         }
       }
+    },
+    "5fe64ef6c1f3": {
+      "name": "toast",
+      "value": {
+        "message": "Sent"
+      },
+      "sent": 1
     },
     "72b0cf4a3571": {
       "name": "browser.keypress#1",
@@ -307,12 +314,6 @@
         }
       }
     },
-    "c20546e0857f": {
-      "name": "toast",
-      "value": {
-        "message": "Sent"
-      }
-    },
     "c2f31140b989": {
       "name": "browser.keypress#1",
       "args": [
@@ -481,7 +482,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -495,7 +496,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -509,7 +510,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -523,7 +524,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -537,7 +538,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -551,7 +552,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -565,7 +566,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -579,7 +580,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -593,7 +594,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -607,7 +608,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       },
       {
@@ -621,7 +622,7 @@
             "keypress": "eb79a9b3682a"
           },
           "state": "8160e8872519",
-          "effects": ["c20546e0857f"]
+          "effects": ["5fe64ef6c1f3"]
         }
       }
     ]

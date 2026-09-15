@@ -11,7 +11,11 @@ function storageKey(sessionId: string): string {
   return `${OUTBOX_PREFIX}${encodeURIComponent(sessionId)}`
 }
 
-export function readOutbox(sessionId: string): StructuredAgentSessionOutboxEntry[] {
+export function readOutbox(
+  sessionId: string,
+  options: { recoverDispatching?: boolean } = {}
+): StructuredAgentSessionOutboxEntry[] {
+  const recoverDispatching = options.recoverDispatching !== false
   try {
     const value = JSON.parse(localStorage.getItem(storageKey(sessionId)) ?? '[]')
     return Array.isArray(value)
@@ -19,7 +23,9 @@ export function readOutbox(sessionId: string): StructuredAgentSessionOutboxEntry
           .map((entry) => parseStructuredAgentSessionOutboxEntry(entry, sessionId))
           .filter((entry): entry is StructuredAgentSessionOutboxEntry => entry !== null)
           .map((entry) =>
-            entry.state === 'dispatching' ? { ...entry, state: 'unconfirmed' as const } : entry
+            recoverDispatching && entry.state === 'dispatching'
+              ? { ...entry, state: 'unconfirmed' as const }
+              : entry
           )
           .sort((left, right) => left.queuedAt - right.queuedAt)
       : []
@@ -48,13 +54,16 @@ export function enqueueStructuredAgentSessionLaunchPrompt(
   sessionId: string,
   text: string
 ): StructuredAgentSessionOutboxEntry | null {
-  const entry = createStructuredAgentSessionOutboxEntry({
-    clientMessageId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
-    sessionId,
-    text,
-    attachments: [],
-    queuedAt: Date.now()
-  })
+  const entry = {
+    ...createStructuredAgentSessionOutboxEntry({
+      clientMessageId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
+      sessionId,
+      text,
+      attachments: [],
+      queuedAt: Date.now()
+    }),
+    source: 'launch' as const
+  }
   return writeOutbox(sessionId, [...readOutbox(sessionId), entry]) ? entry : null
 }
 

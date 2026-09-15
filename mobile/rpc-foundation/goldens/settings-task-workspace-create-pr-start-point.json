@@ -3,9 +3,9 @@
   "family": "settings.task-workspace-create",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
   "scenarioSha256": "8ae9e1dbb32d404eac9e01f71dacf1c37497030220a8e988c0093bb7ed2d159b",
   "platform": "darwin",
@@ -13,12 +13,12 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "067cef118d9f": {
-      "name": "runtimeTaskSettings",
+    "0289e08fa363": {
+      "name": "workspaceCreateDraft",
       "value": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": []
-      }
+        "$rpc": "null"
+      },
+      "sent": 3
     },
     "090c88478661": {
       "name": "settings.get#1",
@@ -43,12 +43,6 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
-      }
-    },
-    "180125f5d1a6": {
-      "name": "workspaceCreateDraft",
-      "value": {
-        "$rpc": "null"
       }
     },
     "2473f12c7cdd": {
@@ -112,23 +106,39 @@
         "disabledTuiAgents": ["claude"]
       }
     },
-    "6eb4e79ad99a": {
+    "759bb7d4b5cf": {
       "name": "setupPrompt",
       "value": {
         "$rpc": "null"
-      }
+      },
+      "sent": 3
     },
     "7ddcb1852b39": {
       "name": "settings.get#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
+    "8f08c9b94011": {
+      "name": "actionItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 3
     },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "96be595b4b0e": {
+      "name": "creatingKey",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 3
+    },
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
     },
     "9e9f36142bbd": {
       "name": "worktree.create#1",
@@ -209,25 +219,22 @@
         "startedAt": 0
       }
     },
-    "ac9996319e05": {
-      "name": "actionItem",
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "b66f6d1958b9": {
       "name": "worktree.create#1",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"pr-7\",\"displayName\":\"Recorded pull request\",\"displayNameKind\":\"generated\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://github.com/o/r/pull/7\",\"createdWithAgent\":\"claude\",\"baseBranch\":\"main\",\"linkedPR\":7}}"
     },
-    "be0ebed89b2b": {
-      "name": "navigation",
-      "value": "/h/host-1/session/wt-2?name=Recorded+pull+request&created=1&warning=shallow+clone"
-    },
-    "c9cb32059b8d": {
-      "name": "creatingKey",
+    "d78d24fff8fb": {
+      "name": "runtimeTaskSettings",
       "value": {
-        "$rpc": "null"
-      }
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      },
+      "sent": 1
+    },
+    "e00e0d995284": {
+      "name": "creatingKey",
+      "value": "github:7",
+      "sent": 0
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -241,9 +248,10 @@
       "name": "worktree.resolvePrBase#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":7}}"
     },
-    "ecefc28694cb": {
-      "name": "creatingKey",
-      "value": "github:7"
+    "f2ca7e4f0a73": {
+      "name": "navigation",
+      "value": "/h/host-1/session/wt-2?name=Recorded+pull+request&created=1&warning=shallow+clone",
+      "sent": 3
     },
     "f9e183f427ee": {
       "name": "worktree.resolvePrBase#1",
@@ -293,7 +301,7 @@
             "submit": "9270aeb7d9c6"
           },
           "state": "52051fd3214e",
-          "effects": ["ecefc28694cb", "82cd71d524c8"]
+          "effects": ["e00e0d995284", "9e263f5e91be"]
         }
       },
       {
@@ -306,7 +314,7 @@
             "submit": "9270aeb7d9c6"
           },
           "state": "3dc266b1bda1",
-          "effects": ["ecefc28694cb", "82cd71d524c8", "067cef118d9f"]
+          "effects": ["e00e0d995284", "9e263f5e91be", "d78d24fff8fb"]
         }
       },
       {
@@ -320,14 +328,14 @@
           },
           "state": "33e3b949d4c5",
           "effects": [
-            "ecefc28694cb",
-            "82cd71d524c8",
-            "067cef118d9f",
-            "ac9996319e05",
-            "180125f5d1a6",
-            "6eb4e79ad99a",
-            "be0ebed89b2b",
-            "c9cb32059b8d"
+            "e00e0d995284",
+            "9e263f5e91be",
+            "d78d24fff8fb",
+            "8f08c9b94011",
+            "0289e08fa363",
+            "759bb7d4b5cf",
+            "f2ca7e4f0a73",
+            "96be595b4b0e"
           ]
         }
       }

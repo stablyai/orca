@@ -170,8 +170,8 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  if (result.tabId) {
-    focusTerminalTabSurface(result.tabId)
+  if (result.surface.kind === 'local-terminal') {
+    focusTerminalTabSurface(result.surface.tabId)
   }
   toast.success(copy.success)
   return true

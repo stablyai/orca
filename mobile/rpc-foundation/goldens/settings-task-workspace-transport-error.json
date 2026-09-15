@@ -3,9 +3,9 @@
   "family": "settings.task-workspace",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
   "scenarioSha256": "a5e812cd508826b3f01ec3798c621ab4303de6536a364113f01a4770dd197bb5",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "01533f698bc3": {
+      "name": "workspaceAgent",
+      "value": "codex",
+      "sent": 1
+    },
     "090c88478661": {
       "name": "settings.get#1",
       "args": [
@@ -69,17 +74,17 @@
         }
       }
     },
-    "3405a06dce84": {
-      "name": "error",
-      "value": "Selected agent is disabled. Choose an enabled agent before creating."
-    },
-    "3f453dd79b03": {
-      "name": "workspaceAgent",
-      "value": "codex"
-    },
-    "730f92993963": {
+    "2a3409305e35": {
       "name": "creatingKey",
-      "value": "linear:1"
+      "value": "linear:1",
+      "sent": 0
+    },
+    "3542b2dc7cf4": {
+      "name": "creatingKey",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 1
     },
     "7abdfe20af50": {
       "creating": "linear:1",
@@ -92,19 +97,19 @@
       "name": "settings.get#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
-    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
     },
-    "c9cb32059b8d": {
-      "name": "creatingKey",
-      "value": {
-        "$rpc": "null"
-      }
+    "98260d6be053": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 1
+    },
+    "9e263f5e91be": {
+      "name": "error",
+      "value": "",
+      "sent": 0
     },
     "d5df3f6b123a": {
       "creating": {
@@ -115,9 +120,10 @@
         "disabledTuiAgents": ["claude"]
       }
     },
-    "ea709e13f0f0": {
-      "name": "workspaceAgentOverridden",
-      "value": false
+    "eaf6fe088c19": {
+      "name": "error",
+      "value": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -141,7 +147,7 @@
             "submit": "9270aeb7d9c6"
           },
           "state": "7abdfe20af50",
-          "effects": ["730f92993963", "82cd71d524c8"]
+          "effects": ["2a3409305e35", "9e263f5e91be"]
         }
       },
       {
@@ -155,12 +161,12 @@
           },
           "state": "d5df3f6b123a",
           "effects": [
-            "730f92993963",
-            "82cd71d524c8",
-            "3f453dd79b03",
-            "ea709e13f0f0",
-            "3405a06dce84",
-            "c9cb32059b8d"
+            "2a3409305e35",
+            "9e263f5e91be",
+            "01533f698bc3",
+            "98260d6be053",
+            "eaf6fe088c19",
+            "3542b2dc7cf4"
           ]
         }
       }

@@ -3,9 +3,9 @@
   "family": "tasks.workspace-ssh-local",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "af0623c2d106d2ed18ef9149d4990539f9ed82146ae091a872a3e1d792efeffe",
   "platform": "darwin",
@@ -13,11 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "41b0d115f434": {
-      "name": "workspaceDetectedAgentIds",
-      "value": {
-        "$rpc": "null"
-      }
+    "0c2cba5f3708": {
+      "name": "workspaceAgent",
+      "value": "claude",
+      "sent": 0
     },
     "7400f4eebe66": {
       "agent": "claude",
@@ -27,6 +26,11 @@
       "ssh": {
         "$rpc": "null"
       }
+    },
+    "77b6cedadbe8": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 0
     },
     "cb93b17470e8": {
       "name": "preflight.detectAgents#1",
@@ -59,17 +63,21 @@
         }
       }
     },
-    "cbb858a786ac": {
-      "name": "workspaceDetectedAgentIds",
-      "value": ["codex", "claude"]
-    },
     "cf32edc950ac": {
       "name": "preflight.detectAgents#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
     },
-    "ea709e13f0f0": {
-      "name": "workspaceAgentOverridden",
-      "value": false
+    "d00f9527d4f2": {
+      "name": "workspaceDetectedAgentIds",
+      "value": ["codex", "claude"],
+      "sent": 1
+    },
+    "dd9d8bf76a0e": {
+      "name": "workspaceDetectedAgentIds",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -78,10 +86,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "ed6189938d78": {
-      "name": "workspaceAgent",
-      "value": "claude"
     }
   },
   "recording": {
@@ -96,7 +100,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "7400f4eebe66",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "cbb858a786ac"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "d00f9527d4f2"]
         }
       }
     ]

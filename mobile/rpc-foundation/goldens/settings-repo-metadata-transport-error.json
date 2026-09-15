@@ -3,9 +3,9 @@
   "family": "settings.repo-metadata",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "741db13a84dbcec2e97e80605d742e69558954657c72f8450f3f8bc177dd01b6",
   "platform": "darwin",
@@ -13,6 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "01c17b40bd86": {
+      "name": "repoColorsByName",
+      "value": [
+        ["Local", "#6366f1"],
+        ["Remote", "#f97316"]
+      ],
+      "sent": 1
+    },
     "02449e890487": {
       "name": "host.platform#1",
       "args": [
@@ -115,10 +123,6 @@
       "name": "ssh.listTargetSummaries#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}"
     },
-    "388d7275af5f": {
-      "name": "hostPlatform",
-      "value": "linux"
-    },
     "4335d4b6568f": {
       "name": "settings.get#1",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
@@ -141,13 +145,6 @@
     "6bdbf70bafa2": {
       "name": "repo.list#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "7d956f17cf24": {
-      "name": "repoColorsByName",
-      "value": [
-        ["Local", "#6366f1"],
-        ["Remote", "#f97316"]
-      ]
     },
     "7f85f28c922e": {
       "name": "host.platform#1",
@@ -182,20 +179,32 @@
         }
       }
     },
+    "85cc15d64d8b": {
+      "name": "repoHostIdByRepoId",
+      "value": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ],
+      "sent": 1
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
     },
-    "a4830eb5b420": {
-      "name": "hostLabelById",
-      "value": [["ssh:ssh-1", "SSH"]]
+    "93f4efbf2bd5": {
+      "name": "hostPlatform",
+      "value": "linux",
+      "sent": 4
     },
-    "a95587e993a9": {
-      "name": "repoIdsByName",
-      "value": [
-        ["Local", "repo-1"],
-        ["Remote", "repo-2"]
-      ]
+    "94a0e83966bb": {
+      "name": "hostLabelById",
+      "value": [["ssh:ssh-1", "SSH"]],
+      "sent": 4
+    },
+    "9b746c7d3d3a": {
+      "name": "repoIconsByName",
+      "value": [],
+      "sent": 1
     },
     "b40605df86b7": {
       "name": "repo.list#1",
@@ -243,17 +252,6 @@
         }
       }
     },
-    "d228b095cad2": {
-      "name": "repoIconsByName",
-      "value": []
-    },
-    "d6a308f7b0ff": {
-      "name": "repoHostIdByRepoId",
-      "value": [
-        ["repo-1", "local"],
-        ["repo-2", "ssh:ssh-1"]
-      ]
-    },
     "df7cbc246ac0": {
       "name": "host.platform#1",
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
@@ -265,6 +263,14 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f070375a490f": {
+      "name": "repoIdsByName",
+      "value": [
+        ["Local", "repo-1"],
+        ["Remote", "repo-2"]
+      ],
+      "sent": 1
     },
     "f7539bb05693": {
       "name": "ssh.listTargetSummaries#1",
@@ -318,7 +324,7 @@
             "load": "9270aeb7d9c6"
           },
           "state": "6134b73f18d0",
-          "effects": ["7d956f17cf24", "d228b095cad2", "a95587e993a9", "d6a308f7b0ff"]
+          "effects": ["01c17b40bd86", "9b746c7d3d3a", "f070375a490f", "85cc15d64d8b"]
         }
       },
       {
@@ -332,12 +338,12 @@
           },
           "state": "071880b671a1",
           "effects": [
-            "7d956f17cf24",
-            "d228b095cad2",
-            "a95587e993a9",
-            "d6a308f7b0ff",
-            "a4830eb5b420",
-            "388d7275af5f"
+            "01c17b40bd86",
+            "9b746c7d3d3a",
+            "f070375a490f",
+            "85cc15d64d8b",
+            "94a0e83966bb",
+            "93f4efbf2bd5"
           ]
         }
       }

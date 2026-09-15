@@ -3,9 +3,9 @@
   "family": "tasks.workspace-sparse",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "865a659012dd882fd6073813585e2911a1d6252404fbf5a5e273f062b89fc91d",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "0a30edace604": {
+      "name": "workspaceSparsePresetsError",
+      "value": "Failed to save sparse preset.",
+      "sent": 2
+    },
     "193c0bc3cf2a": {
       "presets": [],
       "presetsError": "Failed to save sparse preset.",
@@ -24,18 +29,25 @@
         "targetId": "ssh-1"
       }
     },
-    "7fd0cde62993": {
-      "name": "workspaceSparseSaving",
-      "value": false
-    },
-    "86cc01b1e541": {
+    "1db4236fbf9f": {
       "name": "workspaceSshState",
       "value": {
         "error": "",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
-      }
+      },
+      "sent": 1
+    },
+    "3f2baafe9f80": {
+      "name": "workspaceSparseSaving",
+      "value": false,
+      "sent": 2
+    },
+    "594fac1293d4": {
+      "name": "workspaceSparsePresetsError",
+      "value": "",
+      "sent": 1
     },
     "a6bf06ff84e0": {
       "name": "repo.saveSparsePreset#1",
@@ -70,17 +82,10 @@
         }
       }
     },
-    "cea9d7e8986e": {
+    "c74f5fe12440": {
       "name": "workspaceSparseSaving",
-      "value": true
-    },
-    "da3a01640280": {
-      "name": "workspaceSparsePresetsError",
-      "value": "Failed to save sparse preset."
-    },
-    "dba381378b08": {
-      "name": "workspaceSparsePresetsError",
-      "value": ""
+      "value": true,
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -147,11 +152,11 @@
           },
           "state": "193c0bc3cf2a",
           "effects": [
-            "86cc01b1e541",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "da3a01640280",
-            "7fd0cde62993"
+            "1db4236fbf9f",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "0a30edace604",
+            "3f2baafe9f80"
           ]
         }
       }

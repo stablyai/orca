@@ -3,9 +3,9 @@
   "family": "tasks.linear-connect",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "a60d7c0ce3d155116aecbb3d1ca015b4d9de310155f4e840b2fc391dc9d04860",
   "platform": "darwin",
@@ -13,9 +13,20 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "002ad269dd44": {
-      "name": "showLinearConnect",
-      "value": false
+    "0c51558ed744": {
+      "name": "provider",
+      "value": "linear",
+      "sent": 1
+    },
+    "117a62e5ca79": {
+      "name": "linearConnectError",
+      "value": "Cannot read properties of null (reading 'ok')",
+      "sent": 1
+    },
+    "129470ce1f7f": {
+      "name": "linearConnectError",
+      "value": "Unknown method",
+      "sent": 1
     },
     "18e64a04b7b6": {
       "connected": false,
@@ -23,14 +34,6 @@
       "provider": "github",
       "providers": ["github"],
       "state": "error"
-    },
-    "1ca8abed81ae": {
-      "name": "linearConnectError",
-      "value": "Unknown method"
-    },
-    "240dc4bc9982": {
-      "name": "linearConnectError",
-      "value": "inner refused"
     },
     "292bbaa1f6fe": {
       "name": "linear.connect#1",
@@ -121,9 +124,10 @@
       "providers": ["github"],
       "state": "error"
     },
-    "3f0218e5abc6": {
+    "4870152af5d4": {
       "name": "linearConnectState",
-      "value": "idle"
+      "value": "connecting",
+      "sent": 0
     },
     "4e1726d2cf8f": {
       "name": "linear.connect#1",
@@ -159,22 +163,6 @@
         }
       }
     },
-    "50941ff8a9e3": {
-      "name": "linearConnected",
-      "value": true
-    },
-    "528ad1703e15": {
-      "name": "linearConnectError",
-      "value": "transport failure"
-    },
-    "58b707b67141": {
-      "name": "linearConnectState",
-      "value": "error"
-    },
-    "5def091042f5": {
-      "name": "linearConnectError",
-      "value": ""
-    },
     "632dd7f078e3": {
       "name": "linear.connect#1",
       "args": [
@@ -208,9 +196,20 @@
         }
       }
     },
-    "7c00a7dd4850": {
-      "name": "linearApiKeyDraft",
-      "value": ""
+    "69d74e72326c": {
+      "name": "linearConnected",
+      "value": true,
+      "sent": 1
+    },
+    "74c3dc50a7a4": {
+      "name": "linearConnectError",
+      "value": "inner refused",
+      "sent": 1
+    },
+    "7edd10d0e7a7": {
+      "name": "linearConnectError",
+      "value": "transport failure",
+      "sent": 1
     },
     "94b5638a167f": {
       "connected": false,
@@ -219,9 +218,20 @@
       "providers": ["github"],
       "state": "error"
     },
-    "9f55d77a517a": {
+    "9882c11b1a83": {
       "name": "linearConnectError",
-      "value": "outer refused"
+      "value": "outer refused",
+      "sent": 1
+    },
+    "9ca6f7e482f5": {
+      "name": "linearConnectError",
+      "value": "",
+      "sent": 1
+    },
+    "9ea73b6d4ce4": {
+      "name": "linearConnectError",
+      "value": "",
+      "sent": 0
     },
     "9f6138af26e9": {
       "name": "linear.connect#1",
@@ -324,6 +334,11 @@
         }
       }
     },
+    "b314de624efa": {
+      "name": "linearApiKeyDraft",
+      "value": "",
+      "sent": 1
+    },
     "b7f1fad8d45f": {
       "name": "linear.connect#1",
       "args": [
@@ -357,10 +372,6 @@
         }
       }
     },
-    "b9e578e85f05": {
-      "name": "provider",
-      "value": "linear"
-    },
     "ba59d5e7d5dd": {
       "connected": false,
       "error": "",
@@ -368,17 +379,15 @@
       "providers": ["github"],
       "state": "error"
     },
-    "c4149fce9907": {
-      "name": "linearConnectError",
-      "value": "Cannot read properties of null (reading 'ok')"
+    "bb945a4f9d97": {
+      "name": "linearConnectState",
+      "value": "error",
+      "sent": 1
     },
-    "cc185e00fc86": {
+    "ca688a191b1f": {
       "name": "linearConnectError",
-      "value": "[object Object]"
-    },
-    "ccab44ec5aea": {
-      "name": "linearConnectError",
-      "value": "Cannot read properties of undefined (reading 'ok')"
+      "value": "Cannot read properties of undefined (reading 'ok')",
+      "sent": 1
     },
     "d01bbd7239d1": {
       "name": "linear.connect#1",
@@ -431,10 +440,6 @@
       "providers": ["github"],
       "state": "error"
     },
-    "eafaa34ddedb": {
-      "name": "visibleProviders",
-      "value": ["github", "linear"]
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -442,6 +447,16 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f06f609ce6b4": {
+      "name": "linearConnectState",
+      "value": "idle",
+      "sent": 1
+    },
+    "f4cec40b7d42": {
+      "name": "visibleProviders",
+      "value": ["github", "linear"],
+      "sent": 1
     },
     "f54167ff739b": {
       "connected": false,
@@ -480,10 +495,6 @@
         }
       }
     },
-    "fb8120f6d4d3": {
-      "name": "linearConnectState",
-      "value": "connecting"
-    },
     "fc80dec0189f": {
       "name": "linear.connect#1",
       "args": [
@@ -514,6 +525,16 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "fe3b9280899d": {
+      "name": "linearConnectError",
+      "value": "[object Object]",
+      "sent": 1
+    },
+    "fe581ce5541b": {
+      "name": "showLinearConnect",
+      "value": false,
+      "sent": 1
     }
   },
   "recording": {
@@ -530,14 +551,14 @@
           },
           "state": "2f8d5603d8c0",
           "effects": [
-            "fb8120f6d4d3",
-            "5def091042f5",
-            "7c00a7dd4850",
-            "3f0218e5abc6",
-            "002ad269dd44",
-            "50941ff8a9e3",
-            "eafaa34ddedb",
-            "b9e578e85f05"
+            "4870152af5d4",
+            "9ea73b6d4ce4",
+            "b314de624efa",
+            "f06f609ce6b4",
+            "fe581ce5541b",
+            "69d74e72326c",
+            "f4cec40b7d42",
+            "0c51558ed744"
           ]
         }
       },
@@ -551,7 +572,7 @@
             "connect-0": "eb79a9b3682a"
           },
           "state": "18e64a04b7b6",
-          "effects": ["fb8120f6d4d3", "5def091042f5", "58b707b67141", "ccab44ec5aea"]
+          "effects": ["4870152af5d4", "9ea73b6d4ce4", "bb945a4f9d97", "ca688a191b1f"]
         }
       },
       {
@@ -564,7 +585,7 @@
             "connect-0": "eb79a9b3682a"
           },
           "state": "3bd2a4b2ea0b",
-          "effects": ["fb8120f6d4d3", "5def091042f5", "58b707b67141", "c4149fce9907"]
+          "effects": ["4870152af5d4", "9ea73b6d4ce4", "bb945a4f9d97", "117a62e5ca79"]
         }
       },
       {
@@ -578,14 +599,14 @@
           },
           "state": "2f8d5603d8c0",
           "effects": [
-            "fb8120f6d4d3",
-            "5def091042f5",
-            "7c00a7dd4850",
-            "3f0218e5abc6",
-            "002ad269dd44",
-            "50941ff8a9e3",
-            "eafaa34ddedb",
-            "b9e578e85f05"
+            "4870152af5d4",
+            "9ea73b6d4ce4",
+            "b314de624efa",
+            "f06f609ce6b4",
+            "fe581ce5541b",
+            "69d74e72326c",
+            "f4cec40b7d42",
+            "0c51558ed744"
           ]
         }
       },
@@ -599,7 +620,7 @@
             "connect-0": "eb79a9b3682a"
           },
           "state": "dfd3413a2232",
-          "effects": ["fb8120f6d4d3", "5def091042f5", "58b707b67141", "240dc4bc9982"]
+          "effects": ["4870152af5d4", "9ea73b6d4ce4", "bb945a4f9d97", "74c3dc50a7a4"]
         }
       },
       {
@@ -612,7 +633,7 @@
             "connect-0": "eb79a9b3682a"
           },
           "state": "94b5638a167f",
-          "effects": ["fb8120f6d4d3", "5def091042f5", "58b707b67141", "cc185e00fc86"]
+          "effects": ["4870152af5d4", "9ea73b6d4ce4", "bb945a4f9d97", "fe3b9280899d"]
         }
       },
       {
@@ -625,7 +646,7 @@
             "connect-0": "eb79a9b3682a"
           },
           "state": "3abc7d437bb5",
-          "effects": ["fb8120f6d4d3", "5def091042f5", "58b707b67141", "9f55d77a517a"]
+          "effects": ["4870152af5d4", "9ea73b6d4ce4", "bb945a4f9d97", "9882c11b1a83"]
         }
       },
       {
@@ -638,7 +659,7 @@
             "connect-0": "eb79a9b3682a"
           },
           "state": "ba59d5e7d5dd",
-          "effects": ["fb8120f6d4d3", "5def091042f5", "58b707b67141", "5def091042f5"]
+          "effects": ["4870152af5d4", "9ea73b6d4ce4", "bb945a4f9d97", "9ca6f7e482f5"]
         }
       },
       {
@@ -651,7 +672,7 @@
             "connect-0": "eb79a9b3682a"
           },
           "state": "e9d903fbfa72",
-          "effects": ["fb8120f6d4d3", "5def091042f5", "58b707b67141", "1ca8abed81ae"]
+          "effects": ["4870152af5d4", "9ea73b6d4ce4", "bb945a4f9d97", "129470ce1f7f"]
         }
       },
       {
@@ -664,7 +685,7 @@
             "connect-0": "eb79a9b3682a"
           },
           "state": "f54167ff739b",
-          "effects": ["fb8120f6d4d3", "5def091042f5", "58b707b67141", "528ad1703e15"]
+          "effects": ["4870152af5d4", "9ea73b6d4ce4", "bb945a4f9d97", "7edd10d0e7a7"]
         }
       },
       {
@@ -677,7 +698,7 @@
             "connect-0": "eb79a9b3682a"
           },
           "state": "ba59d5e7d5dd",
-          "effects": ["fb8120f6d4d3", "5def091042f5", "58b707b67141", "5def091042f5"]
+          "effects": ["4870152af5d4", "9ea73b6d4ce4", "bb945a4f9d97", "9ca6f7e482f5"]
         }
       }
     ]

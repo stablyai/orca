@@ -3,9 +3,9 @@
   "family": "tasks.task-create-linear",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "f6c7eea985190d9edeead5b36f90c8aa98679f69d19dab7579fec88841645259",
   "platform": "darwin",
@@ -53,17 +53,10 @@
         }
       }
     },
-    "3e610f908f29": {
-      "name": "showCreateTask",
-      "value": false
-    },
-    "4a66cf72bc8f": {
+    "46bbfadb0481": {
       "name": "creatingTask",
-      "value": false
-    },
-    "5b8e3a96030e": {
-      "name": "createBody",
-      "value": ""
+      "value": true,
+      "sent": 0
     },
     "6105e77e3945": {
       "name": "linear.createIssue#1",
@@ -104,19 +97,22 @@
         "updatedAt": "2026-01-01T00:00:00.000Z"
       }
     },
-    "791f05938c43": {
-      "name": "creatingTask",
-      "value": true
+    "6652745ed1c6": {
+      "name": "createBody",
+      "value": "",
+      "sent": 1
     },
-    "82cd71d524c8": {
+    "781721955405": {
+      "name": "showCreateTask",
+      "value": false,
+      "sent": 1
+    },
+    "9e263f5e91be": {
       "name": "error",
-      "value": ""
+      "value": "",
+      "sent": 0
     },
-    "871b62dd230b": {
-      "name": "createTitle",
-      "value": ""
-    },
-    "9f7828134fd2": {
+    "b83a4bfe6154": {
       "name": "actionItem",
       "value": {
         "key": "linear:linear-workspace:issue-3",
@@ -147,7 +143,13 @@
         "subtitle": "ENG-3 · undefined",
         "title": "A sub-issue",
         "updatedAt": "2026-01-01T00:00:00.000Z"
-      }
+      },
+      "sent": 1
+    },
+    "c0c0f9a6037e": {
+      "name": "createTitle",
+      "value": "",
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -156,6 +158,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "fc7f792d6e89": {
+      "name": "creatingTask",
+      "value": false,
+      "sent": 1
     }
   },
   "recording": {
@@ -172,13 +179,13 @@
           },
           "state": "61b2cb7e4313",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "9f7828134fd2",
-            "3e610f908f29",
-            "871b62dd230b",
-            "5b8e3a96030e",
-            "4a66cf72bc8f"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "b83a4bfe6154",
+            "781721955405",
+            "c0c0f9a6037e",
+            "6652745ed1c6",
+            "fc7f792d6e89"
           ]
         }
       }

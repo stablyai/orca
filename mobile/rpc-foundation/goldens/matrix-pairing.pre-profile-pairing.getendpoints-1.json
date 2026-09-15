@@ -3,9 +3,9 @@
   "family": "pairing.pre-profile",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "ccd2ef7c617d13bdf5987f5f89fed6917206205268633b9ef061b92c3580d672",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0193ae4dbb38": {
-      "name": "candidate-closed",
-      "value": "relay"
-    },
     "06dee54a3689": {
       "status": "rejected",
       "startedAt": 0,
@@ -27,15 +23,15 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "0799d165f56e": {
+    "0b595cd54ac3": {
       "name": "journal-saved",
-      "value": "pair-fixture-1"
+      "value": "pair-fixture-1",
+      "sent": 0
     },
-    "1da0bf924e75": {
-      "name": "bundle-written",
-      "value": {
-        "version": 4
-      }
+    "12869cc488be": {
+      "name": "host-saved",
+      "value": "relay-host-0001x",
+      "sent": 4
     },
     "1e5b32902af7": {
       "name": "status.get#1",
@@ -213,9 +209,15 @@
         }
       }
     },
-    "4030a59932c1": {
-      "name": "journal-updated",
-      "value": "pair-fixture-1"
+    "477b001b0374": {
+      "name": "candidate-closed",
+      "value": "direct",
+      "sent": 4
+    },
+    "47dedea61355": {
+      "name": "journal-cleared",
+      "value": "pair-fixture-1",
+      "sent": 4
     },
     "4e3b57d795cb": {
       "status": "rejected",
@@ -290,6 +292,13 @@
           }
         }
       }
+    },
+    "6b9f1bf73e55": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      },
+      "sent": 4
     },
     "6cb74a535419": {
       "name": "status.get#2",
@@ -603,13 +612,10 @@
         }
       }
     },
-    "b8549409f4a9": {
-      "name": "journal-cleared",
-      "value": "pair-fixture-1"
-    },
-    "bc627d34e0d0": {
-      "name": "host-saved",
-      "value": "relay-host-0001x"
+    "b96f13a39e18": {
+      "name": "journal-updated",
+      "value": "pair-fixture-1",
+      "sent": 2
     },
     "c0c86e67c300": {
       "name": "status.get#2",
@@ -632,6 +638,11 @@
         "isRpcDeliveryUnknown": true
       }
     },
+    "ca7cb1785a59": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 4
+    },
     "ccde11a35347": {
       "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received null\"\n  }\n]",
       "savedHost": {
@@ -646,6 +657,11 @@
       "value": {
         "hostId": "host-1"
       }
+    },
+    "d433a326314e": {
+      "name": "candidate-closed",
+      "value": "relay",
+      "sent": 2
     },
     "d56bfdbce702": {
       "status": "rejected",
@@ -680,10 +696,6 @@
         "$rpc": "null"
       },
       "timedOut": false
-    },
-    "f203320e31e9": {
-      "name": "candidate-closed",
-      "value": "direct"
     },
     "f413abdb830a": {
       "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  }\n]",
@@ -726,14 +738,14 @@
           },
           "state": "9b50435fa2f8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "1da0bf924e75",
-            "bc627d34e0d0",
-            "b8549409f4a9",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "6b9f1bf73e55",
+            "12869cc488be",
+            "47dedea61355",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -747,11 +759,11 @@
           },
           "state": "f413abdb830a",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -765,11 +777,11 @@
           },
           "state": "ccde11a35347",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -783,11 +795,11 @@
           },
           "state": "706827e9c433",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -801,11 +813,11 @@
           },
           "state": "7adfb8f30333",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -819,11 +831,11 @@
           },
           "state": "7adfb8f30333",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -837,11 +849,11 @@
           },
           "state": "4e5a56d00e5e",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -855,11 +867,11 @@
           },
           "state": "e625529b1cd8",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -873,11 +885,11 @@
           },
           "state": "c3972c583458",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -891,11 +903,11 @@
           },
           "state": "9dec5db5203d",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       },
@@ -909,11 +921,11 @@
           },
           "state": "d7f4c8d8decc",
           "effects": [
-            "0799d165f56e",
-            "0193ae4dbb38",
-            "4030a59932c1",
-            "f203320e31e9",
-            "0193ae4dbb38"
+            "0b595cd54ac3",
+            "d433a326314e",
+            "b96f13a39e18",
+            "477b001b0374",
+            "ca7cb1785a59"
           ]
         }
       }

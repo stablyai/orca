@@ -3,9 +3,9 @@
   "family": "pairing.pre-profile",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
   "scenarioSha256": "9ab72231bf97fbe7eed232019c56568a9411433835eae424628af62c7c6a10c1",
   "platform": "darwin",
@@ -13,13 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0193ae4dbb38": {
-      "name": "candidate-closed",
-      "value": "relay"
-    },
-    "0799d165f56e": {
+    "0b595cd54ac3": {
       "name": "journal-saved",
-      "value": "pair-fixture-1"
+      "value": "pair-fixture-1",
+      "sent": 0
     },
     "1e5b32902af7": {
       "name": "status.get#1",
@@ -35,6 +32,11 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "b2a8517fe750": {
+      "name": "candidate-closed",
+      "value": "direct",
+      "sent": 2
     },
     "ba9fd57319d3": {
       "name": "status.get#1",
@@ -72,9 +74,10 @@
       },
       "timedOut": true
     },
-    "f203320e31e9": {
+    "d433a326314e": {
       "name": "candidate-closed",
-      "value": "direct"
+      "value": "relay",
+      "sent": 2
     },
     "f6c99f740e75": {
       "name": "status.get#2",
@@ -114,7 +117,7 @@
             "pair": "9270aeb7d9c6"
           },
           "state": "86d361a0bf7c",
-          "effects": ["0799d165f56e"]
+          "effects": ["0b595cd54ac3"]
         }
       },
       {
@@ -126,7 +129,7 @@
             "pair": "9270aeb7d9c6"
           },
           "state": "ccefc12fda27",
-          "effects": ["0799d165f56e", "f203320e31e9", "0193ae4dbb38"]
+          "effects": ["0b595cd54ac3", "b2a8517fe750", "d433a326314e"]
         }
       }
     ]

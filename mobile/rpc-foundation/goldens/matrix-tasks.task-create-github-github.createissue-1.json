@@ -3,9 +3,9 @@
   "family": "tasks.task-create-github",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "014040846f649f3c6ca1175b610ed1b51bae3001e7de103549d7ee1a511a2506",
   "platform": "darwin",
@@ -125,9 +125,10 @@
       "name": "github.createIssue#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}"
     },
-    "186f44bc465a": {
+    "198ac889ae28": {
       "name": "error",
-      "value": "Unknown method"
+      "value": "transport failure",
+      "sent": 1
     },
     "19bc740e746a": {
       "name": "github.createIssue#1",
@@ -173,14 +174,6 @@
         "$rpc": "null"
       }
     },
-    "2d711d96f190": {
-      "name": "error",
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
-    "3e610f908f29": {
-      "name": "showCreateTask",
-      "value": false
-    },
     "449fcef41ecc": {
       "composer": true,
       "creating": false,
@@ -189,9 +182,10 @@
         "$rpc": "null"
       }
     },
-    "4a66cf72bc8f": {
+    "46bbfadb0481": {
       "name": "creatingTask",
-      "value": false
+      "value": true,
+      "sent": 0
     },
     "56ac6af35c46": {
       "composer": true,
@@ -261,13 +255,20 @@
         "updatedAt": "2026-01-01T00:00:00.000Z"
       }
     },
-    "5b8e3a96030e": {
+    "6652745ed1c6": {
       "name": "createBody",
-      "value": ""
+      "value": "",
+      "sent": 1
     },
-    "791f05938c43": {
-      "name": "creatingTask",
-      "value": true
+    "781721955405": {
+      "name": "showCreateTask",
+      "value": false,
+      "sent": 1
+    },
+    "7d901d60a01a": {
+      "name": "error",
+      "value": "[object Object]",
+      "sent": 1
     },
     "7db197060e39": {
       "composer": true,
@@ -277,13 +278,32 @@
         "$rpc": "null"
       }
     },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
-    },
-    "871b62dd230b": {
-      "name": "createTitle",
-      "value": ""
+    "873de7fc7ff8": {
+      "name": "actionItem",
+      "value": {
+        "key": "github:repo-1:issue:11",
+        "provider": "github",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:11",
+          "labels": [],
+          "number": 11,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "open",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://github.com/owner/repo/issues/11"
+        },
+        "status": "Open",
+        "subtitle": "Repo #11",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      "sent": 1
     },
     "907da244f26c": {
       "name": "github.createIssue#1",
@@ -317,10 +337,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "945ea389c1ef": {
-      "name": "error",
-      "value": "transport failure"
     },
     "98e33157a9f2": {
       "name": "repo.update#1",
@@ -358,43 +374,20 @@
         }
       }
     },
-    "a10650cc438b": {
-      "name": "actionItem",
-      "value": {
-        "key": "github:repo-1:issue:11",
-        "provider": "github",
-        "source": {
-          "author": {
-            "$rpc": "null"
-          },
-          "id": "issue:11",
-          "labels": [],
-          "number": 11,
-          "repoId": "repo-1",
-          "repoName": "Repo",
-          "state": "open",
-          "title": "A new task",
-          "type": "issue",
-          "updatedAt": "2026-01-01T00:00:00.000Z",
-          "url": "https://github.com/owner/repo/issues/11"
-        },
-        "status": "Open",
-        "subtitle": "Repo #11",
-        "title": "A new task",
-        "updatedAt": "2026-01-01T00:00:00.000Z"
-      }
-    },
-    "ae5be7de2632": {
+    "9e263f5e91be": {
       "name": "error",
-      "value": "Cannot read properties of undefined (reading 'ok')"
+      "value": "",
+      "sent": 0
     },
-    "ba65a7abe43b": {
+    "b53c339a3854": {
       "name": "error",
-      "value": "outer refused"
+      "value": "Unknown method",
+      "sent": 1
     },
-    "c008e85e2d06": {
-      "name": "error",
-      "value": "inner refused"
+    "c0c0f9a6037e": {
+      "name": "createTitle",
+      "value": "",
+      "sent": 1
     },
     "c140f66eca23": {
       "composer": true,
@@ -407,6 +400,16 @@
     "c41296ee02f7": {
       "name": "repo.update#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.update\",\"params\":{\"repo\":\"id:repo-1\",\"updates\":{\"issueSourcePreference\":\"upstream\"}}}"
+    },
+    "c4f585980acf": {
+      "name": "error",
+      "value": "inner refused",
+      "sent": 1
+    },
+    "c939abf83c6c": {
+      "name": "error",
+      "value": "Cannot read properties of undefined (reading 'ok')",
+      "sent": 1
     },
     "cccb7ee799b9": {
       "name": "github.createIssue#1",
@@ -453,6 +456,11 @@
       "item": {
         "$rpc": "null"
       }
+    },
+    "d48d5c49486c": {
+      "name": "error",
+      "value": "",
+      "sent": 1
     },
     "d6c61589920d": {
       "name": "github.createIssue#1",
@@ -539,10 +547,6 @@
         "$rpc": "undefined"
       }
     },
-    "ecc1b4e0914f": {
-      "name": "error",
-      "value": "[object Object]"
-    },
     "ed6dd7582b18": {
       "name": "github.createIssue#1",
       "args": [
@@ -622,6 +626,21 @@
         }
       }
     },
+    "f791567b212f": {
+      "name": "error",
+      "value": "outer refused",
+      "sent": 1
+    },
+    "faf0249fca3c": {
+      "name": "error",
+      "value": "Cannot read properties of null (reading 'ok')",
+      "sent": 1
+    },
+    "fc7f792d6e89": {
+      "name": "creatingTask",
+      "value": false,
+      "sent": 1
+    },
     "fdd487d7c0f5": {
       "composer": true,
       "creating": false,
@@ -645,13 +664,13 @@
           },
           "state": "5ab5b62983be",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "a10650cc438b",
-            "3e610f908f29",
-            "871b62dd230b",
-            "5b8e3a96030e",
-            "4a66cf72bc8f"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "873de7fc7ff8",
+            "781721955405",
+            "c0c0f9a6037e",
+            "6652745ed1c6",
+            "fc7f792d6e89"
           ]
         }
       },
@@ -667,14 +686,14 @@
           },
           "state": "5ab5b62983be",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "a10650cc438b",
-            "3e610f908f29",
-            "871b62dd230b",
-            "5b8e3a96030e",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "873de7fc7ff8",
+            "781721955405",
+            "c0c0f9a6037e",
+            "6652745ed1c6",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -688,7 +707,7 @@
             "create-0": "eb79a9b3682a"
           },
           "state": "56ac6af35c46",
-          "effects": ["791f05938c43", "82cd71d524c8", "ae5be7de2632", "4a66cf72bc8f"]
+          "effects": ["46bbfadb0481", "9e263f5e91be", "c939abf83c6c", "fc7f792d6e89"]
         }
       },
       {
@@ -703,11 +722,11 @@
           },
           "state": "7db197060e39",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "ae5be7de2632",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "c939abf83c6c",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -721,7 +740,7 @@
             "create-0": "eb79a9b3682a"
           },
           "state": "f3ba4c9e02fb",
-          "effects": ["791f05938c43", "82cd71d524c8", "2d711d96f190", "4a66cf72bc8f"]
+          "effects": ["46bbfadb0481", "9e263f5e91be", "faf0249fca3c", "fc7f792d6e89"]
         }
       },
       {
@@ -736,11 +755,11 @@
           },
           "state": "7db197060e39",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "2d711d96f190",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "faf0249fca3c",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -755,12 +774,12 @@
           },
           "state": "df5721b34b16",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "3e610f908f29",
-            "871b62dd230b",
-            "5b8e3a96030e",
-            "4a66cf72bc8f"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "781721955405",
+            "c0c0f9a6037e",
+            "6652745ed1c6",
+            "fc7f792d6e89"
           ]
         }
       },
@@ -776,13 +795,13 @@
           },
           "state": "df5721b34b16",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "3e610f908f29",
-            "871b62dd230b",
-            "5b8e3a96030e",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "781721955405",
+            "c0c0f9a6037e",
+            "6652745ed1c6",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -796,7 +815,7 @@
             "create-0": "eb79a9b3682a"
           },
           "state": "fdd487d7c0f5",
-          "effects": ["791f05938c43", "82cd71d524c8", "c008e85e2d06", "4a66cf72bc8f"]
+          "effects": ["46bbfadb0481", "9e263f5e91be", "c4f585980acf", "fc7f792d6e89"]
         }
       },
       {
@@ -811,11 +830,11 @@
           },
           "state": "7db197060e39",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "c008e85e2d06",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "c4f585980acf",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -829,7 +848,7 @@
             "create-0": "eb79a9b3682a"
           },
           "state": "2924a6b4c745",
-          "effects": ["791f05938c43", "82cd71d524c8", "ecc1b4e0914f", "4a66cf72bc8f"]
+          "effects": ["46bbfadb0481", "9e263f5e91be", "7d901d60a01a", "fc7f792d6e89"]
         }
       },
       {
@@ -844,11 +863,11 @@
           },
           "state": "7db197060e39",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "ecc1b4e0914f",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "7d901d60a01a",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -862,7 +881,7 @@
             "create-0": "eb79a9b3682a"
           },
           "state": "449fcef41ecc",
-          "effects": ["791f05938c43", "82cd71d524c8", "ba65a7abe43b", "4a66cf72bc8f"]
+          "effects": ["46bbfadb0481", "9e263f5e91be", "f791567b212f", "fc7f792d6e89"]
         }
       },
       {
@@ -877,11 +896,11 @@
           },
           "state": "7db197060e39",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "ba65a7abe43b",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "f791567b212f",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -895,7 +914,7 @@
             "create-0": "eb79a9b3682a"
           },
           "state": "7db197060e39",
-          "effects": ["791f05938c43", "82cd71d524c8", "82cd71d524c8", "4a66cf72bc8f"]
+          "effects": ["46bbfadb0481", "9e263f5e91be", "d48d5c49486c", "fc7f792d6e89"]
         }
       },
       {
@@ -910,11 +929,11 @@
           },
           "state": "7db197060e39",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "82cd71d524c8",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "d48d5c49486c",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -928,7 +947,7 @@
             "create-0": "eb79a9b3682a"
           },
           "state": "d24a112e43bf",
-          "effects": ["791f05938c43", "82cd71d524c8", "186f44bc465a", "4a66cf72bc8f"]
+          "effects": ["46bbfadb0481", "9e263f5e91be", "b53c339a3854", "fc7f792d6e89"]
         }
       },
       {
@@ -943,11 +962,11 @@
           },
           "state": "7db197060e39",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "186f44bc465a",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "b53c339a3854",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -961,7 +980,7 @@
             "create-0": "eb79a9b3682a"
           },
           "state": "c140f66eca23",
-          "effects": ["791f05938c43", "82cd71d524c8", "945ea389c1ef", "4a66cf72bc8f"]
+          "effects": ["46bbfadb0481", "9e263f5e91be", "198ac889ae28", "fc7f792d6e89"]
         }
       },
       {
@@ -976,11 +995,11 @@
           },
           "state": "7db197060e39",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "945ea389c1ef",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "198ac889ae28",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       },
@@ -994,7 +1013,7 @@
             "create-0": "eb79a9b3682a"
           },
           "state": "7db197060e39",
-          "effects": ["791f05938c43", "82cd71d524c8", "82cd71d524c8", "4a66cf72bc8f"]
+          "effects": ["46bbfadb0481", "9e263f5e91be", "d48d5c49486c", "fc7f792d6e89"]
         }
       },
       {
@@ -1009,11 +1028,11 @@
           },
           "state": "7db197060e39",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "82cd71d524c8",
-            "4a66cf72bc8f",
-            "82cd71d524c8"
+            "46bbfadb0481",
+            "9e263f5e91be",
+            "d48d5c49486c",
+            "fc7f792d6e89",
+            "d48d5c49486c"
           ]
         }
       }

@@ -3,10 +3,10 @@
   "family": "worktree.catalog-snapshot",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
-  "adapterSha256": "6119d409e1958877e4a04b3901f94a3609ac0420f5ca02af20eb8dae5cbf3408",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
+  "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
   "scenarioSha256": "d2947158840576cbd0f0604ed3d37b0f446c63c6d439b4d1b7def7fe8524523d",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -60,17 +60,32 @@
       "admitted": "unadmitted",
       "fetched": "unfetched"
     },
-    "2d40d1d38104": {
-      "name": "unhandled-rejection",
-      "value": {
-        "category": "Error",
-        "isRpcDeliveryUnknown": false,
-        "message": "Unsupported observation: function"
-      }
-    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "9948855e8b8d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "response",
+        "pending": {
+          "admission": {
+            "kind": "full",
+            "snapshotId": "snapshot-1",
+            "worktrees": [
+              {
+                "displayName": "One",
+                "repo": "Repo",
+                "worktreeId": "w-1"
+              }
+            ]
+          },
+          "client": "logical-client",
+          "hostId": "host-1"
+        }
+      }
     },
     "a87f1f91dc98": {
       "name": "worktree.ps#1",
@@ -153,10 +168,10 @@
           "sender": ["227f9e3de4fa"],
           "payloads": ["a87f1f91dc98"],
           "settlements": {
-            "fetch": "9270aeb7d9c6"
+            "fetch": "9948855e8b8d"
           },
           "state": "ab1a9ba6301c",
-          "effects": ["2d40d1d38104"]
+          "effects": []
         }
       }
     ]

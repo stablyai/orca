@@ -74,6 +74,7 @@ describe('RPC main recording mutants', () => {
   for (const { id, scenario, mutation } of mutantPilots) {
     it(`${id}: kills ${mutation}`, async () => {
       const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
+        device: scenario,
         mutation: operationMutation(mutation)
       })
       const result = await runRecordingMutant(
@@ -90,6 +91,7 @@ describe('RPC main recording mutants', () => {
   for (const { id, scenario, reference } of referencePilots) {
     it.skipIf(!process.env.RPC_FOUNDATION_REFERENCE_ROOT)(`${id}: rejects bcba08b3e4`, async () => {
       const { adapters } = pilotMountAdapters(process.env.RPC_FOUNDATION_REFERENCE_ROOT!, {
+        device: scenario,
         reference: true
       })
       const result = await runRecording(

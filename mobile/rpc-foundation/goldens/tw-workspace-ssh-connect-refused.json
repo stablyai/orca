@@ -3,9 +3,9 @@
   "family": "tasks.workspace-ssh",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "dd25391fdd3dc864ae493f72d013e789884a21e9c71522edc79323bc2b6c7f76",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "0c2cba5f3708": {
+      "name": "workspaceAgent",
+      "value": "claude",
+      "sent": 0
+    },
     "12826f529c2a": {
       "name": "ssh.connect#1",
       "args": [
@@ -46,10 +51,6 @@
           "ok": false
         }
       }
-    },
-    "1739575ac53e": {
-      "name": "workspaceSshConnecting",
-      "value": true
     },
     "27b09a2898b9": {
       "name": "preflight.detectRemoteAgents#1",
@@ -98,16 +99,6 @@
       "name": "preflight.detectRemoteAgents#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
     },
-    "41b0d115f434": {
-      "name": "workspaceDetectedAgentIds",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "43fd3e2f4b53": {
-      "name": "workspaceSshConnecting",
-      "value": false
-    },
     "55904d40a00f": {
       "agent": "claude",
       "connecting": false,
@@ -126,6 +117,11 @@
         "targetId": "ssh-1"
       }
     },
+    "77b6cedadbe8": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 0
+    },
     "7c9498659f58": {
       "name": "ssh.connect#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
@@ -142,18 +138,37 @@
         "targetId": "ssh-1"
       }
     },
-    "86cc01b1e541": {
+    "86149ccb0853": {
+      "name": "workspaceSshConnecting",
+      "value": true,
+      "sent": 1
+    },
+    "8967d4751aaf": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connecting",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
+    },
+    "a745d7e1dd70": {
       "name": "workspaceSshState",
       "value": {
         "error": "",
         "reconnectAttempt": 0,
         "status": "error",
         "targetId": "ssh-1"
-      }
+      },
+      "sent": 2
     },
-    "9f152ed6e897": {
+    "a88df8f43f70": {
       "name": "workspaceDetectedAgentIds",
-      "value": []
+      "value": [],
+      "sent": 1
     },
     "b302d21e1567": {
       "name": "repo.hooks#1",
@@ -193,9 +208,17 @@
         }
       }
     },
-    "ea709e13f0f0": {
-      "name": "workspaceAgentOverridden",
-      "value": false
+    "db1cde7aa6f5": {
+      "name": "workspaceSshConnecting",
+      "value": false,
+      "sent": 2
+    },
+    "dd9d8bf76a0e": {
+      "name": "workspaceDetectedAgentIds",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -205,24 +228,9 @@
         "$rpc": "undefined"
       }
     },
-    "ed6189938d78": {
-      "name": "workspaceAgent",
-      "value": "claude"
-    },
     "f0a9f62da106": {
       "name": "repo.hooks#1",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
-    },
-    "fbfdbb919268": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": {
-          "$rpc": "null"
-        },
-        "reconnectAttempt": 0,
-        "status": "connecting",
-        "targetId": "ssh-1"
-      }
     }
   },
   "recording": {
@@ -239,14 +247,14 @@
           },
           "state": "8509334ad6ae",
           "effects": [
-            "ed6189938d78",
-            "ea709e13f0f0",
-            "41b0d115f434",
-            "9f152ed6e897",
-            "1739575ac53e",
-            "fbfdbb919268",
-            "86cc01b1e541",
-            "43fd3e2f4b53"
+            "0c2cba5f3708",
+            "77b6cedadbe8",
+            "dd9d8bf76a0e",
+            "a88df8f43f70",
+            "86149ccb0853",
+            "8967d4751aaf",
+            "a745d7e1dd70",
+            "db1cde7aa6f5"
           ]
         }
       },
@@ -262,14 +270,14 @@
           },
           "state": "55904d40a00f",
           "effects": [
-            "ed6189938d78",
-            "ea709e13f0f0",
-            "41b0d115f434",
-            "9f152ed6e897",
-            "1739575ac53e",
-            "fbfdbb919268",
-            "86cc01b1e541",
-            "43fd3e2f4b53"
+            "0c2cba5f3708",
+            "77b6cedadbe8",
+            "dd9d8bf76a0e",
+            "a88df8f43f70",
+            "86149ccb0853",
+            "8967d4751aaf",
+            "a745d7e1dd70",
+            "db1cde7aa6f5"
           ]
         }
       }

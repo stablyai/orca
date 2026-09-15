@@ -3,9 +3,9 @@
   "family": "tasks.item-status-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "8c4218bfb2af227da5386f29989cec438f2c6187f39ce1c06859e136ea920bfa",
   "scenarioSha256": "85414544a9e8570567770b43e6bf5cfcc406c9b9b4ffed3a4ff0c8187beb7549",
   "platform": "darwin",
@@ -13,21 +13,33 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "066ce15717c8": {
-      "name": "mutatingStatus",
-      "value": true
-    },
     "132591a733d1": {
       "name": "gitlab.updateIssue#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":4,\"updates\":{\"state\":\"closed\"},\"projectRef\":\"group/project\"}}"
     },
+    "13b233a5bc5a": {
+      "name": "itemRemoveAssigneesDraft",
+      "value": "",
+      "sent": 2
+    },
+    "32a3635e06a4": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 1
+    },
+    "3c6c54110c00": {
+      "name": "itemRemoveLabelsDraft",
+      "value": "",
+      "sent": 2
+    },
+    "583b546bd557": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 1
+    },
     "71cb3feddd6c": {
       "name": "github.updateIssue#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updateIssue\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"updates\":{\"title\":\"Renamed\",\"addLabels\":[\"triage\"],\"removeLabels\":[\"bug\"]}}}"
-    },
-    "7781b68e4a2b": {
-      "name": "itemAddLabelsDraft",
-      "value": ""
     },
     "779cb33e2c39": {
       "name": "gitlab.updateIssue#1",
@@ -67,9 +79,65 @@
         }
       }
     },
-    "82cd71d524c8": {
+    "7ff9a871c9b4": {
+      "name": "itemAddLabelsDraft",
+      "value": "",
+      "sent": 2
+    },
+    "84465663f388": {
+      "name": "actionItem",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 1
+    },
+    "893c7ff30ddf": {
+      "name": "items",
+      "value": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:issue:4",
+            "labels": ["bug"],
+            "number": 4,
+            "projectRef": "group/project",
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "issue"
+          },
+          "title": "A GitLab issue"
+        }
+      ],
+      "sent": 2
+    },
+    "8cde53a56cdf": {
+      "name": "mutatingStatus",
+      "value": false,
+      "sent": 2
+    },
+    "9999466f95f3": {
+      "name": "detailPayload",
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      },
+      "sent": 2
+    },
+    "9e263f5e91be": {
       "name": "error",
-      "value": ""
+      "value": "",
+      "sent": 0
     },
     "9fb1b1ad3675": {
       "name": "github.updateIssue#1",
@@ -110,33 +178,22 @@
         }
       }
     },
-    "ac9996319e05": {
+    "b3786fd78eba": {
       "name": "actionItem",
       "value": {
         "$rpc": "null"
-      }
+      },
+      "sent": 2
     },
-    "ce0c6ff56cf0": {
-      "name": "detailPayload",
-      "value": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
+    "cc96725d8f47": {
+      "name": "mutatingStatus",
+      "value": true,
+      "sent": 0
     },
-    "d2f3c0ccfef8": {
-      "name": "itemRemoveAssigneesDraft",
-      "value": ""
+    "d48d5c49486c": {
+      "name": "error",
+      "value": "",
+      "sent": 1
     },
     "d9d32e421d46": {
       "error": "",
@@ -175,28 +232,6 @@
         "provider": "gitlab"
       }
     },
-    "dadd4b06e486": {
-      "name": "itemAddAssigneesDraft",
-      "value": ""
-    },
-    "e1e995a34822": {
-      "name": "items",
-      "value": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "number": 4,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "issue"
-          },
-          "title": "A GitLab issue"
-        }
-      ]
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -205,13 +240,10 @@
         "$rpc": "undefined"
       }
     },
-    "f02550278f6a": {
-      "name": "mutatingStatus",
-      "value": false
-    },
-    "fca590f95bf2": {
-      "name": "itemRemoveLabelsDraft",
-      "value": ""
+    "ec6aee3704e2": {
+      "name": "itemAddAssigneesDraft",
+      "value": "",
+      "sent": 2
     }
   },
   "recording": {
@@ -227,7 +259,7 @@
             "gitlab-status-0": "eb79a9b3682a"
           },
           "state": "d9d32e421d46",
-          "effects": ["066ce15717c8", "82cd71d524c8", "ac9996319e05", "f02550278f6a"]
+          "effects": ["cc96725d8f47", "9e263f5e91be", "84465663f388", "32a3635e06a4"]
         }
       },
       {
@@ -242,20 +274,20 @@
           },
           "state": "d9d32e421d46",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "f02550278f6a",
-            "066ce15717c8",
-            "82cd71d524c8",
-            "ac9996319e05",
-            "e1e995a34822",
-            "ce0c6ff56cf0",
-            "7781b68e4a2b",
-            "fca590f95bf2",
-            "dadd4b06e486",
-            "d2f3c0ccfef8",
-            "f02550278f6a"
+            "cc96725d8f47",
+            "9e263f5e91be",
+            "84465663f388",
+            "32a3635e06a4",
+            "583b546bd557",
+            "d48d5c49486c",
+            "b3786fd78eba",
+            "893c7ff30ddf",
+            "9999466f95f3",
+            "7ff9a871c9b4",
+            "3c6c54110c00",
+            "ec6aee3704e2",
+            "13b233a5bc5a",
+            "8cde53a56cdf"
           ]
         }
       }

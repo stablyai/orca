@@ -1,0 +1,698 @@
+{
+  "operation": "notifications.push-dismissal",
+  "family": "notifications.push-dismissal",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
+  "adapterSha256": "595a3eb2994d0596b9fcd0707b175b4e978625053dfbc5c541b0350c0cbfb524",
+  "scenarioSha256": "9ab21cda2ac956c70ddd23fe589778bbb46333314508cf92770d668ba59d5a90",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0375564c20d2": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "12a51134490b": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "35a8f1665a60": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "3edd0c4f94c5": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "538677482207": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "6769d136aaaa": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9658e14eeea9": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "9aba86eb07e4": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ac56c3fc846f": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "dismissedPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ]
+          }
+        }
+      }
+    },
+    "afd5e55d2004": {
+      "name": "notifications.getMissedSince#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.getMissedSince\",\"params\":{\"lastSeenSeq\":9007199254740991,\"deliveredPushes\":[{\"notificationId\":\"note-1\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":7}]}}"
+    },
+    "b45fce07f72d": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "bcdd9c902f5e": {
+      "name": "device-store.setItem",
+      "value": {
+        "key": "orca:pushDismissalWatermarks:v1",
+        "value": "[{\"key\":\"[\\\"Yw3NKWbEM2aRElRI\\\",\\\"epoch-1\\\",\\\"note-1\\\"]\",\"seq\":7,\"expiresAt\":1767312000000}]"
+      },
+      "sent": 1
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "c83340909a1e": {
+      "name": "notification-tray.dismiss",
+      "value": {
+        "identifier": "tray-1"
+      },
+      "sent": 1
+    },
+    "cf9c28129225": {
+      "disposed": false
+    },
+    "d40294206150": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ec2490deff5d": {
+      "name": "notifications.getMissedSince#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-notifications.push-dismissal-notifications.getmissedsince-1",
+    "checkpoints": [
+      {
+        "id": "push-dismissal-tray-reconciled.prelude:requested",
+        "observation": {
+          "sender": ["9aba86eb07e4"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "9270aeb7d9c6"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.normal:reconciled",
+        "observation": {
+          "sender": ["ac56c3fc846f"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": ["bcdd9c902f5e", "c83340909a1e"]
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.result-absent:reconciled",
+        "observation": {
+          "sender": ["538677482207"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.result-null:reconciled",
+        "observation": {
+          "sender": ["b45fce07f72d"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.inner-ok-missing:reconciled",
+        "observation": {
+          "sender": ["35a8f1665a60"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.inner-false-string-error:reconciled",
+        "observation": {
+          "sender": ["9658e14eeea9"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.inner-false-object-error:reconciled",
+        "observation": {
+          "sender": ["0375564c20d2"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.outer-refused:reconciled",
+        "observation": {
+          "sender": ["12a51134490b"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.outer-refused-no-message:reconciled",
+        "observation": {
+          "sender": ["3edd0c4f94c5"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.method-not-found:reconciled",
+        "observation": {
+          "sender": ["6769d136aaaa"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.transport-rejection:reconciled",
+        "observation": {
+          "sender": ["ec2490deff5d"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "a947768bc0ed"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "push-dismissal-tray-reconciled.transport-rejection-no-message:reconciled",
+        "observation": {
+          "sender": ["d40294206150"],
+          "payloads": ["afd5e55d2004"],
+          "settlements": {
+            "catchup": "c7584e82c72f"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

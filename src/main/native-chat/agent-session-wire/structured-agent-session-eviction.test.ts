@@ -5,6 +5,10 @@ import {
   STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
   type StructuredAgentSessionEvictionContext
 } from './structured-agent-session-eviction'
+import {
+  AgentSessionAcquisitionRootExitObservedError,
+  AgentSessionPreSpawnError
+} from './structured-agent-session-adapter'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 
 function context(): StructuredAgentSessionEvictionContext & { order: string[] } {
@@ -141,6 +145,28 @@ describe('rows the provider emits while closing', () => {
 // `closeSession` returning false means the adapter could not prove the child exited and has kept
 // the session indexed on purpose so a retry can reach it.
 describe('a child that will not stop', () => {
+  it.each([
+    new AgentSessionAcquisitionRootExitObservedError(new Error('root exited')),
+    new AgentSessionPreSpawnError(new Error('spawn failed'))
+  ])('continues eviction after an actionable provider verdict', async (error) => {
+    const ctx = context()
+    ctx.adapter.closeSession = vi.fn(async () => {
+      throw error
+    })
+
+    await evictStructuredAgentSession(ctx)
+
+    expect(ctx.order).toEqual([
+      'drained',
+      'settleWork',
+      'unbind',
+      'close',
+      'discardSink',
+      'releaseLease',
+      'forget'
+    ])
+  })
+
   it('aborts without forgetting the session, so the next close is a real retry', async () => {
     const ctx = context()
     ctx.adapter.closeSession = vi.fn(async () => false)

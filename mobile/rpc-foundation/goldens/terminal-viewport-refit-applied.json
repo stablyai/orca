@@ -3,9 +3,9 @@
   "family": "terminal.viewport-refit",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "f966c2ef2e747a5231f423147ddaf38458cb08c719434b274016a5e4abc10771",
   "platform": "darwin",
@@ -55,18 +55,13 @@
         }
       }
     },
-    "472aa5c4220c": {
-      "name": "measure-fit",
-      "value": {
-        "frameHeight": 600
-      }
-    },
-    "58cda7b4ca05": {
+    "3c255f83f3e1": {
       "name": "reflow",
       "value": {
         "cols": 100,
         "rows": 30
-      }
+      },
+      "sent": 1
     },
     "7e0619ad636f": {
       "measured": true,
@@ -78,6 +73,13 @@
     "9c584ebc4a0f": {
       "name": "terminal.updateViewport#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.updateViewport\",\"params\":{\"terminal\":\"terminal-1\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"},\"viewport\":{\"cols\":100,\"rows\":30}}}"
+    },
+    "a993d0d38252": {
+      "name": "measure-fit",
+      "value": {
+        "frameHeight": 600
+      },
+      "sent": 0
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -101,7 +103,7 @@
             "height": "eb79a9b3682a"
           },
           "state": "7e0619ad636f",
-          "effects": ["472aa5c4220c", "58cda7b4ca05"]
+          "effects": ["a993d0d38252", "3c255f83f3e1"]
         }
       }
     ]

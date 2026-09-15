@@ -3,9 +3,9 @@
   "family": "relay.direct-upgrade",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
   "scenarioSha256": "0fe163f405373adbb1913dddd79d6d596bf88d69fc27c824ba5a2cd4c1406446",
   "platform": "darwin",
@@ -154,16 +154,6 @@
       "name": "pairing.provisionRelay#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-fixture-1\",\"newResumeTokenHash\":\"7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4\"}}"
     },
-    "1da0bf924e75": {
-      "name": "bundle-written",
-      "value": {
-        "version": 4
-      }
-    },
-    "25b377db6629": {
-      "name": "host-saved",
-      "value": "host-1"
-    },
     "2a6e0fd0f08e": {
       "name": "pairing.provisionRelay#1",
       "args": [
@@ -241,6 +231,11 @@
     "3ada736eb1f5": {
       "journal": "present",
       "outcome": "failed: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reqId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  },\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"relay-basis\",\n      \"authenticated-direct\"\n    ],\n    \"path\": [\n      \"authorizationMode\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"relay-basis\\\"|\\\"authenticated-direct\\\"\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"currentVersion\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"resumeExpiresAt\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"ok\",\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized keys: \\\"ok\\\", \\\"error\\\"\"\n  }\n]"
+    },
+    "4683b84a57a2": {
+      "name": "host-saved",
+      "value": "host-1",
+      "sent": 3
     },
     "4e3b57d795cb": {
       "status": "rejected",
@@ -322,6 +317,11 @@
     "7583d8b57ef8": {
       "name": "pairing.getEndpoints#2",
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
+    },
+    "7d023da12fdb": {
+      "name": "journal-cleared",
+      "value": "upgrade",
+      "sent": 3
     },
     "85d4f26647a1": {
       "name": "pairing.provisionRelay#1",
@@ -439,6 +439,11 @@
         }
       }
     },
+    "92bfc56d85f4": {
+      "name": "journal-cleared",
+      "value": "upgrade",
+      "sent": 2
+    },
     "952828fa571a": {
       "journal": "present",
       "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  }\n]"
@@ -485,10 +490,6 @@
           }
         }
       }
-    },
-    "a2c193508948": {
-      "name": "journal-cleared",
-      "value": "upgrade"
     },
     "a3865c87e54b": {
       "name": "pairing.provisionRelay#1",
@@ -541,6 +542,13 @@
     "abe9b3fdea58": {
       "journal": "present",
       "outcome": "failed: transport failure"
+    },
+    "b991b2c7609f": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      },
+      "sent": 3
     },
     "ba95b28e3a94": {
       "name": "pairing.getEndpoints#1",
@@ -708,7 +716,7 @@
             "upgrade": "590b3311b0c4"
           },
           "state": "980bbba0b617",
-          "effects": ["1da0bf924e75", "25b377db6629", "a2c193508948"]
+          "effects": ["b991b2c7609f", "4683b84a57a2", "7d023da12fdb"]
         }
       },
       {
@@ -804,7 +812,7 @@
             "upgrade": "ee20a1dc39e7"
           },
           "state": "6c43da669636",
-          "effects": ["a2c193508948"]
+          "effects": ["92bfc56d85f4"]
         }
       },
       {

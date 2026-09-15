@@ -354,7 +354,7 @@ describe('NativeChatStructuredSession', () => {
     let finishFirst!: (value: unknown) => void
     let finishSecond!: (value: unknown) => void
     mocks.stopBackgroundTask.mockImplementation(
-      (_sessionId: string, taskId: string) =>
+      (_sessionId: string, taskId?: string) =>
         new Promise((resolve) => {
           if (taskId === 'task-one') {
             finishFirst = resolve

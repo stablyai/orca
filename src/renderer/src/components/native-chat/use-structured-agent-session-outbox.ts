@@ -1,24 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionMutationResult,
-  AgentSessionSendResult
-} from '../../../../shared/agent-session-wire'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import {
   createStructuredAgentSessionOutboxEntry,
   reconcileStructuredAgentSessionOutbox,
-  structuredAgentSessionSendRequest,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
-import {
-  disposeStructuredAgentSessionSendFailure,
-  disposeStructuredAgentSessionSendResult,
-  type StructuredAgentSessionSendDisposition
-} from '../../../../shared/structured-agent-session-send-disposition'
+import type { StructuredAgentSessionSendDisposition } from '../../../../shared/structured-agent-session-send-disposition'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readOutbox, writeOutbox } from './structured-agent-session-outbox-storage'
+import {
+  dispatchStructuredAgentSessionOutboxEntry,
+  hasInFlightLaunchDispatch,
+  readMountedStructuredAgentSessionOutbox
+} from './structured-agent-session-outbox-dispatch'
+import { getStructuredAgentLaunchPromptDispatch } from '@/lib/structured-agent-session-launch-prompt'
 
 export function structuredSessionOperationId(): string {
   return createStructuredAgentSessionOperationId(() => crypto.randomUUID())
@@ -31,11 +27,6 @@ const UNCONFIRMED_PROBE_BASE_DELAY_MS = 1_000
  *  Retry, because the entry leaves `unconfirmed` -- pre-existing, not closed here. */
 const UNCONFIRMED_PROBE_MAX_DELAY_MS = 16_000
 
-function isDesktopDeliveryUnknown(error: unknown): boolean {
-  const text = error instanceof Error ? `${error.name}:${error.message}` : String(error)
-  return /timeout|disconnect|connection|closed|unavailable|cutover/i.test(text)
-}
-
 export function useStructuredAgentSessionOutbox(args: {
   sessionId: string
   target: RuntimeClientTarget
@@ -45,7 +36,7 @@ export function useStructuredAgentSessionOutbox(args: {
   const { fence, sessionId, submissions, target } = args
   const targetKey = target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
   const [outbox, setOutbox] = useState<StructuredAgentSessionOutboxEntry[]>(() =>
-    readOutbox(sessionId)
+    readMountedStructuredAgentSessionOutbox(sessionId, fence, readOutbox)
   )
   const outboxRef = useRef(outbox)
   const outboxSessionRef = useRef(sessionId)
@@ -78,9 +69,13 @@ export function useStructuredAgentSessionOutbox(args: {
   useEffect(() => {
     const sessionChanged = outboxSessionRef.current !== sessionId
     outboxSessionRef.current = sessionId
-    const current = sessionChanged ? readOutbox(sessionId) : outboxRef.current
+    const current = sessionChanged
+      ? readMountedStructuredAgentSessionOutbox(sessionId, fence, readOutbox)
+      : outboxRef.current
     const next = current.map((entry) =>
-      entry.state === 'dispatching' ? { ...entry, state: 'queued' as const } : entry
+      entry.state === 'dispatching' && !hasInFlightLaunchDispatch(entry, fence)
+        ? { ...entry, state: 'queued' as const }
+        : entry
     )
     if (
       sessionChanged ||
@@ -138,9 +133,32 @@ export function useStructuredAgentSessionOutbox(args: {
 
   useEffect(() => {
     const next = outbox[0]
+    if (!next || next.sessionId !== sessionId) {
+      return
+    }
+    const launchDispatch =
+      next.source === 'launch'
+        ? getStructuredAgentLaunchPromptDispatch(
+            next.sessionId,
+            next.clientMessageId,
+            fence ?? undefined
+          )
+        : undefined
+    if (launchDispatch) {
+      const persisted = readOutbox(sessionId, { recoverDispatching: false })
+      const persistedHead = persisted[0]
+      if (persistedHead?.state !== next.state) {
+        outboxRef.current = persisted
+        setOutbox(persisted)
+      }
+      void launchDispatch.then(() => {
+        const latest = readOutbox(sessionId, { recoverDispatching: false })
+        outboxRef.current = latest
+        setOutbox(latest)
+      })
+      return
+    }
     if (
-      !next ||
-      next.sessionId !== sessionId ||
       next.state !== 'queued' ||
       fence === null ||
       dispatchingRef.current ||
@@ -148,58 +166,45 @@ export function useStructuredAgentSessionOutbox(args: {
     ) {
       return
     }
-    dispatchingRef.current = true
-    const dispatchGeneration = dispatchGenerationRef.current
-    const staged = [
-      { ...next, state: 'dispatching' as const, lastAttemptAt: Date.now() },
-      ...outbox.slice(1)
-    ]
-    if (!writeOutbox(sessionId, staged)) {
-      dispatchingRef.current = false
-      blockedIdRef.current = next.clientMessageId
-      setError('Message could not be saved to the outbox')
+    // A launch settlement may have already admitted this entry and cleared its in-flight marker
+    // before this effect observes the queued React snapshot. Storage is the shared ownership
+    // record; only dispatch when the persisted head is still queued.
+    const persisted = readOutbox(sessionId, { recoverDispatching: false })
+    const persistedHead = persisted[0]
+    if (
+      persistedHead?.clientMessageId !== next.clientMessageId ||
+      persistedHead.state !== 'queued'
+    ) {
+      outboxRef.current = persisted
+      setOutbox(persisted)
       return
     }
-    outboxRef.current = staged
-    setOutbox(staged)
-    void callStructuredAgentSession<AgentSessionMutationResult<AgentSessionSendResult>>(
+    const dispatchGeneration = dispatchGenerationRef.current
+    const dispatch = dispatchStructuredAgentSessionOutboxEntry({
+      next: persistedHead,
+      persisted,
+      sessionId,
       target,
-      'agentSession.send',
-      structuredAgentSessionSendRequest(next, fence)
-    )
-      .then((result) => {
-        if (dispatchGenerationRef.current !== dispatchGeneration) {
-          return
-        }
-        applyDisposition(
-          disposeStructuredAgentSessionSendResult({
-            entries: outboxRef.current,
-            entry: next,
-            blockedClientMessageId: blockedIdRef.current,
-            result,
-            createOperationId: structuredSessionOperationId
-          })
-        )
+      fence,
+      dispatchGeneration,
+      dispatchGenerationRef,
+      dispatchingRef,
+      blockedIdRef,
+      outboxRef,
+      setOutbox,
+      setError,
+      applyDisposition,
+      createOperationId: structuredSessionOperationId
+    })
+    if (!dispatch.started) {
+      // The launch settlement owns this entry. Its storage mutation does not update this hook's
+      // local state, so mirror the settled state once the shared admission finishes.
+      void dispatch.promise.then(() => {
+        const latest = readOutbox(sessionId, { recoverDispatching: false })
+        outboxRef.current = latest
+        setOutbox(latest)
       })
-      .catch((caught) => {
-        if (dispatchGenerationRef.current !== dispatchGeneration) {
-          return
-        }
-        applyDisposition(
-          disposeStructuredAgentSessionSendFailure({
-            entries: outboxRef.current,
-            entry: next,
-            blockedClientMessageId: blockedIdRef.current,
-            cause: caught,
-            isDeliveryUnknown: isDesktopDeliveryUnknown
-          })
-        )
-      })
-      .finally(() => {
-        if (dispatchGenerationRef.current === dispatchGeneration) {
-          dispatchingRef.current = false
-        }
-      })
+    }
   }, [applyDisposition, fence, outbox, sessionId, target])
 
   // A transport-side unknown may never have reached the host, and nothing else

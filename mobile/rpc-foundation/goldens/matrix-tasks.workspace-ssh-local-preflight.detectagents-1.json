@@ -3,9 +3,9 @@
   "family": "tasks.workspace-ssh-local",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "28f7ba289c188bfc121ef7b969133711189e887fbfc7b37c8a5401ea7f30b56a",
   "platform": "darwin",
@@ -82,6 +82,11 @@
           }
         }
       }
+    },
+    "0c2cba5f3708": {
+      "name": "workspaceAgent",
+      "value": "claude",
+      "sent": 0
     },
     "1317fc33bdbe": {
       "name": "preflight.detectAgents#1",
@@ -183,12 +188,6 @@
         }
       }
     },
-    "41b0d115f434": {
-      "name": "workspaceDetectedAgentIds",
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "6e5fcf24648d": {
       "name": "preflight.detectAgents#1",
       "args": [
@@ -268,6 +267,11 @@
         "$rpc": "null"
       }
     },
+    "77b6cedadbe8": {
+      "name": "workspaceAgentOverridden",
+      "value": false,
+      "sent": 0
+    },
     "87d7d24a30d2": {
       "name": "preflight.detectAgents#1",
       "args": [
@@ -302,9 +306,10 @@
         }
       }
     },
-    "9f152ed6e897": {
+    "a88df8f43f70": {
       "name": "workspaceDetectedAgentIds",
-      "value": []
+      "value": [],
+      "sent": 1
     },
     "cb93b17470e8": {
       "name": "preflight.detectAgents#1",
@@ -337,17 +342,21 @@
         }
       }
     },
-    "cbb858a786ac": {
-      "name": "workspaceDetectedAgentIds",
-      "value": ["codex", "claude"]
-    },
     "cf32edc950ac": {
       "name": "preflight.detectAgents#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
     },
-    "ea709e13f0f0": {
-      "name": "workspaceAgentOverridden",
-      "value": false
+    "d00f9527d4f2": {
+      "name": "workspaceDetectedAgentIds",
+      "value": ["codex", "claude"],
+      "sent": 1
+    },
+    "dd9d8bf76a0e": {
+      "name": "workspaceDetectedAgentIds",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 0
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -356,10 +365,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "ed6189938d78": {
-      "name": "workspaceAgent",
-      "value": "claude"
     },
     "fb640b2bca4c": {
       "name": "preflight.detectAgents#1",
@@ -439,7 +444,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "7400f4eebe66",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "cbb858a786ac"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "d00f9527d4f2"]
         }
       },
       {
@@ -451,7 +456,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       },
       {
@@ -463,7 +468,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       },
       {
@@ -475,7 +480,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       },
       {
@@ -487,7 +492,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       },
       {
@@ -499,7 +504,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       },
       {
@@ -511,7 +516,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       },
       {
@@ -523,7 +528,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       },
       {
@@ -535,7 +540,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       },
       {
@@ -547,7 +552,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       },
       {
@@ -559,7 +564,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "71225024ccf5",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+          "effects": ["0c2cba5f3708", "77b6cedadbe8", "dd9d8bf76a0e", "a88df8f43f70"]
         }
       }
     ]

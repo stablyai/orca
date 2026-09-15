@@ -3,9 +3,9 @@
   "family": "tasks.workspace-sparse",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "3d4637406e2d658b72f73153f0a5e176cb8b143593b72bce0cdf979bc6e4cbdd",
   "platform": "darwin",
@@ -13,6 +13,11 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "0a30edace604": {
+      "name": "workspaceSparsePresetsError",
+      "value": "Failed to save sparse preset.",
+      "sent": 2
+    },
     "1923ab7dba76": {
       "name": "repo.saveSparsePreset#1",
       "args": [
@@ -49,10 +54,6 @@
         }
       }
     },
-    "1d9a7d969446": {
-      "name": "workspaceSparsePresetsLoaded",
-      "value": true
-    },
     "1f453ea83df7": {
       "presets": [],
       "presetsError": "transport failure",
@@ -65,6 +66,11 @@
         "status": "connected",
         "targetId": "ssh-1"
       }
+    },
+    "23c24a8bc04b": {
+      "name": "workspaceSparsePresetsError",
+      "value": "Connection closed",
+      "sent": 2
     },
     "23e798f4b47c": {
       "name": "repo.saveSparsePreset#1",
@@ -99,9 +105,15 @@
         }
       }
     },
-    "312ed3cbf468": {
-      "name": "workspaceSparsePresetId",
-      "value": "p1"
+    "3dea8cd23ff6": {
+      "name": "workspaceSparsePresetsError",
+      "value": "outer refused",
+      "sent": 2
+    },
+    "3f2baafe9f80": {
+      "name": "workspaceSparseSaving",
+      "value": false,
+      "sent": 2
     },
     "404305aa2e3a": {
       "presets": [
@@ -122,25 +134,17 @@
         "targetId": "ssh-1"
       }
     },
-    "42bbd034563e": {
-      "name": "workspaceSparseDraft",
+    "452edc62bce0": {
+      "name": "workspaceSshState",
       "value": {
-        "$rpc": "null"
-      }
-    },
-    "4856f62b3650": {
-      "name": "workspaceSparsePresets",
-      "value": [
-        {
-          "directories": ["docs"],
-          "id": "p1",
-          "name": "docs"
-        }
-      ]
-    },
-    "4c7522c66d03": {
-      "name": "workspaceSparsePresetsError",
-      "value": "transport failure"
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      },
+      "sent": 1
     },
     "4d66e995ff47": {
       "name": "repo.saveSparsePreset#1",
@@ -175,9 +179,20 @@
         }
       }
     },
-    "4e1228f5e0a8": {
+    "50299594248a": {
       "name": "workspaceSparsePresetsError",
-      "value": "Cannot read properties of null (reading 'preset')"
+      "value": "",
+      "sent": 2
+    },
+    "594fac1293d4": {
+      "name": "workspaceSparsePresetsError",
+      "value": "",
+      "sent": 1
+    },
+    "5b8f6c626989": {
+      "name": "workspaceSparsePresetId",
+      "value": "p1",
+      "sent": 2
     },
     "5c44ff5f6877": {
       "name": "repo.saveSparsePreset#1",
@@ -254,17 +269,10 @@
         }
       }
     },
-    "7993762437ad": {
+    "7c00933f99aa": {
       "name": "workspaceSparsePresetsError",
-      "value": "Connection closed"
-    },
-    "7fd0cde62993": {
-      "name": "workspaceSparseSaving",
-      "value": false
-    },
-    "841927d71fc6": {
-      "name": "workspaceSparsePresetsError",
-      "value": "outer refused"
+      "value": "Cannot read properties of null (reading 'preset')",
+      "sent": 2
     },
     "89aa7a3bd619": {
       "name": "ssh.getState#1",
@@ -306,6 +314,17 @@
         }
       }
     },
+    "8a48f96e40fe": {
+      "name": "workspaceSparsePresets",
+      "value": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "sent": 2
+    },
     "8e410711e308": {
       "presets": [],
       "presetsError": "Cannot read properties of undefined (reading 'preset')",
@@ -319,16 +338,10 @@
         "targetId": "ssh-1"
       }
     },
-    "921f72d7827e": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": {
-          "$rpc": "null"
-        },
-        "reconnectAttempt": 0,
-        "status": "connected",
-        "targetId": "ssh-1"
-      }
+    "8ff2b79a90fb": {
+      "name": "workspaceSparsePresetsLoaded",
+      "value": true,
+      "sent": 2
     },
     "92b857799ffd": {
       "name": "repo.saveSparsePreset#1",
@@ -495,6 +508,11 @@
         "targetId": "ssh-1"
       }
     },
+    "bf4ab087f5b3": {
+      "name": "workspaceSparsePresetsError",
+      "value": "Cannot read properties of undefined (reading 'preset')",
+      "sent": 2
+    },
     "c33fee0d8294": {
       "presets": [],
       "presetsError": "Unknown method",
@@ -546,9 +564,10 @@
         }
       }
     },
-    "cea9d7e8986e": {
+    "c74f5fe12440": {
       "name": "workspaceSparseSaving",
-      "value": true
+      "value": true,
+      "sent": 1
     },
     "d14de7ce4d84": {
       "name": "repo.saveSparsePreset#1",
@@ -598,17 +617,10 @@
         "targetId": "ssh-1"
       }
     },
-    "da3a01640280": {
+    "df20e67660fc": {
       "name": "workspaceSparsePresetsError",
-      "value": "Failed to save sparse preset."
-    },
-    "dba381378b08": {
-      "name": "workspaceSparsePresetsError",
-      "value": ""
-    },
-    "dd63325a7802": {
-      "name": "workspaceSparsePresetsError",
-      "value": "Cannot read properties of undefined (reading 'preset')"
+      "value": "Unknown method",
+      "sent": 2
     },
     "e52233a9ff71": {
       "presets": [],
@@ -622,10 +634,6 @@
         "status": "connected",
         "targetId": "ssh-1"
       }
-    },
-    "ea260eacb1db": {
-      "name": "workspaceSparsePresetsError",
-      "value": "Unknown method"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -647,6 +655,13 @@
         "status": "connected",
         "targetId": "ssh-1"
       }
+    },
+    "ef39f35afb7f": {
+      "name": "workspaceSparseDraft",
+      "value": {
+        "$rpc": "null"
+      },
+      "sent": 2
     },
     "f4d4ba362712": {
       "name": "repo.saveSparsePreset#1",
@@ -681,6 +696,11 @@
         }
       }
     },
+    "f77e22eef962": {
+      "name": "workspaceSparsePresetsError",
+      "value": "transport failure",
+      "sent": 2
+    },
     "f9dfbe0c0ea7": {
       "name": "ssh.getState#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
@@ -702,7 +722,7 @@
             "mount": "eb79a9b3682a"
           },
           "state": "ee3a941d5e9c",
-          "effects": ["921f72d7827e"]
+          "effects": ["452edc62bce0"]
         }
       },
       {
@@ -716,11 +736,11 @@
           },
           "state": "bcfc7df6e4f2",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "7993762437ad",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "23c24a8bc04b",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -735,14 +755,14 @@
           },
           "state": "404305aa2e3a",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "8a48f96e40fe",
+            "8ff2b79a90fb",
+            "5b8f6c626989",
+            "ef39f35afb7f",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -757,11 +777,11 @@
           },
           "state": "8e410711e308",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "dd63325a7802",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "bf4ab087f5b3",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -776,11 +796,11 @@
           },
           "state": "e52233a9ff71",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4e1228f5e0a8",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "7c00933f99aa",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -795,11 +815,11 @@
           },
           "state": "befb68fa6c76",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "da3a01640280",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "0a30edace604",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -814,11 +834,11 @@
           },
           "state": "befb68fa6c76",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "da3a01640280",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "0a30edace604",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -833,11 +853,11 @@
           },
           "state": "befb68fa6c76",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "da3a01640280",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "0a30edace604",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -852,11 +872,11 @@
           },
           "state": "d74bc3778ca8",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "841927d71fc6",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "3dea8cd23ff6",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -871,11 +891,11 @@
           },
           "state": "ee3a941d5e9c",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "dba381378b08",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "50299594248a",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -890,11 +910,11 @@
           },
           "state": "c33fee0d8294",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "ea260eacb1db",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "df20e67660fc",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -909,11 +929,11 @@
           },
           "state": "1f453ea83df7",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4c7522c66d03",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "f77e22eef962",
+            "3f2baafe9f80"
           ]
         }
       },
@@ -928,11 +948,11 @@
           },
           "state": "ee3a941d5e9c",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "dba381378b08",
-            "7fd0cde62993"
+            "452edc62bce0",
+            "c74f5fe12440",
+            "594fac1293d4",
+            "50299594248a",
+            "3f2baafe9f80"
           ]
         }
       }

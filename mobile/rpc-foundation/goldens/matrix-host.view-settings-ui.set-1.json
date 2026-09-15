@@ -3,9 +3,9 @@
   "family": "host.view-settings",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
   "adapterSha256": "a9e0780298a1443664e7ae02056168aa34d67556c9c056d51a82c7b4a73ad35b",
   "scenarioSha256": "30cbeff90a845ab5dd576e302156e859338357b608e87e9fadeddf18ae93d9ca",
   "platform": "darwin",
@@ -47,6 +47,11 @@
         }
       }
     },
+    "1207e1b06040": {
+      "name": "workspaceStatuses",
+      "value": [],
+      "sent": 1
+    },
     "25d97d355299": {
       "name": "ui.set#1",
       "args": [
@@ -82,10 +87,6 @@
       "name": "ui.set#1",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"sortBy\":\"name\"}}"
     },
-    "3059ce80d86a": {
-      "name": "collapsedGroups",
-      "value": []
-    },
     "344b9ddf6cfb": {
       "name": "ui.set#1",
       "args": [
@@ -119,10 +120,6 @@
           }
         }
       }
-    },
-    "34925f64c9a6": {
-      "name": "sortMode",
-      "value": "name"
     },
     "44e91172f4a0": {
       "name": "ui.set#1",
@@ -218,6 +215,11 @@
         "startedAt": 0
       }
     },
+    "6816213c2ede": {
+      "name": "collapsedGroups",
+      "value": [],
+      "sent": 1
+    },
     "733b56879f90": {
       "name": "ui.set#1",
       "args": [
@@ -281,22 +283,9 @@
         }
       }
     },
-    "7eaddd04bcdd": {
-      "name": "workspaceStatuses",
-      "value": []
-    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "9527461faeb1": {
-      "name": "filters",
-      "value": {
-        "alwaysShowDefaultBranch": true,
-        "filterRepoIds": [],
-        "hideDefaultBranch": false,
-        "hideSleeping": true
-      }
     },
     "a234a06a4465": {
       "name": "ui.set#1",
@@ -368,6 +357,11 @@
         }
       }
     },
+    "a8115697f295": {
+      "name": "sortMode",
+      "value": "name",
+      "sent": 1
+    },
     "ba2035345a68": {
       "collapsed": [],
       "filters": {
@@ -428,6 +422,16 @@
         }
       }
     },
+    "d88f3b1774b1": {
+      "name": "filters",
+      "value": {
+        "alwaysShowDefaultBranch": true,
+        "filterRepoIds": [],
+        "hideDefaultBranch": false,
+        "hideSleeping": true
+      },
+      "sent": 1
+    },
     "d991b0c4e961": {
       "name": "ui.set#1",
       "args": [
@@ -461,9 +465,10 @@
         }
       }
     },
-    "e9a3acf203c6": {
+    "e0a092c9ae88": {
       "name": "groupMode",
-      "value": "repo"
+      "value": "repo",
+      "sent": 1
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -536,16 +541,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -561,16 +566,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -586,16 +591,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -611,16 +616,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -636,16 +641,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -661,16 +666,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -686,16 +691,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -711,16 +716,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -736,16 +741,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -761,16 +766,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       },
@@ -786,16 +791,16 @@
           },
           "state": "ba2035345a68",
           "effects": [
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1",
-            "e9a3acf203c6",
-            "34925f64c9a6",
-            "7eaddd04bcdd",
-            "3059ce80d86a",
-            "9527461faeb1"
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1",
+            "e0a092c9ae88",
+            "a8115697f295",
+            "1207e1b06040",
+            "6816213c2ede",
+            "d88f3b1774b1"
           ]
         }
       }

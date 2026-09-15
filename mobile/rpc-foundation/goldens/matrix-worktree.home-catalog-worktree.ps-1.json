@@ -3,10 +3,10 @@
   "family": "worktree.home-catalog",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
-  "adapterSha256": "6119d409e1958877e4a04b3901f94a3609ac0420f5ca02af20eb8dae5cbf3408",
+  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
+  "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
   "scenarioSha256": "fa0e28a167a5fba6fe7ffebb9f4ad28dd413d601c07116a24a7781d156f54beb",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -253,7 +253,7 @@
         }
       }
     },
-    "8944b50988b9": {
+    "86091b4d2b73": {
       "name": "info",
       "value": {
         "host-1": {
@@ -268,7 +268,8 @@
           },
           "totalWorktrees": 2
         }
-      }
+      },
+      "sent": 1
     },
     "9270aeb7d9c6": {
       "status": "pending",
@@ -373,7 +374,22 @@
         }
       }
     },
-    "a3336f998e22": {
+    "a12f66e6b7a8": {
+      "name": "info",
+      "value": {
+        "host-1": {
+          "activeCount": 0,
+          "countsProvenAt": 1767225600000,
+          "hostId": "host-1",
+          "lastActiveWorktree": {
+            "$rpc": "null"
+          },
+          "totalWorktrees": 0
+        }
+      },
+      "sent": 1
+    },
+    "b2b1fae7e3de": {
       "name": "info",
       "value": {
         "host-1": {
@@ -385,7 +401,8 @@
           },
           "totalWorktrees": 0
         }
-      }
+      },
+      "sent": 1
     },
     "bc1a8e138f82": {
       "name": "worktree.ps#1",
@@ -410,20 +427,6 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
-      }
-    },
-    "cca1bdaf2563": {
-      "name": "info",
-      "value": {
-        "host-1": {
-          "activeCount": 0,
-          "countsProvenAt": 1767225600000,
-          "hostId": "host-1",
-          "lastActiveWorktree": {
-            "$rpc": "null"
-          },
-          "totalWorktrees": 0
-        }
       }
     },
     "d0ec31ab66d5": {
@@ -537,7 +540,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "39b7354b00f4",
-          "effects": ["8944b50988b9"]
+          "effects": ["86091b4d2b73"]
         }
       },
       {
@@ -549,7 +552,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "51d64b49c1ab",
-          "effects": ["a3336f998e22"]
+          "effects": ["b2b1fae7e3de"]
         }
       },
       {
@@ -561,7 +564,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "51d64b49c1ab",
-          "effects": ["a3336f998e22"]
+          "effects": ["b2b1fae7e3de"]
         }
       },
       {
@@ -573,7 +576,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "d0ec31ab66d5",
-          "effects": ["cca1bdaf2563"]
+          "effects": ["a12f66e6b7a8"]
         }
       },
       {
@@ -585,7 +588,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "d0ec31ab66d5",
-          "effects": ["cca1bdaf2563"]
+          "effects": ["a12f66e6b7a8"]
         }
       },
       {
@@ -597,7 +600,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "d0ec31ab66d5",
-          "effects": ["cca1bdaf2563"]
+          "effects": ["a12f66e6b7a8"]
         }
       },
       {
@@ -609,7 +612,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "51d64b49c1ab",
-          "effects": ["a3336f998e22"]
+          "effects": ["b2b1fae7e3de"]
         }
       },
       {
@@ -621,7 +624,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "51d64b49c1ab",
-          "effects": ["a3336f998e22"]
+          "effects": ["b2b1fae7e3de"]
         }
       },
       {
@@ -633,7 +636,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "51d64b49c1ab",
-          "effects": ["a3336f998e22"]
+          "effects": ["b2b1fae7e3de"]
         }
       },
       {
@@ -645,7 +648,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "51d64b49c1ab",
-          "effects": ["a3336f998e22"]
+          "effects": ["b2b1fae7e3de"]
         }
       },
       {
@@ -657,7 +660,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "51d64b49c1ab",
-          "effects": ["a3336f998e22"]
+          "effects": ["b2b1fae7e3de"]
         }
       }
     ]
