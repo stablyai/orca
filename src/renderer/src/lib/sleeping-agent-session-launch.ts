@@ -122,6 +122,7 @@ export function launchSleepingAgentSession(
       launchAgent: record.agent,
       providerSession: record.providerSession
     },
+    ...(record.viewMode ? { viewMode: record.viewMode } : {}),
     ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
   })
   state.clearSleepingAgentSession(record.paneKey)
