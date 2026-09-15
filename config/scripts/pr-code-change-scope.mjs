@@ -124,7 +124,15 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/methods/session-tabs.ts',
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
-  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
+  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
+  // Federation pairs a desktop with a worker host on its own release, so both the
+  // coordinator-side callers and the host-side methods are cross-version surface.
+  'src/main/runtime/orchestration/federation',
+  'src/main/runtime/rpc/methods/orchestration/federation/',
+  'src/main/runtime/rpc/methods/orchestration/worker/worker-observation',
+  'src/main/runtime/rpc/methods/orchestration/worker/worker-legacy-federated-read',
+  'src/main/runtime/rpc/orchestration-contract-fence',
+  'src/main/runtime/rpc/orchestration-mutation-executor'
 ]
 
 const MANAGED_HOOK_PREFIXES = [

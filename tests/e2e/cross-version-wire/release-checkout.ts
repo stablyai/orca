@@ -112,9 +112,22 @@ function compareReleaseTags(a: string, b: string): number {
  * the exact failure this harness exists to prevent.
  */
 export function resolveBaselineReleaseRef(): string {
+  return resolveBaselineReleaseRefs(1)[0] as string
+}
+
+/**
+ * The newest `count` release points, newest first. A surface whose peers routinely
+ * sit a release behind — federation pairs a desktop with a worker host that updates
+ * on its own schedule — has to be checked against N-1 as well as N, because N alone
+ * already contains the fix for anything broken during the last cycle.
+ *
+ * Returns fewer than `count` only when the repository has fewer stable tags; an
+ * explicit {@link BASELINE_REF_ENV} pins exactly one ref and wins outright.
+ */
+export function resolveBaselineReleaseRefs(count: number): string[] {
   const override = process.env[BASELINE_REF_ENV]?.trim()
   if (override) {
-    return override
+    return [override]
   }
   let tags: string[]
   try {
@@ -125,24 +138,30 @@ export function resolveBaselineReleaseRef(): string {
         `Run it inside a git checkout, or pin a ref with ${BASELINE_REF_ENV}.`
     )
   }
-  const latest = selectLatestStableReleaseTag(tags)
-  if (!latest) {
+  const selected = selectStableReleaseTags(tags, count)
+  if (selected.length === 0) {
     throw new Error(
       `Cross-version harness found no stable desktop release tags matching vX.Y.Z (saw ${tags.length} tag(s) total). ` +
         'CI checkouts default to a shallow clone with no tags: use `actions/checkout` with `fetch-depth: 0`, ' +
         `or pin a ref with ${BASELINE_REF_ENV}.`
     )
   }
-  return latest
+  return selected
 }
 
 export function selectLatestStableReleaseTag(tags: string[]): string | null {
-  return (
-    tags
-      .filter((tag) => STABLE_DESKTOP_RELEASE_TAG.test(tag))
-      .sort(compareReleaseTags)
-      .at(-1) ?? null
-  )
+  return selectStableReleaseTags(tags, 1)[0] ?? null
+}
+
+/** The newest `count` stable desktop release tags, newest first. */
+export function selectStableReleaseTags(tags: string[], count: number): string[] {
+  if (count <= 0) {
+    return []
+  }
+  return tags
+    .filter((tag) => STABLE_DESKTOP_RELEASE_TAG.test(tag))
+    .sort((a, b) => compareReleaseTags(b, a))
+    .slice(0, count)
 }
 
 function resolveCommit(ref: string): string {

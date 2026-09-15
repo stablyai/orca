@@ -154,10 +154,41 @@ Run it with:
 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
 ```
 
-The harness covers the terminal stream and the structured agent-session surface. It does
-**not** cover the session-tab sync channel, legacy agent-session publications, file or Git
-RPCs, mobile/E2EE framing, or the relay transport. A change on those paths still needs its
-own reasoning against the three rules above.
+`tests/e2e/cross-version-wire/cross-version-orchestration-wire.unit.test.ts` pairs the
+orchestration federation surface: `federationAttachStart`, `federationFleetSnapshot`,
+`federationShow`, `federationRead`, and the `federationPull`/`federationAck`/
+`federationImport` relay loop. A coordinator build's own `startFederatedWorker` composes
+the attach params and its own sync loop drives the relay, so the suite fails on what a
+real release sends rather than on a hand-written payload.
+
+It pairs against the **two** newest release tags, not one. A worker host and the desktop
+that dispatches to it update on their own schedules, so a coordinator one release behind
+is an ordinary peer for weeks. The newest tag already contains everything fixed during
+the last cycle: pairing only against it cannot see a break introduced and repaired inside
+that window, which is how a v1.4.198 coordinator losing its Run id on
+`federationAttachStart` reached users (#19689). `resolveBaselineReleaseRefs(2)` in
+`release-checkout.ts` derives both refs from `git tag`; no version is written down.
+
+Run it with:
+
+```bash
+pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-orchestration-wire.unit.test.ts
+```
+
+It fails when a released coordinator's params are refused by the current host's schema
+(Rule 2 — this is #19689's class), when the current host stops publishing a field a
+released peer's receipt parser reads (Rule 3, compared as dotted paths so a removal
+inside `setup`, `launch`, `attachment` or `observation` cannot hide), when an
+`orchestration.*` method name a released peer still calls disappears, or when a
+coordinator throws instead of degrading against a host that lacks a method. Whether the
+old side has a method or a caller module at all is read from its checkout — never
+asserted as a literal.
+
+The harness covers the terminal stream, the structured agent-session surface, and
+orchestration federation. It does **not** cover the session-tab sync channel, legacy
+agent-session publications, file or Git RPCs, mobile/E2EE framing, or the relay
+transport. A change on those paths still needs its own reasoning against the three rules
+above.
 
 ## Worked example: `agentWait` on terminal and worker reads
 

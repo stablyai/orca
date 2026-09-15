@@ -277,7 +277,26 @@ describe('per-job path classification', () => {
       'src/main/runtime/rpc/methods/structured-agent-session-hold.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-schemas.ts',
       'src/main/runtime/rpc/methods/terminal.ts',
-      'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+      'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts',
+      // Orchestration federation: the coordinator side that composes what goes on
+      // the wire, and the host side that validates and publishes the answer. Both
+      // pair against a peer on a different release, so both must select the lane —
+      // #19542 changed only host-side files and this job never ran.
+      'src/main/runtime/orchestration/federation-sync.ts',
+      'src/main/runtime/orchestration/federation-sync-capability.ts',
+      'src/main/runtime/orchestration/federation-control-message.ts',
+      'src/main/runtime/orchestration/federation-lifecycle-settlement.ts',
+      'src/main/runtime/rpc/methods/orchestration/federation/federation.ts',
+      'src/main/runtime/rpc/methods/orchestration/federation/federation-start-schema.ts',
+      'src/main/runtime/rpc/methods/orchestration/federation/federation-control.ts',
+      'src/main/runtime/rpc/methods/orchestration/federation/federation-relay.ts',
+      'src/main/runtime/rpc/methods/orchestration/federation/federated-worker-start.ts',
+      'src/main/runtime/rpc/methods/orchestration/federation/federated-fleet-snapshot.ts',
+      'src/main/runtime/rpc/methods/orchestration/federation/federated-attach-receipt.ts',
+      'src/main/runtime/rpc/methods/orchestration/worker/worker-observation.ts',
+      'src/main/runtime/rpc/methods/orchestration/worker/worker-legacy-federated-read.ts',
+      'src/main/runtime/rpc/orchestration-contract-fence.ts',
+      'src/main/runtime/rpc/orchestration-mutation-executor.ts'
     ]) {
       expectClassification([file], {
         'cross-version-wire': true,
