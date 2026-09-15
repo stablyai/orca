@@ -153,8 +153,25 @@ describe('ai vault resume command runtime', () => {
   })
 
   it('follows the live Windows shell for non-resumable agents in the fallback path', () => {
-    // Why: agents without a TUI startup plan (e.g. cursor) queue through the
-    // shared-builder fallback, which must quote for the live shell too (#6152).
+    // Why: agents without a TUI startup plan queue through the shared-builder
+    // fallback, which must quote for the live shell too (#6152).
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+
+    expect(
+      buildQueuedAiVaultResumeCommand({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'hermes',
+          sessionId: 'session one',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe("hermes --resume 'session one'")
+  })
+
+  it('queues a Cursor resume through the TUI startup plan', () => {
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
     expect(
@@ -168,7 +185,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cursor-agent --resume 'session one'")
+    ).toBe("cursor-agent '--yolo' '--resume' 'session one'")
   })
 
   it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {

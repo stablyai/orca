@@ -140,6 +140,23 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     })
   })
 
+  it('routes Cursor through the resumable-agent startup plan', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'cursor',
+        sessionId: '668320d2-2fd8-4888-b33c-2a466fec86e7'
+      }),
+      hostPlatform: 'darwin'
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && cursor-agent '--yolo' '--resume' '668320d2-2fd8-4888-b33c-2a466fec86e7'",
+      launchConfig: { agentCommand: "cursor-agent '--yolo'" },
+      launchAgent: 'cursor'
+    })
+  })
+
   it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({

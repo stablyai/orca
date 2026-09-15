@@ -38,6 +38,20 @@ describe('Cursor hook normalization', () => {
     expect(result?.payload.prompt).toBe('add a README')
   })
 
+  it('captures the Cursor provider session from conversation_id', () => {
+    const conversationId = '668320d2-2fd8-4888-b33c-2a466fec86e7'
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'beforeSubmitPrompt',
+        prompt: 'add a README',
+        conversation_id: conversationId
+      }),
+      'production'
+    )
+    expect(result?.providerSession).toEqual({ key: 'session_id', id: conversationId })
+  })
+
   it('stop maps to done', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
