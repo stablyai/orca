@@ -22,6 +22,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
+import { matchesProcessIncarnation } from './orchestration/worker-terminal-process-liveness'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   /** Every pane key this PTY could be addressed by, including restored receipts. */
@@ -269,5 +270,27 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined
     })
+  }
+  /** Recover an expired handle only for the recorded process incarnation on its owning host. */
+  resolveTerminalHandleByProcessIncarnation(
+    processIncarnation: string,
+    serializedHostScope: string | null
+  ): string | null {
+    if (!processIncarnation || !serializedHostScope) {
+      return null
+    }
+    // Do not split colon-bearing PTY or incarnation IDs.
+    for (const [ptyId, pty] of this.ptysById) {
+      if (!matchesProcessIncarnation(ptyId, pty.incarnationId, processIncarnation)) {
+        continue
+      }
+      const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
+      if (!hostScope || JSON.stringify(hostScope) !== serializedHostScope) {
+        // A different-host match must not hide a later same-host match.
+        continue
+      }
+      return this.issuePtyHandle(pty)
+    }
+    return null
   }
 }
