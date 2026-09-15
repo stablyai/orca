@@ -238,6 +238,29 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/linear.js')).LINEAR_HANDLERS
   },
   {
+    name: 'jira',
+    keys: [
+      'jira issue',
+      'jira list',
+      'jira search',
+      'jira create',
+      'jira project list',
+      'jira project types',
+      'jira comment list',
+      'jira comment add',
+      'jira status list',
+      'jira status set',
+      'jira assignee list',
+      'jira assignee set',
+      'jira assignee clear',
+      'jira priority list',
+      'jira priority set',
+      'jira priority clear',
+      'jira label set'
+    ],
+    load: async () => (await import('./handlers/jira.js')).JIRA_HANDLERS
+  },
+  {
     name: 'vm',
     keys: ['vm recipe doctor'],
     load: async () => (await import('./handlers/vm.js')).VM_HANDLERS

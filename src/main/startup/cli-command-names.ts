@@ -39,6 +39,7 @@ export const CLI_COMMAND_NAMES = [
   'inserttext',
   'intercept',
   'is',
+  'jira',
   'keypress',
   'linear',
   'mouse',
