@@ -375,6 +375,21 @@ describe('ClaudeUsageStore', () => {
         },
         {
           day: '2026-04-09',
+          model: 'claude-fable-5-1',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
+        },
+        {
+          day: '2026-04-09',
           model: 'claude-sonnet-5-thinking',
           projectKey: 'worktree:repo-1::/workspace/repo-a',
           projectLabel: 'Repo A',
@@ -399,6 +414,9 @@ describe('ClaudeUsageStore', () => {
     expect(
       breakdown.find((row) => row.key === 'anthropic/claude-fable-5')?.estimatedCostUsd
     ).toBeCloseTo(73.5)
+    expect(breakdown.find((row) => row.key === 'claude-fable-5-1')?.estimatedCostUsd).toBeCloseTo(
+      73.5
+    )
     expect(
       breakdown.find((row) => row.key === 'claude-sonnet-5-thinking')?.estimatedCostUsd
     ).toBeCloseTo(14.7)
