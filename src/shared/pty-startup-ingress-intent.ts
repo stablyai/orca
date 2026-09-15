@@ -5,6 +5,7 @@ import {
 
 export type PtyStartupIngressIntent = {
   colors: TerminalOscColorQueryReplyColors
+  kittyKeyboardProtocol?: boolean
   deadlineMs: number
 }
 
@@ -35,6 +36,7 @@ export function parsePtyStartupIngressIntent(value: unknown): PtyStartupIngressI
   }
   return {
     colors: normalizedColors,
+    ...(record.kittyKeyboardProtocol === true ? { kittyKeyboardProtocol: true } : {}),
     deadlineMs: record.deadlineMs
   }
 }

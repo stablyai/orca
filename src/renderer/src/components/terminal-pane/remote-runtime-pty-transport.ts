@@ -150,6 +150,7 @@ export function createRemoteRuntimePtyTransport(
     launchToken,
     launchAgent,
     terminalColorQueryReplies,
+    terminalKittyKeyboardProtocol,
     agentPrompt,
     agentPromptDelivery,
     agentArgsOverride,
@@ -2223,6 +2224,9 @@ export function createRemoteRuntimePtyTransport(
           ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
           ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
           ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+          ...(terminalKittyKeyboardProtocol === true
+            ? { terminalKittyKeyboardProtocol: true }
+            : {}),
           tabId,
           leafId,
           focus: false,

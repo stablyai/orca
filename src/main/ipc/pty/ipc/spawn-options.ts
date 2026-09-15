@@ -123,6 +123,7 @@ export async function buildPtyIpcSpawnOptions(
   if (startupTerminalColorQueryReplyColors) {
     ctx.spawnOptions.startupIngress = {
       colors: startupTerminalColorQueryReplyColors,
+      ...(args.terminalKittyKeyboardProtocol === true ? { kittyKeyboardProtocol: true } : {}),
       deadlineMs: 5_000
     }
   }

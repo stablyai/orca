@@ -62,6 +62,9 @@ export const TERMINAL_LIFECYCLE_METHODS = [
                 : {}),
               ...(params.launchToken ? { launchToken: params.launchToken } : {}),
               ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+              ...(params.terminalKittyKeyboardProtocol === true
+                ? { terminalKittyKeyboardProtocol: true }
+                : {}),
               ...(params.terminalColorQueryReplies
                 ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
                 : {}),

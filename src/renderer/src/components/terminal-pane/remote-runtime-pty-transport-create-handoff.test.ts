@@ -250,6 +250,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       command: "codex 'linked issue context'",
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       startupCommandDelivery: 'shell-ready',
+      terminalKittyKeyboardProtocol: true,
       terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
     })
 
@@ -263,6 +264,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           command: "codex 'linked issue context'",
           envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
           startupCommandDelivery: 'shell-ready',
+          terminalKittyKeyboardProtocol: true,
           terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
         })
       })

@@ -168,6 +168,7 @@ export const TerminalCreateParams = z.object({
     .optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
+  terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: z
     .object({
       foreground: z.string().max(128).optional(),
