@@ -39,6 +39,20 @@ export function shouldStepNativeChatAskAnswer(agent: string | null | undefined):
   return transcriptAgent === 'claude' || transcriptAgent === 'codex'
 }
 
+/** True when the question-answered inference accepts this agent. The renderer
+ *  helper and the main-process server both compare the status payload's literal
+ *  `agentType` to `'claude'`, because answering AskUserQuestion is the one case
+ *  that emits no hook and needs a fallback; every other agent reports its own
+ *  resolution. Checks the literal agent string rather than
+ *  `resolveNativeChatTranscriptAgent`: that alias folds OpenClaude into
+ *  `'claude'` for transcript parsing, but `resolveHookPayloadAgentType` keeps
+ *  an OpenClaude pane's status payload at `'openclaude'`, which both inference
+ *  gates then reject. Narrower than `shouldStepNativeChatAskAnswer`, which also
+ *  covers Codex. */
+export function supportsNativeChatAnsweredInference(agent: string | null | undefined): boolean {
+  return agent === 'claude'
+}
+
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {

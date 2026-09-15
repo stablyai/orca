@@ -1,7 +1,8 @@
-import { useState, type RefObject } from 'react'
+import { Fragment, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
 
 export type NativeChatQuestionCardProps = {
@@ -38,11 +39,28 @@ export function NativeChatQuestionCard({
   // unique, while Claude's selector commits the numbered row (STA-1860).
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
+  // Which option's preview is showing, per question. Pointer and keyboard focus
+  // both write it, so hovering a row previews it without committing a pick.
+  const [highlights, setHighlights] = useState<number[]>(() => prompt.questions.map(() => 0))
 
   const total = prompt.questions.length
   const isLast = index === total - 1
   const q = prompt.questions[index]!
   const questionAllowsOther = Array.isArray(allowOther) ? (allowOther[index] ?? false) : allowOther
+
+  const setHighlight = (optionIndex: number): void => {
+    setHighlights((prev) => {
+      const next = [...prev]
+      next[index] = optionIndex
+      return next
+    })
+  }
+
+  const previewIndex = highlights[index] ?? 0
+  const preview = q.options[previewIndex]?.preview
+  // Gated on preview text rather than `hasPreview`: this decides whether there is
+  // anything to render, not which keystrokes the answer commits with.
+  const questionHasPreviewText = q.options.some((option) => (option.preview ?? '').length > 0)
 
   const setOther = (qi: number, value: string): void => {
     setOtherText((prev) => {
@@ -62,6 +80,7 @@ export function NativeChatQuestionCard({
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
+  const currentPicked = (selections[index] ?? []).length > 0
   const currentAnswered = answerFor(index).length > 0
 
   const submitAll = (sel: number[][], oth: string[]): void => {
@@ -89,6 +108,7 @@ export function NativeChatQuestionCard({
   // trailing Send/Next button. (Auto-submitting on the first click dismissed the
   // card before the user saw any feedback, which read as "nothing happened".)
   const pickOption = (optionIndex: number): void => {
+    setHighlight(optionIndex)
     setSelections((prev) => {
       const next = prev.map((s) => [...s])
       const cur = next[index] ?? []
@@ -172,21 +192,51 @@ export function NativeChatQuestionCard({
             </button>
           </div>
 
-          {/* Scroll only kicks in on long option lists; the sleek scrollbar rides
-              the card's right edge instead of crowding the choices. */}
-          <div className="max-h-[50vh] divide-y divide-border/60 overflow-y-auto border-t border-border scrollbar-sleek">
-            {q.options.map((opt, i) => (
-              <OptionRow
-                key={`${i}:${opt.label}`}
-                badge={String(i + 1)}
-                label={opt.label}
-                description={opt.description}
-                selected={(selections[index] ?? []).includes(i)}
-                disabled={isSubmitting}
-                onSelect={() => pickOption(i)}
-              />
-            ))}
-            <div className="flex items-center gap-3 px-3.5 py-2.5">
+          {/* The card is width-constrained by the chat pane, not the window, so
+              the split is driven by the card's own inline size. */}
+          <div className="@container/question border-t border-border">
+            {/* Scroll only kicks in on long option lists; the sleek scrollbar rides
+                the card's right edge instead of crowding the choices. One grid in
+                both modes: stacked, the preview is the row after its own option;
+                split, it spans column 2 across every option row.
+
+                The row track list is explicit because `row-span-full` resolves
+                against explicit lines only — with implicit rows the span collapses
+                to one row, which then stretches to the preview's height. */}
+            <div
+              style={
+                questionHasPreviewText
+                  ? ({
+                      '--question-option-rows': `repeat(${q.options.length}, min-content)`
+                    } as React.CSSProperties)
+                  : undefined
+              }
+              className={cn(
+                'grid max-h-[50vh] min-w-0 grid-cols-1 auto-rows-min overflow-y-auto scrollbar-sleek',
+                questionHasPreviewText &&
+                  '@2xl/question:grid-cols-2 @2xl/question:grid-rows-(--question-option-rows) @2xl/question:content-start @2xl/question:[&>button]:col-start-1 @2xl/question:[&>[data-slot=question-preview]]:col-start-2 @2xl/question:[&>[data-slot=question-preview]]:row-span-full'
+              )}
+            >
+              {q.options.map((opt, i) => (
+                <Fragment key={`${i}:${opt.label}`}>
+                  <OptionRow
+                    badge={String(i + 1)}
+                    label={opt.label}
+                    description={opt.description}
+                    selected={(selections[index] ?? []).includes(i)}
+                    highlighted={questionHasPreviewText && previewIndex === i}
+                    disabled={isSubmitting}
+                    onSelect={() => pickOption(i)}
+                    onHighlight={() => setHighlight(i)}
+                    dividerAbove={i > 0}
+                  />
+                  {questionHasPreviewText && previewIndex === i ? (
+                    <PreviewPanel preview={preview} />
+                  ) : null}
+                </Fragment>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 border-t border-border/60 px-3.5 py-2.5">
               {questionAllowsOther ? (
                 <>
                   <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
@@ -203,10 +253,22 @@ export function NativeChatQuestionCard({
                         confirm(true)
                       }
                     }}
-                    placeholder={translate(
-                      'components.native-chat.question.otherPlaceholder',
-                      'Type your answer'
-                    )}
+                    placeholder={
+                      !questionHasPreviewText
+                        ? translate(
+                            'components.native-chat.question.otherPlaceholder',
+                            'Type your answer'
+                          )
+                        : currentPicked
+                          ? translate(
+                              'components.native-chat.question.notePlaceholder',
+                              'Add a note (optional)'
+                            )
+                          : translate(
+                              'components.native-chat.question.replyPlaceholder',
+                              'Answer in your own words — sends as a chat message'
+                            )
+                    }
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50"
                   />
                 </>
@@ -246,32 +308,89 @@ export function NativeChatQuestionCard({
   )
 }
 
+/** The highlighted option's example snippet, rendered as markdown in a monospace
+ *  box to match the AskUserQuestion tool's documented contract for the field.
+ *  Beside the option list it is a framed well; stacked under one option it is a
+ *  flush detail region indented to that option's text column. Carries no
+ *  disclosure affordance in either mode — the highlight follows hover, so
+ *  anything that read as expandable would invite a click that does nothing. */
+function PreviewPanel({ preview }: { preview?: string }): React.JSX.Element {
+  return (
+    <div
+      data-slot="question-preview"
+      // Stacked, the left inset lands on the option label's text column (row
+      // border + padding + badge + gap), past the number badge.
+      className="min-w-0 self-stretch pr-3.5 pb-2.5 pl-13 @2xl/question:relative @2xl/question:h-full @2xl/question:border-l @2xl/question:border-border/60 @2xl/question:pt-2.5 @2xl/question:pl-3.5"
+    >
+      {/* Beside the list the well is lifted out of flow, so which preview is
+          showing cannot feed back into the grid's track sizing — swapping
+          previews must not resize the card. */}
+      <div className="min-w-0 overflow-hidden bg-muted/40 @2xl/question:absolute @2xl/question:inset-x-3.5 @2xl/question:inset-y-2.5 @2xl/question:rounded-md @2xl/question:border @2xl/question:border-border/60">
+        {preview ? (
+          <CommentMarkdown
+            content={preview}
+            className={cn(
+              'max-h-[40vh] overflow-auto p-2.5 font-mono text-xs text-foreground scrollbar-sleek @2xl/question:max-h-full',
+              // The compact variant emits paragraphs as inline spans and caps its
+              // own code blocks; blocking the spans keeps line structure, and
+              // releasing the cap lets this frame's height tier govern scrolling.
+              '[&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-2',
+              '[&_pre]:my-1 [&_pre]:max-h-none [&_pre]:bg-transparent [&_pre]:p-0 [&_pre]:text-xs',
+              '[&_code]:text-xs'
+            )}
+          />
+        ) : (
+          <p className="p-2.5 text-xs text-muted-foreground">
+            {translate('components.native-chat.question.noPreview', 'This option has no preview.')}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function OptionRow({
   badge,
   label,
   description,
   selected,
+  highlighted,
   disabled,
-  onSelect
+  onSelect,
+  onHighlight,
+  dividerAbove
 }: {
   badge: string
   label: string
   description?: string
   selected: boolean
+  highlighted: boolean
   disabled: boolean
   onSelect: () => void
+  onHighlight: () => void
+  dividerAbove: boolean
 }): React.JSX.Element {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onSelect}
+      onMouseEnter={onHighlight}
+      onFocus={onHighlight}
       // Selection is otherwise only the visual check/badge swap; expose it to
       // assistive tech.
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
-        selected ? 'bg-accent' : 'hover:bg-accent'
+        // The inline left border is transparent when idle so the row's text
+        // never shifts as the highlight moves.
+        'flex w-full items-start gap-3 border-l-2 border-l-transparent px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
+        // Grid children cannot use the list's divide-y once the preview splits
+        // into a second column.
+        dividerAbove && 'border-t border-border/60',
+        selected || highlighted ? 'bg-accent' : 'hover:bg-accent',
+        // Ties the row to the preview it drives, which is otherwise a full-height
+        // cell beside the whole list.
+        highlighted && 'border-l-ring'
       )}
     >
       <span

@@ -3,7 +3,8 @@ import {
   isNativeChatSupportedAgent,
   nativeChatRequiresLocalTranscript,
   resolveNativeChatTranscriptAgent,
-  shouldStepNativeChatAskAnswer
+  shouldStepNativeChatAskAnswer,
+  supportsNativeChatAnsweredInference
 } from './native-chat-agent-support'
 
 describe('resolveNativeChatTranscriptAgent', () => {
@@ -63,5 +64,35 @@ describe('shouldStepNativeChatAskAnswer', () => {
     expect(shouldStepNativeChatAskAnswer('cursor')).toBe(false)
     expect(shouldStepNativeChatAskAnswer(null)).toBe(false)
     expect(shouldStepNativeChatAskAnswer(undefined)).toBe(false)
+  })
+})
+
+describe('supportsNativeChatAnsweredInference', () => {
+  it('covers only the agents the question-answered inference accepts', () => {
+    expect(supportsNativeChatAnsweredInference('claude')).toBe(true)
+    expect(supportsNativeChatAnsweredInference('openclaude')).toBe(false)
+    expect(supportsNativeChatAnsweredInference('grok')).toBe(false)
+    expect(supportsNativeChatAnsweredInference('omp')).toBe(false)
+    expect(supportsNativeChatAnsweredInference('cursor')).toBe(false)
+    expect(supportsNativeChatAnsweredInference(null)).toBe(false)
+    expect(supportsNativeChatAnsweredInference(undefined)).toBe(false)
+  })
+
+  // Codex steps its selector like Claude but resolves its own ask through a
+  // post-tool hook; both inference gates reject a non-Claude payload.
+  it('excludes Codex even though it steps the answer', () => {
+    expect(shouldStepNativeChatAskAnswer('codex')).toBe(true)
+    expect(supportsNativeChatAnsweredInference('codex')).toBe(false)
+  })
+
+  // resolveHookPayloadAgentType keeps an OpenClaude pane's status payload at
+  // 'openclaude' even though it steps its answer like Claude (STA-1860); both
+  // inference gates compare that literal value and reject anything but
+  // 'claude', so the predicate must reject it too even though OpenClaude's
+  // transcript resolves to 'claude' for parsing purposes.
+  it('excludes OpenClaude even though it resolves to the Claude transcript format', () => {
+    expect(shouldStepNativeChatAskAnswer('openclaude')).toBe(true)
+    expect(resolveNativeChatTranscriptAgent('openclaude')).toBe('claude')
+    expect(supportsNativeChatAnsweredInference('openclaude')).toBe(false)
   })
 })

@@ -233,6 +233,12 @@ export function NativeChatToolRun({
                       {member.arg ? (
                         <span className="text-muted-foreground/70">{` ${member.arg}`}</span>
                       ) : null}
+                      {member.declinedQuestion ? (
+                        <span className="text-destructive">{` ${translate(
+                          'components.native-chat.tool.declinedQuestion',
+                          NATIVE_CHAT_TOOL_ACTIVITY_COPY.declinedQuestion
+                        )}`}</span>
+                      ) : null}
                     </span>
                   </Fragment>
                 ))}

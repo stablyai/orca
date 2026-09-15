@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAskAnswerKeys,
+  buildAskChatRowKeys,
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   parseApprovalFromStatus,
   parseAskFromStatus,
   parseInteractivePrompt,
+  routeAskAnswer,
   type AskPrompt
 } from './native-chat-interactive-prompt'
 
@@ -77,6 +79,54 @@ describe('parseAskFromStatus', () => {
     )
     expect(prompt?.questions).toHaveLength(1)
     expect(prompt?.questions[0]?.question).toBe('ok')
+  })
+
+  it('surfaces preview presence and text per option, dropping empty previews', () => {
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [
+          {
+            question: 'q',
+            options: [
+              { label: 'A', preview: 'const x = 1' },
+              { label: 'B' },
+              { label: 'C', preview: '' }
+            ]
+          }
+        ]
+      })
+    )
+    expect(prompt?.questions[0]?.options).toEqual([
+      { label: 'A', hasPreview: true, preview: 'const x = 1' },
+      { label: 'B' },
+      { label: 'C' }
+    ])
+  })
+
+  it('sets hasPreview on exactly the options it gives preview text to', () => {
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [
+          {
+            question: 'q',
+            options: [{ label: 'A', preview: 'x' }, { label: 'B' }, { label: 'C', preview: '' }]
+          }
+        ]
+      })
+    )
+    for (const option of prompt?.questions[0]?.options ?? []) {
+      expect(option.hasPreview === true).toBe(option.preview !== undefined)
+    }
+  })
+
+  it('keeps a multi-line preview snippet intact', () => {
+    const snippet = 'function greet() {\n  return "hi"\n}'
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [{ question: 'q', options: [{ label: 'A', preview: snippet }] }]
+      })
+    )
+    expect(prompt?.questions[0]?.options[0]?.preview).toBe(snippet)
   })
 })
 
@@ -179,6 +229,20 @@ const single = (options: string[], multiSelect = false): AskPrompt => ({
   questions: [{ question: 'q', multiSelect, options: options.map((label) => ({ label })) }]
 })
 
+/** A question where one option carries a preview snippet, switching Claude's
+ *  selector to the list+preview layout that needs an explicit Enter to commit. */
+const singleWithPreview = (options: string[]): AskPrompt => ({
+  questions: [
+    {
+      question: 'q',
+      multiSelect: false,
+      options: options.map((label, i) =>
+        i === 0 ? { label, hasPreview: true, preview: 'snippet' } : { label }
+      )
+    }
+  ]
+})
+
 describe('buildAskAnswerKeys', () => {
   it('single-select: sends the picked option NUMBER (not the label), no trailing Enter', () => {
     // STA-1860 regression: picking the 2nd option must deliver the 2nd option.
@@ -202,6 +266,45 @@ describe('buildAskAnswerKeys', () => {
     expect(
       buildAskAnswerKeys(single(['Apple', 'Banana', 'Cherry'], true), [{ indices: [0, 2] }])
     ).toEqual([{ raw: '1' }, { raw: '3' }, { raw: '\x1b[C' }, { raw: '\r' }])
+  })
+
+  it('multi-select plus a note: arrows to the free-text row, then walks out through Submit', () => {
+    // Case 2.2. A digit toggles the free-text row's checkbox without opening its
+    // editor, so the row is reached by arrowing down past every option from the
+    // initial highlight (digit toggles leave it on row 1). Enter opens the field;
+    // Enter inside it would uncheck the row and discard the note, so the exit is
+    // DOWN onto Submit, Enter, then Enter on the review page.
+    expect(
+      buildAskAnswerKeys(single(['Rust', 'Swift', 'TypeScript'], true), [
+        { indices: [0, 2], other: 'some note' }
+      ])
+    ).toEqual([
+      { raw: '1' },
+      { raw: '3' },
+      { raw: `${ESC}[B` },
+      { raw: `${ESC}[B` },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { text: 'some note' },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('multi-select plus a note: the arrow count follows the option count', () => {
+    expect(
+      buildAskAnswerKeys(single(['Rust', 'Swift'], true), [{ indices: [1], other: 'note' }])
+    ).toEqual([
+      { raw: '2' },
+      { raw: `${ESC}[B` },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { text: 'note' },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { raw: '\r' }
+    ])
   })
 
   it('multi-question single-select: option numbers auto-advance, one final submit Enter', () => {
@@ -238,6 +341,251 @@ describe('buildAskAnswerKeys', () => {
 
   it('is empty when nothing is answered', () => {
     expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [] }])).toEqual([])
+  })
+
+  it('single-question preview selector: appends Enter after the option number to commit it', () => {
+    // #16865: a digit alone only moves the highlight in the list+preview layout;
+    // without this Enter the answer is silently dropped.
+    expect(buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [1] }])).toEqual([
+      { raw: '2' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('single-question preview selector: appends Enter regardless of which option is picked', () => {
+    // The preview layout is a property of the whole selector, not the chosen row.
+    expect(buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [0] }])).toEqual([
+      { raw: '1' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('preview selector option plus free text: annotates the row, then escapes the field to commit', () => {
+    // The preview layout has no "Type something" row (upstream
+    // anthropics/claude-code#27348, closed "not planned"); `n` opens a note on
+    // the selected row. Enter inside that field submits the question as
+    // notes-only and loses the row, so ESC leaves the field with the note kept
+    // and the trailing Enter commits the selection and the note together.
+    expect(
+      buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [
+        { indices: [1], other: 'but only in JS' }
+      ])
+    ).toEqual([{ raw: '2' }, { raw: 'n' }, { text: 'but only in JS' }, { raw: ESC }, { raw: '\r' }])
+  })
+
+  it('preview selector free text with no pick: emits nothing', () => {
+    // Notes attach to a selected option, so there is no keystroke sequence for
+    // this input. The card prevents it; the builder refuses to invent a pick.
+    expect(
+      buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
+    ).toEqual([])
+  })
+
+  it('preview selector: an unanswered lone question emits nothing', () => {
+    expect(buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [] }])).toEqual([])
+  })
+
+  it('plain selector free text: no extra Enter before the text', () => {
+    expect(
+      buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
+    ).toEqual([{ raw: '3' }, { text: 'Zebra' }, { raw: '\r' }])
+  })
+
+  it('single-question plain selector: unchanged, no Enter appended', () => {
+    expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [1] }])).toEqual([
+      { raw: '2' }
+    ])
+  })
+
+  it('multi-question with a preview single-select answer: Enter follows that question’s digit, plus the existing final submit Enter', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        {
+          question: 'q1',
+          multiSelect: false,
+          options: [
+            { label: 'Tabs', hasPreview: true, preview: '\tindented' },
+            { label: 'Spaces', hasPreview: true, preview: '    indented' }
+          ]
+        },
+        { question: 'q2', multiSelect: false, options: [{ label: 'Apple' }, { label: 'Banana' }] }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [1] }, { indices: [0] }])).toEqual([
+      { raw: '2' },
+      { raw: '\r' },
+      { raw: '1' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('multi-select with previews: dispatches as the plain checkbox layout', () => {
+    // The selector renders the plain checkbox layout whenever multiSelect is
+    // true, even when every option carries a preview, and never displays the
+    // previews — so multiSelect is tested before the preview layout.
+    const prompt: AskPrompt = {
+      questions: [
+        {
+          question: 'q',
+          multiSelect: true,
+          options: [
+            { label: 'A', hasPreview: true },
+            { label: 'B', hasPreview: true }
+          ]
+        }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [0], other: 'Zebra' }])).toEqual([
+      { raw: '1' },
+      { raw: `${ESC}[B` },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { text: 'Zebra' },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('multi-select with previews and no note: plain checkbox toggles and the Submit tab', () => {
+    // Case 4.1.
+    const prompt: AskPrompt = {
+      questions: [
+        {
+          question: 'q',
+          multiSelect: true,
+          options: [
+            { label: 'A', hasPreview: true },
+            { label: 'B', hasPreview: true },
+            { label: 'C', hasPreview: true }
+          ]
+        }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [0, 1] }])).toEqual([
+      { raw: '1' },
+      { raw: '2' },
+      { raw: '\x1b[C' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('never emits a row digit the layout does not have', () => {
+    // An out-of-range digit is swallowed with no redraw, so a following Enter
+    // commits the untouched first option. The preview layout numbers only its
+    // options, so its free-text row does not exist at options.length + 1.
+    const previewKeys = buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [
+      { indices: [], other: 'Zebra' }
+    ])
+    expect(previewKeys).toEqual([])
+
+    const everyDigit = (groups: ReturnType<typeof buildAskAnswerKeys>): string[] =>
+      groups.flatMap((group) => ('raw' in group && /^\d$/.test(group.raw) ? [group.raw] : []))
+
+    // Plain single-select numbers its options plus the "Type something" row.
+    expect(
+      everyDigit(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }]))
+    ).toEqual(['3'])
+    // Plain multi-select reaches its free-text row by arrowing, never by digit.
+    expect(
+      everyDigit(
+        buildAskAnswerKeys(single(['Rust', 'Swift', 'TypeScript'], true), [
+          { indices: [0, 2], other: 'some note' }
+        ])
+      )
+    ).toEqual(['1', '3'])
+  })
+})
+
+describe('buildAskChatRowKeys', () => {
+  it('plain single-select: the row after "Type something" selects and commits', () => {
+    expect(buildAskChatRowKeys(single(['Zed', 'Orca', 'Vim']).questions[0]!)).toEqual([
+      { raw: '5' }
+    ])
+  })
+
+  it('plain multi-select: the same numbered row, selected by its digit', () => {
+    // A digit on this row selects it outright; unlike the option rows it does
+    // not toggle a checkbox, and the selector closes on the keystroke.
+    expect(
+      buildAskChatRowKeys(single(['Rust', 'Swift', 'TypeScript'], true).questions[0]!)
+    ).toEqual([{ raw: '5' }])
+  })
+
+  it('preview layout: arrows past the last option to the unnumbered row', () => {
+    // The preview layout leaves this row unnumbered below the divider, so it is
+    // reached by arrowing down from the initial highlight on the first option.
+    expect(
+      buildAskChatRowKeys(singleWithPreview(['Tabs', 'Spaces', 'Mixed']).questions[0]!)
+    ).toEqual([{ raw: `${ESC}[B` }, { raw: `${ESC}[B` }, { raw: `${ESC}[B` }, { raw: '\r' }])
+  })
+})
+
+describe('routeAskAnswer', () => {
+  it('keeps a pick and its note on the selector, with nothing for chat', () => {
+    const routing = routeAskAnswer(singleWithPreview(['Tabs', 'Spaces']), [
+      { indices: [1], other: 'but only in JS' }
+    ])
+    expect(routing.selectorSelections).toEqual([{ indices: [1], other: 'but only in JS' }])
+    expect(routing.chatText).toBe('')
+    expect(routing.rejectsPrompt).toBe(false)
+  })
+
+  it('routes text with no pick to chat and rejects the prompt', () => {
+    const routing = routeAskAnswer(singleWithPreview(['Tabs', 'Spaces']), [
+      { indices: [], other: 'neither, use whatever the file already uses' }
+    ])
+    expect(routing.selectorSelections).toEqual([{ indices: [], other: '' }])
+    expect(routing.chatText).toBe('neither, use whatever the file already uses')
+    expect(routing.rejectsPrompt).toBe(true)
+  })
+
+  it('submits the picked question and sends the stranded one to chat', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'Indent?', multiSelect: false, options: [{ label: 'Tabs' }] },
+        { question: 'Quotes?', multiSelect: false, options: [{ label: 'Single' }] }
+      ]
+    }
+    const routing = routeAskAnswer(prompt, [
+      { indices: [0] },
+      { indices: [], other: 'whichever the linter wants' }
+    ])
+    expect(routing.selectorSelections).toEqual([
+      { indices: [0], other: '' },
+      { indices: [], other: '' }
+    ])
+    // The question is named so the reply stands on its own in the transcript.
+    expect(routing.chatText).toBe('Quotes?\nwhichever the linter wants')
+    expect(routing.rejectsPrompt).toBe(false)
+  })
+
+  it('joins several stranded questions into one chat message', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'Indent?', multiSelect: false, options: [{ label: 'Tabs' }] },
+        { question: 'Quotes?', multiSelect: false, options: [{ label: 'Single' }] }
+      ]
+    }
+    const routing = routeAskAnswer(prompt, [
+      { indices: [], other: 'tabs please' },
+      { indices: [], other: 'single' }
+    ])
+    expect(routing.chatText).toBe('Indent?\ntabs please\n\nQuotes?\nsingle')
+    expect(routing.rejectsPrompt).toBe(true)
+  })
+
+  it('leaves a lone question’s text unlabelled', () => {
+    const routing = routeAskAnswer(single(['Tabs', 'Spaces']), [
+      { indices: [], other: 'no strong opinion' }
+    ])
+    expect(routing.chatText).toBe('no strong opinion')
+  })
+
+  it('has nothing to route when nothing was entered', () => {
+    const routing = routeAskAnswer(single(['Tabs', 'Spaces']), [{ indices: [] }])
+    expect(routing.chatText).toBe('')
+    expect(routing.rejectsPrompt).toBe(false)
   })
 })
 

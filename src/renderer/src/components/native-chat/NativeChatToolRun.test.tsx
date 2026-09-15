@@ -49,6 +49,47 @@ describe('NativeChatToolRun', () => {
     expect(screen.queryByTitle('{"file_path":"src/index.ts","offset":10}')).toBeNull()
   })
 
+  it('marks a declined question in the collapsed run header', () => {
+    // Record ordering measured against Claude Code 2.1.266: the refusal reaches
+    // the client only as an errored result, whose body a collapsed run hides.
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'AskUserQuestion', input: { questions: [] } },
+      {
+        type: 'tool-result',
+        output: "The user doesn't want to proceed with this tool use.",
+        isError: true
+      }
+    ]
+
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
+
+    expect(runHeader(container)).toHaveTextContent('declined')
+  })
+
+  it('leaves an answered question unmarked', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'AskUserQuestion', input: { questions: [] } },
+      { type: 'tool-result', output: 'The user answered: "Which editor?"="Orca".' }
+    ]
+
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
+
+    expect(runHeader(container)).not.toHaveTextContent('declined')
+  })
+
+  it('leaves an ordinary failed tool run unmarked', () => {
+    // Failed runs stay visually neutral while collapsed; only a declined
+    // question reports a user action the neutral row would misstate.
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'shell', input: { command: 'false' }, state: 'failed' },
+      { type: 'tool-result', output: 'exit 1', isError: true }
+    ]
+
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
+
+    expect(runHeader(container)).not.toHaveTextContent('declined')
+  })
+
   it('renders structured apply_patch changes as a reviewable diff instead of JSON', () => {
     const blocks: NativeChatBlock[] = [
       {
