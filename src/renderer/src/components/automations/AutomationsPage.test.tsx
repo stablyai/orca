@@ -34,6 +34,8 @@ import { listedRow, listedExternalEntries } from './automations-page-listed-item
 import {
   makeAutomation,
   makeExternalManager,
+  makeProjectHostSetup,
+  makeRepo,
   REPO_ID,
   WORKSPACE_ID
 } from './automations-page-fixtures'
@@ -434,6 +436,46 @@ describe('AutomationsPage mutations', () => {
         destination: { selector: { kind: 'self' } }
       })
     )
+  })
+
+  it('creates one copy per extra project, each in a new workspace', async () => {
+    api.automations.list.mockResolvedValue([])
+    const second = { ...makeRepo(), id: 'repo-2', displayName: 'docs' }
+    mocks.state.repos = [makeRepo(), second]
+    mocks.repoMap.set(second.id, second)
+    mocks.state.projectHostSetups = [
+      makeProjectHostSetup(),
+      { ...makeProjectHostSetup(), id: 'setup-2', projectId: 'project-2', repoId: second.id }
+    ]
+    api.automations.create.mockImplementation(async (input: { repo: string }) =>
+      makeAutomation({ id: `a-${input.repo}`, projectId: input.repo.replace('id:', '') })
+    )
+
+    await renderPage()
+    await act(async () => {
+      mocks.listPanel?.openCreateDialog()
+    })
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...(current as Record<string, unknown>),
+        name: 'Sweep',
+        prompt: 'Do the sweep',
+        projectId: REPO_ID,
+        extraProjectIds: [second.id],
+        workspaceMode: 'new_per_run',
+        workspaceId: ''
+      }))
+    })
+    await act(async () => {
+      mocks.editorDialog?.onSave()
+    })
+
+    const created = api.automations.create.mock.calls.map((call) => call[0])
+    expect(created.map((input) => input.repo)).toEqual([`id:${REPO_ID}`, `id:${second.id}`])
+    expect(created[1]).toEqual(
+      expect.objectContaining({ name: 'Sweep', workspaceMode: 'new_per_run', baseBranch: null })
+    )
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Automation saved in 2 projects.')
   })
 
   it('refreshes after a mutation so the list reflects the write', async () => {
