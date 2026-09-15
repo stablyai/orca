@@ -1,0 +1,136 @@
+{
+  "operation": "tasks.paste-lookup",
+  "family": "tasks.paste-lookup",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "scenarioSha256": "e9d85c576adf93063a8f56d49d28869c402cad38122732b46b8ec021d25db5e3",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0b81b65669e6": {
+      "name": "github.repoSlug#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-2"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "2d9e475c68c7": {
+      "name": "github.repoSlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "forbidden",
+            "message": "no access"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "35f3e39a1c50": {
+      "cache": [
+        [
+          "repo-1",
+          {
+            "$rpc": "null"
+          }
+        ],
+        [
+          "repo-2",
+          {
+            "$rpc": "null"
+          }
+        ]
+      ],
+      "repo-slug": {
+        "$rpc": "null"
+      }
+    },
+    "5f7cab1e0f03": {
+      "name": "github.repoSlug#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-2\"}}"
+    },
+    "6530ef4dbd15": {
+      "name": "github.repoSlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "ee20a1dc39e7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "null"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-paste-lookup-slug-refused",
+    "checkpoints": [
+      {
+        "id": "refusal-is-per-repo",
+        "observation": {
+          "sender": ["2d9e475c68c7", "0b81b65669e6"],
+          "payloads": ["6530ef4dbd15", "5f7cab1e0f03"],
+          "settlements": {
+            "repo-slug": "ee20a1dc39e7"
+          },
+          "state": "35f3e39a1c50",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

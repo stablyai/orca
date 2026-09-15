@@ -486,7 +486,8 @@ describe('codex journal translation', () => {
     expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
       accepted: true
     })
-    expect(tap.tombstones).toContain('legacy:codex:session-1:turn-lifecycle%3Aturn-1')
+    // Lifecycle rows are revised in place, never tombstoned.
+    expect(tap.tombstones).toEqual([])
     // The two maps share one bounded bucket budget; this assertion documents
     // the contract for future changes even though the maps are private.
     expect(MAX_CODEX_GENERIC_BOOKKEEPING_ENTRIES).toBeGreaterThanOrEqual(

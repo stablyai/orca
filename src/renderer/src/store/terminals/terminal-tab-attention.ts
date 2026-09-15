@@ -17,7 +17,7 @@ export function createTerminalTabAttentionActions(
   | 'setTabColor'
 > {
   return {
-    markTerminalTabUnread: (tabId) => {
+    markTerminalTabUnread: (tabId, reason) => {
       const state = get()
       const ownerTab = Object.values(state.tabsByWorktree ?? {})
         .flat()
@@ -30,18 +30,18 @@ export function createTerminalTabAttentionActions(
         if (s.unreadTerminalTabs[tabId]) {
           return s
         }
-        return { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: true as const } }
+        return { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: reason } }
       })
     },
-    markTerminalPaneUnread: (paneKey) => {
+    markTerminalPaneUnread: (paneKey, reason) => {
       set((s) => {
         if (s.unreadTerminalPanes[paneKey]) {
           return s
         }
-        return { unreadTerminalPanes: { ...s.unreadTerminalPanes, [paneKey]: true as const } }
+        return { unreadTerminalPanes: { ...s.unreadTerminalPanes, [paneKey]: reason } }
       })
     },
-    markAgentCompletionPaneUnread: (paneKey) => {
+    markAgentCompletionPaneUnread: (paneKey, reason) => {
       set((s) => {
         if (s.unreadAgentCompletionPanes[paneKey]) {
           return s
@@ -49,7 +49,7 @@ export function createTerminalTabAttentionActions(
         return {
           unreadAgentCompletionPanes: {
             ...s.unreadAgentCompletionPanes,
-            [paneKey]: true as const
+            [paneKey]: reason
           }
         }
       })

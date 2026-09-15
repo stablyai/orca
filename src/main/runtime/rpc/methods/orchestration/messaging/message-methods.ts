@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import type { TaskStatus } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
@@ -19,7 +19,7 @@ import {
   TaskUpdateParams
 } from '../schemas'
 
-export const ORCHESTRATION_MESSAGE_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_MESSAGE_METHODS = [
   defineMethod({
     name: 'orchestration.reply',
     params: ReplyParams,

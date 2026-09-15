@@ -30,9 +30,8 @@ describe('worktree creation flow agent trust preflight', () => {
     expect(preflight).toContain('...(args.connectionId ? { connectionId: args.connectionId } : {})')
     expect(createFlow).toContain('repoConnectionId')
     expect(createFlow).toContain('repo.id === worktree.repoId')
-    expect(createFlow).toContain(
-      'await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)'
-    )
+    expect(createFlow).toContain('await preflightAgentTrust({')
+    expect(createFlow).toContain('connectionId: repoConnectionId')
     expect(STRUCTURED_SOURCE).toContain('await preflightAgentTrust({')
     expect(STRUCTURED_SOURCE).toContain('workspacePath: worktree.path')
   })

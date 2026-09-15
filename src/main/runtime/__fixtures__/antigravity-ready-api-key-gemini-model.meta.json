@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T04:33:14.819Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy binary 1.1.25, TUI banner 1.2.0; Gemini API key identity (no OAuth sign-in); model Gemini 3.7 Flash (Low); workspace ~",
+  "exitCode": 0
+}

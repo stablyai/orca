@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 function userMessage(id: string): NativeChatMessage {
@@ -18,17 +19,20 @@ function Harness({
   messages,
   enabled,
   isWorking = true,
+  settledTurns,
   scopeKey = 'host\0worktree\0tab-a'
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
   isWorking?: boolean
+  settledTurns?: NativeChatSettledTurns
   scopeKey?: string
 }): React.JSX.Element {
   const disclosure = useMobileNativeChatTurnDisclosure({
     messages,
     enabled,
     isWorking,
+    settledTurns,
     scopeKey
   })
   return createElement('result', { disclosure })
@@ -111,6 +115,56 @@ describe('useMobileNativeChatTurnDisclosure', () => {
         )
       })
       expect(renderer!.root.findByType('result').props.disclosure.onToggleTurn).toBe(firstHandler)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows the host-recorded duration over the locally observed one', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      const messages = [userMessage('u1')]
+      act(() => {
+        renderer = create(createElement(Harness, { messages, enabled: true }))
+      })
+      // Locally this turn ran 5s; the host says 3m 17s and the host wins.
+      vi.setSystemTime(6_000)
+      const settledTurns = new Map([['u1', { startedAt: 500, workedSeconds: 197 }]])
+      act(() => {
+        renderer?.update(
+          createElement(Harness, { messages, enabled: true, isWorking: false, settledTurns })
+        )
+      })
+      const row = renderer!.root.findByType('result').props.disclosure.resolveRow(0, messages[0])
+      expect(row.turnStatus).toEqual({ startedAt: 500, thinking: false, workedSeconds: 197 })
+      expect(row.turnKey).toBe('u1')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses local duration when the host explicitly cannot verify the end', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      const messages = [userMessage('u1')]
+      act(() => {
+        renderer = create(createElement(Harness, { messages, enabled: true }))
+      })
+      vi.setSystemTime(60_000)
+      act(() => {
+        renderer?.update(
+          createElement(Harness, {
+            messages,
+            enabled: true,
+            isWorking: false,
+            settledTurns: new Map([['u1', null]])
+          })
+        )
+      })
+      const row = renderer!.root.findByType('result').props.disclosure.resolveRow(0, messages[0])
+      expect(row.turnStatus).toBeNull()
     } finally {
       vi.useRealTimers()
     }

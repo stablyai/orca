@@ -1,4 +1,5 @@
 import type {
+  ClaudeAcquisitionAttempt,
   ClaudeAcquisitionRegistry,
   ClaudeSession,
   ClaudeSessionExit,
@@ -11,8 +12,11 @@ import {
   AgentSessionPreSpawnError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
+import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
+import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
 
 export function claudeAcquisitionCleanupError(
@@ -28,15 +32,34 @@ export function claudeAcquisitionCleanupError(
     : new AgentSessionAcquisitionExitUnprovenError(cause)
 }
 
-export function settleClaudeDispatchWaiters(session: ClaudeSession): void {
-  for (const waiter of session.dispatchWaiters.splice(0)) {
-    clearTimeout(waiter.timer)
-    waiter.resolve(null)
+export async function resolveClaudeAcquisitionError(input: {
+  error: unknown
+  sessionId: string
+  sessions: Map<string, ClaudeSession>
+  attempt: ClaudeAcquisitionAttempt
+  translator: ClaudeJournalTranslator | null
+  prompts: ClaudePromptRegistry
+}): Promise<unknown> {
+  let acquisitionError = input.error
+  if (input.sessions.get(input.sessionId)?.connection !== input.attempt.connection) {
+    input.translator?.dispose()
+    for (const prompt of input.prompts.clear()) {
+      prompt.settle(null)
+    }
+    const closed = (await input.attempt.connection?.close()) ?? true
+    if (input.attempt.connection?.exitVerdict.root === 'processless') {
+      acquisitionError = new AgentSessionPreSpawnError(input.error)
+    } else if (!closed) {
+      acquisitionError = claudeAcquisitionCleanupError(input.attempt.connection, input.error)
+    }
   }
+  return acquisitionError
 }
 
 export function settleClaudeExitedSession(session: ClaudeSession): void {
-  settleClaudeDispatchWaiters(session)
+  // The child is gone, so no replay can start these turns. Nothing else ends a
+  // waiter's life now that no deadline does.
+  retireClaudeDispatchWaiters(session)
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
   }
@@ -68,7 +91,7 @@ async function finalizeClaudePublishedSession(
   input: CloseClaudePublishedSessionInput,
   session: ClaudeSession
 ): Promise<boolean> {
-  settleClaudeDispatchWaiters(session)
+  retireClaudeDispatchWaiters(session)
   // Settle every in-flight permission callback so closing leaves no dangling promise; `null`
   // writes no response, and the SDK ignores any post-cleanup answer regardless.
   for (const prompt of session.prompts.clear()) {
@@ -109,7 +132,8 @@ async function finalizeClaudePublishedSession(
   const ended = {
     type: 'ended',
     sessionId: input.sessionId,
-    reason: 'claude session closed'
+    reason: 'claude session closed',
+    observedAt: Date.now()
   } as const
   let callbackError: unknown
   let callbackThrew = false

@@ -1,10 +1,19 @@
 import './terminal-hydration-store-test-bootstrap'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
+
+vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/runtime/sync-runtime-graph', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
+vi.mock('@/components/terminal-pane/pty-transport', () => ({
+  registerEagerPtyBuffer: vi.fn(),
+  ensurePtyDispatcher: vi.fn()
+}))
 
 describe('hydrateWorkspaceSession canonical terminal rows', () => {
   it('drops only legacy rows that duplicate canonical PTY ownership', () => {

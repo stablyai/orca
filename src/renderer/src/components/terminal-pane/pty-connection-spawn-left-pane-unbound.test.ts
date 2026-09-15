@@ -223,4 +223,50 @@ describe('fresh spawn leaves a local pane unbound', () => {
       expect.objectContaining({ reason: 'spawn-left-pane-unbound' })
     )
   })
+
+  // The other half of the observation gate for this reason. A remount for
+  // 'spawn-left-pane-unbound' heals by spawning, not by reattaching, so it
+  // reaches none of the reattach settle points. Binding a PTY IS the outcome,
+  // and reporting it is what keeps the attempt from sitting 'pending' for the
+  // whole settlement bound and blocking the tab's next recovery.
+  it('settles the tab recovery attempt as a success when the spawn binds a PTY', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const settleTerminalTabRecovery = vi.fn()
+    mockStoreState = { ...mockStoreState, settleTerminalTabRecovery } as StoreState
+    const transport = createMockTransport('pty-bound')
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ tabId: 'tab-bound-spawn' }) as never
+    )
+    await flushAsyncTicks(40)
+
+    expect(settleTerminalTabRecovery).toHaveBeenCalledWith('tab-bound-spawn', 0, 'success')
+  })
+
+  // The failure half, which already had a settle point: the same call reports
+  // 'failed' before it asks for the remount, so a spawn that keeps failing is
+  // refused as a settled failure rather than retried on the cooldown.
+  it('settles the attempt as failed before asking for the remount', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const settleTerminalTabRecovery = vi.fn()
+    mockStoreState = { ...mockStoreState, settleTerminalTabRecovery } as StoreState
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async () => null)
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ tabId: 'tab-unbound-spawn' }) as never
+    )
+    await flushAsyncTicks(40)
+
+    expect(settleTerminalTabRecovery).toHaveBeenCalledWith('tab-unbound-spawn', 0, 'failed')
+    expect(settleTerminalTabRecovery.mock.invocationCallOrder[0]).toBeLessThan(
+      requestTerminalPaneRecovery.mock.invocationCallOrder[0]
+    )
+  })
 })

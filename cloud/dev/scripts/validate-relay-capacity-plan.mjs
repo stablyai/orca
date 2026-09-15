@@ -9,7 +9,7 @@ const REHOME_CONFIG =
 
 // Only cells listed as regional rehome sources get rehome trust lines in their startup script.
 function rehomeProtocol({ regionalRehomeProtocol }) {
-  if (![0, 1, '0', '1'].includes(regionalRehomeProtocol)) {
+  if (![0, 1, 3, '0', '1', '3'].includes(regionalRehomeProtocol)) {
     throw new Error('same-cap Terraform plan has an invalid regional rehome protocol')
   }
   return Number(regionalRehomeProtocol)
@@ -43,7 +43,7 @@ export function parseCapacityPlanArguments(argv) {
     (!values['rollback-image'] ||
       !values['rehome-director-service-account'] ||
       !values['rehome-audience'] ||
-      !['0', '1'].includes(values['regional-rehome-protocol']))
+      !['0', '1', '3'].includes(values['regional-rehome-protocol']))
   ) throw new Error('same-cap validation requires rollback image and rehome trust config')
   if (values.mode !== 'same-cap-cell' && values['regional-rehome-protocol'] !== undefined) {
     throw new Error('--regional-rehome-protocol applies only to same-cap-cell validation')
@@ -227,7 +227,7 @@ function requireDesiredStartupScript(script, config) {
       `  printf 'ORCA_RELAY_CAPACITY_SERVICE_ACCOUNT=%s\\n' '${config.capacityServiceAccount}'`
     ])
   }
-  const rehomeTrusted = config.mode === 'same-cap-cell' && rehomeProtocol(config) === 1
+  const rehomeTrusted = config.mode === 'same-cap-cell' && rehomeProtocol(config) >= 1
   if (rehomeTrusted) {
     expected.push(
       [

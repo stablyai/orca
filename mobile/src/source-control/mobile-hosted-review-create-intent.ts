@@ -1,4 +1,3 @@
-import type { RpcClient } from '../transport/rpc-client'
 import { requestMobileCommitMessage } from './mobile-commit-message-ai'
 import { getStageablePaths, type MobileGitStatusResult } from './mobile-git-status'
 import { getMobilePrEligibilityReadiness } from './mobile-open-pr-prefill'
@@ -7,9 +6,10 @@ import {
   commitMobileHostedReviewStagedChanges,
   mobileHostedReviewBranchStillMatches,
   readMobileHostedReviewGitStatus,
-  sendMobileHostedReviewGitMutation
+  stageMobileHostedReviewPaths
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
+import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
 
 export type MobileHostedReviewCreateIntentProgress =
   | 'staging'
@@ -71,7 +71,7 @@ function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
 }
 
 async function resolvePrefillFromStatus(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileSourceControlRpcSender,
   worktreeId: string,
   branch: string,
   title: string,
@@ -85,7 +85,7 @@ async function resolvePrefillFromStatus(
 }
 
 async function ensureLocalChangesCommitted(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileSourceControlRpcSender,
   worktreeId: string,
   input: PrepareInput,
   currentStatus: MobileGitStatusResult | null
@@ -108,12 +108,7 @@ async function ensureLocalChangesCommitted(
   const stagePaths = getStageablePaths(currentStatus?.entries ?? [])
   if (stagePaths.length > 0) {
     input.onProgress?.('staging')
-    const staged = await sendMobileHostedReviewGitMutation(
-      client,
-      'git.bulkStage',
-      { worktree: `id:${worktreeId}`, filePaths: stagePaths },
-      'Failed to stage changes'
-    )
+    const staged = await stageMobileHostedReviewPaths(client, worktreeId, stagePaths)
     if (!staged.ok) {
       return staged
     }
@@ -189,7 +184,7 @@ async function ensureLocalChangesCommitted(
 }
 
 export async function prepareMobileHostedReviewCreateIntent(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileSourceControlRpcSender,
   worktreeId: string,
   input: PrepareInput
 ): Promise<MobileHostedReviewCreateIntentOutcome> {

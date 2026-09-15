@@ -11,6 +11,10 @@ import {
   type RelayAssignRateGate
 } from './relay-assign-rate-gate'
 import type { RelayRegion } from './relay-region-preference'
+import {
+  RelayRegionCorrectionResponseSchema,
+  type RelayRegionCorrectionRequest
+} from './relay-region-correction-protocol'
 
 const RELAY_HTTP_REQUEST_DEADLINE_MS = 15_000
 const RELAY_RETRY_AFTER_MAX_MS = 5 * 60_000
@@ -33,7 +37,9 @@ const AssignmentResponseSchema = z
     lease: z
       .string()
       .min(1)
-      .max(8 * 1024)
+      .max(8 * 1024),
+    // Optional correction must not make a healthy assignment depend on a future policy.
+    regionCorrection: RelayRegionCorrectionResponseSchema.optional().catch(undefined)
   })
   .strict()
 
@@ -133,6 +139,7 @@ type RelayAssignmentRequest = {
   relayHostId: string
   reconnect?: boolean
   preferredRegion?: RelayRegion
+  regionCorrection?: RelayRegionCorrectionRequest
   fetch?: typeof globalThis.fetch
   requestDeadlineMs?: number
   // Fencing for the throttle wait: a superseded caller aborts instead of assigning.
@@ -185,6 +192,7 @@ async function sendRelayAssignment(
     body: JSON.stringify({
       v: 1,
       relayHostId: input.relayHostId,
+      ...(input.regionCorrection ? { regionCorrection: input.regionCorrection } : {}),
       ...(input.preferredRegion ? { preferredRegion: input.preferredRegion } : {}),
       // Declares likely reconnection so the director can verify and admit
       // through its bounded fast lane instead of the placement queue.
@@ -197,6 +205,9 @@ async function sendRelayAssignment(
       gate.noteRetryAfter(rateKey, retryAfterMs)
     }
     await cancelUnreadResponseBody(response)
+    if (input.regionCorrection && response.status === 400) {
+      return await sendRelayAssignment({ ...input, regionCorrection: undefined }, gate, rateKey)
+    }
     if (input.preferredRegion && response.status === 400) {
       // A rolled-back director rejects the regional hint; preserve the
       // reconnect lane while retrying without only that field.

@@ -13,14 +13,16 @@ type ImeModifierGestureEvent = ImeKeyboardEvent & {
   shiftKey?: boolean
 }
 
-/** True when the IME, rather than Orca, owns a keyboard event. */
-export function isImeOwnedKeyboardEvent(event: object): boolean {
-  const candidate = event as ImeKeyboardEvent
+/** True when the IME, rather than Orca, owns a keyboard event. Generic so synthetic, native, and
+ * gesture events each pass their own richer shape. */
+export function isImeOwnedKeyboardEvent<KeyEvent extends ImeKeyboardEvent>(
+  event: KeyEvent
+): boolean {
   return (
-    candidate.isComposing === true ||
-    candidate.keyCode === 229 ||
-    candidate.nativeEvent?.isComposing === true ||
-    candidate.nativeEvent?.keyCode === 229
+    event.isComposing === true ||
+    event.keyCode === 229 ||
+    event.nativeEvent?.isComposing === true ||
+    event.nativeEvent?.keyCode === 229
   )
 }
 

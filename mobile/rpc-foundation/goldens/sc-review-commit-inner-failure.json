@@ -1,0 +1,89 @@
+{
+  "operation": "source-control.review-git-preparation",
+  "family": "git.review-preparation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
+  "scenarioSha256": "db1fb2a584cd806028b9be861283a63aa4836c83f61558f3d518ddbb7a59498d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "88185276c233": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "nothing staged",
+        "ok": false
+      }
+    },
+    "a96ee3f6fd5e": {
+      "committed": {
+        "error": "nothing staged",
+        "ok": false
+      },
+      "status": "unread"
+    },
+    "e9c816eee026": {
+      "name": "git.commit#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}"
+    },
+    "f29b710be334": {
+      "name": "git.commit#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "message": "recorded message",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "nothing staged",
+            "success": false
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-review-commit-inner-failure",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["f29b710be334"],
+          "payloads": ["e9c816eee026"],
+          "settlements": {
+            "commit": "88185276c233"
+          },
+          "state": "a96ee3f6fd5e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

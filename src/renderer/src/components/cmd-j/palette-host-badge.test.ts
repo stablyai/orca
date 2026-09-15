@@ -83,8 +83,7 @@ describe('getPaletteHostBadge', () => {
       repos: [{ executionHostId: 'runtime:env-1' }],
       sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'env-2' },
-      // A live status makes the runtime 'available'; without it the host reads
-      // 'disconnected' and the badge is suppressed (covered below).
+      // Only verified availability enables unfiltered host badges.
       runtimeStatusByEnvironmentId: new Map([
         [
           'env-1',
@@ -145,3 +144,19 @@ describe('getPaletteHostBadge', () => {
     expect(getPaletteHostBadge(null, hosts)).toBeNull()
   })
 })
+
+it.each(['connecting', 'blocked', 'disconnected', 'error'] as const)(
+  'does not infer reachability from %s health, but preserves explicit filter labels',
+  (health) => {
+    const hosts = buildSidebarHostOptions({
+      repos: [{ executionHostId: 'runtime:env-1' }],
+      sshTargetLabels: new Map(),
+      settings: { activeRuntimeEnvironmentId: null }
+    }).map((host) => (host.kind === 'runtime' ? { ...host, health } : host))
+    expect(getPaletteHostBadge({ connectionId: null }, hosts)).toBeNull()
+    expect(getPaletteHostBadge({ executionHostId: 'runtime:env-1' }, hosts, true)).toEqual({
+      hostId: 'runtime:env-1',
+      label: 'env-1'
+    })
+  }
+)

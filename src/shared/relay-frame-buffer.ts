@@ -7,6 +7,10 @@ export class RelayFrameBuffer {
     return this.bytes
   }
 
+  get chunkCount(): number {
+    return this.chunks.length - this.head
+  }
+
   append(chunk: Buffer): void {
     this.chunks.push(chunk)
     this.bytes += chunk.length

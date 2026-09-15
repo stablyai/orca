@@ -36,15 +36,15 @@ function measurePair(source) {
 
 const results = []
 for (const size of [8192, 16384, 32768]) {
-  for (const shape of ['no icon', 'rel without href', 'unterminated link starts']) {
+  for (const variant of ['no icon', 'rel without href', 'unterminated link starts']) {
     const source =
-      shape === 'unterminated link starts'
+      variant === 'unterminated link starts'
         ? '<link '.repeat(Math.floor(size / 6))
-        : 'a'.repeat(size) + (shape === 'rel without href' ? ' rel:"icon"' : '')
+        : 'a'.repeat(size) + (variant === 'rel without href' ? ' rel:"icon"' : '')
     assert.equal(extractIconHref(source), original(source))
     const { beforeMs, afterMs } = measurePair(source)
     results.push({
-      shape,
+      variant,
       bytes: Buffer.byteLength(source),
       beforeMs,
       afterMs,

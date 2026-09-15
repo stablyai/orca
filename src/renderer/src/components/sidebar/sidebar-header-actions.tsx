@@ -1,131 +1,104 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { FolderPlus, GitBranchPlus, Plus } from 'lucide-react'
+import React, { useCallback } from 'react'
+import { FolderPlus, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 
-function SidebarCreateMenu({
+function AddProjectButton({
   preserveWorkspaceBoardOpen
 }: {
   preserveWorkspaceBoardOpen: boolean
 }): React.JSX.Element {
   const openModal = useAppStore((s) => s.openModal)
-  const keybindings = useAppStore((s) => s.keybindings)
-  const [open, setOpen] = useState(false)
-  const menuContentRef = useRef<HTMLDivElement | null>(null)
-  // Why primary: workspace.create binds both Mod+N and Mod+Shift+N, and listing
-  // every alias in a two-row menu reads as noise rather than help.
-  const newWorktreeShortcutLabel = formatOptionalPrimaryShortcutLabel(
-    'workspace.create',
-    keybindings
+  const label = translate('auto.components.sidebar.SidebarHeader.addProject', 'Add project')
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          type="button"
+          className="text-muted-foreground"
+          aria-label={label}
+          data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+          onClick={() => openModal('add-repo')}
+        >
+          <FolderPlus className="size-3.5" strokeWidth={2.25} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
-  const boardAttr = preserveWorkspaceBoardOpen ? '' : undefined
+}
 
-  // Why query, not a ref on the item: Radix wraps each item in a roving-focus Slot,
-  // and a second ref on that child conflicts with the one the Slot already owns.
-  // Why at all: Radix highlights the first item only when opened by keyboard, so a
-  // mouse click would otherwise leave Enter with nothing to activate.
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    const frame = requestAnimationFrame(() =>
-      menuContentRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
-    )
-    return () => cancelAnimationFrame(frame)
-  }, [open])
+function NewWorkspaceButton({
+  preserveWorkspaceBoardOpen
+}: {
+  preserveWorkspaceBoardOpen: boolean
+}): React.JSX.Element {
+  const keybindings = useAppStore((s) => s.keybindings)
+  // Why primary: workspace.create binds both Mod+N and Mod+Shift+N, and listing
+  // every alias in a one-line tooltip reads as noise rather than help.
+  const shortcutLabel = formatOptionalPrimaryShortcutLabel('workspace.create', keybindings)
+  const label = translate('auto.components.sidebar.SidebarHeader.92154beb7e', 'New workspace')
 
-  // Why: the tour highlights this trigger, so the handoff has to fire from the
-  // menu item rather than the button that now only opens the menu.
+  // Why the tour handoff here: the tour highlights this button, and it is now
+  // the control that performs the action rather than one that opens a menu.
   const handleCreateWorkspace = useCallback(() => {
-    // Why: opening after Radix tears down the menu prevents its focus restoration
-    // from treating the new dialog as an outside interaction.
-    window.setTimeout(openWorkspaceCreationComposerWithTourHandoff, 0)
+    openWorkspaceCreationComposerWithTourHandoff()
   }, [])
 
   return (
-    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              type="button"
-              className="text-muted-foreground"
-              aria-label={translate('auto.components.sidebar.SidebarHeader.createMenu', 'Create')}
-              data-workspace-board-preserve-open={boardAttr}
-              data-contextual-tour-target="workspace-create-control"
-            >
-              <Plus className="size-3.5" strokeWidth={2.25} />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {translate('auto.components.sidebar.SidebarHeader.createMenu', 'Create')}
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent
-        side="bottom"
-        // Why start: the menu hangs from the button's left edge and opens rightward.
-        align="start"
-        // Keep the panel clear of the trigger: Radix opens on pointerdown, and an
-        // overlapping first item activates on the same click's pointerup.
-        sideOffset={4}
-        ref={menuContentRef}
-        className="w-52 p-1.5"
-        data-workspace-board-preserve-open={boardAttr}
-      >
-        <DropdownMenuItem
-          className="cursor-pointer gap-2.5 py-1.5"
-          onSelect={handleCreateWorkspace}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          type="button"
+          className="text-muted-foreground"
+          aria-label={label}
+          data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+          data-contextual-tour-target="workspace-create-control"
+          onClick={handleCreateWorkspace}
         >
-          {/* GitBranchPlus matches the create-workspace button on the landing screen. */}
-          <GitBranchPlus className="size-3.5" strokeWidth={2.25} />
-          {translate('auto.components.sidebar.SidebarHeader.92154beb7e', 'New workspace')}
-          {newWorktreeShortcutLabel ? (
-            <DropdownMenuShortcut>{newWorktreeShortcutLabel}</DropdownMenuShortcut>
-          ) : null}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="cursor-pointer gap-2.5 py-1.5"
-          onSelect={() => openModal('add-repo')}
-        >
-          <FolderPlus className="size-3.5" strokeWidth={2.25} />
-          {translate('auto.components.sidebar.SidebarHeader.addProject', 'Add project')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <Plus className="size-3.5" strokeWidth={2.25} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+        {shortcutLabel ? <span className="ml-1.5 text-background/60">{shortcutLabel}</span> : null}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
 export function SidebarHeaderActions({
   onWorkspaceBoardMenuOpenChange,
-  hideWorkspaceOptions = false
+  agentsViewActive = false
 }: {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
-  hideWorkspaceOptions?: boolean
+  agentsViewActive?: boolean
 }): React.JSX.Element {
   return (
-    <div className="flex shrink-0 items-center gap-1">
-      {hideWorkspaceOptions ? null : (
-        <SidebarWorkspaceOptionsMenu
-          preserveWorkspaceBoardOpen
-          onMenuOpenChange={onWorkspaceBoardMenuOpenChange}
-        />
+    <div className="flex shrink-0 items-center gap-1" data-sidebar-header-actions="">
+      {/* Why both hidden in the agents view: it lists activity, not projects. */}
+      {agentsViewActive ? null : (
+        <>
+          <SidebarWorkspaceOptionsMenu
+            preserveWorkspaceBoardOpen
+            onMenuOpenChange={onWorkspaceBoardMenuOpenChange}
+          />
+          <AddProjectButton preserveWorkspaceBoardOpen />
+        </>
       )}
-      <SidebarCreateMenu preserveWorkspaceBoardOpen />
+      <NewWorkspaceButton preserveWorkspaceBoardOpen />
     </div>
   )
 }

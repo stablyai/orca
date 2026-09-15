@@ -87,7 +87,8 @@ function scoreAgent(agent: AgentCatalogEntry, query: string): number {
   return Math.min(
     scoreCandidate(query, agent.label, 0),
     scoreCandidate(query, agent.id, 600),
-    scoreCandidate(query, agent.cmd, 650)
+    scoreCandidate(query, agent.cmd, 650),
+    ...(agent.searchAliases ?? []).map((alias) => scoreCandidate(query, alias, 650))
   )
 }
 

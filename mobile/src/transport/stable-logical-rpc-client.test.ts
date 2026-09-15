@@ -90,6 +90,7 @@ describe('stable logical RPC client', () => {
     const nextSession = new FakeSession('connecting')
     const pending = deferred<RpcResponse>()
     oldSession.sendRequest.mockReturnValue(pending.promise)
+    oldSession.close.mockImplementation(() => pending.reject(new Error('Client closed')))
     nextSession.sendRequest.mockResolvedValue(success('next'))
     const client = createStableLogicalRpcClient(oldSession, 'lan')
     const stream = vi.fn()
@@ -204,6 +205,19 @@ describe('stable logical RPC client', () => {
     await expect(request.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(
       false
     )
+  })
+
+  it('preserves a committed response when logical close wins the callback race', async () => {
+    const session = new FakeSession('connected')
+    const inFlight = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValue(inFlight.promise)
+    const client = createStableLogicalRpcClient(session, 'lan')
+    const request = client.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+
+    inFlight.resolve(success('accepted'))
+    client.close()
+
+    await expect(request).resolves.toEqual(success('accepted'))
   })
 
   it('publishes the replacement dial phases while the client is suspended', async () => {

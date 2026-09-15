@@ -68,6 +68,8 @@ jobs:
           restore-keys: |
             electron-builder-win-
 
+      # Why host-only: this job packages only for its own runner OS and
+      # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:

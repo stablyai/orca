@@ -316,7 +316,7 @@ export function removeWorkspaceLineageForFolderParent(
 }
 
 export function installMetadataLineageOperationsContext(
-  target: object,
+  target: MetadataLineageOperations,
   source: MetadataLineageOperations
 ): void {
   Object.defineProperty(target, metadataLineageOperationsContext, {

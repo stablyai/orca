@@ -213,13 +213,13 @@ function drain(iterate, data, meta) {
 }
 
 function describeFrames(iterate, data, meta) {
-  const shapes = []
+  const descriptions = []
   for (const frame of iterate(data, meta)) {
-    shapes.push(
+    descriptions.push(
       `${Buffer.from(frame.bytes).toString('base64')}|${frame.seq ?? 'u'}|${frame.opcode ?? 'u'}`
     )
   }
-  return shapes.join('\n')
+  return descriptions.join('\n')
 }
 
 const SURROGATE_PAIR = '\u{1f600}'

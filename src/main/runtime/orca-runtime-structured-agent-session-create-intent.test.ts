@@ -59,7 +59,7 @@ describe('structured agent-session create intent', () => {
       variable: 'CODEX_HOME',
       path: '/accounts/selected/home'
     })
-    expect(intent.options).toEqual({ model: 'gpt-5.6-sol', effort: 'medium' })
+    expect(intent.options).toEqual({ model: 'gpt-5.6-sol', effort: 'medium', fastMode: 'true' })
   })
 
   it('pins the configured Claude launch home without Codex launch preparation', async () => {
@@ -116,7 +116,7 @@ describe('structured agent-session create intent', () => {
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/configured/claude-home'
     })
-    expect(intent.options).toEqual({ model: 'opus', effort: 'high' })
+    expect(intent.options).toEqual({ model: 'opus', effort: 'high', fastMode: 'true' })
   })
 
   it('uses the managed Claude launch home before falling back to ~/.claude', async () => {

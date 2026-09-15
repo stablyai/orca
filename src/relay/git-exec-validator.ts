@@ -96,7 +96,7 @@ const DIFF_ALLOWED_FLAGS = new Set([
 // only those two exact shapes, held to the same remote-name and URL rules the
 // relay already enforces on every pushTarget-carrying RPC. Everything else --
 // set-url, rename, prune, flags before the action -- stays blocked.
-function isAllowedRemoteWriteShape(args: string[]): boolean {
+function isAllowedRemoteWriteInvocation(args: string[]): boolean {
   if (args[1] === 'add') {
     return args.length === 4 && isSafeGitRemoteName(args[2]) && isSafePushTargetRemoteUrl(args[3])
   }
@@ -197,7 +197,7 @@ export function validateGitExecArgs(args: string[]): void {
     if (
       remoteSubcmd &&
       REMOTE_WRITE_SUBCOMMANDS.has(remoteSubcmd) &&
-      !isAllowedRemoteWriteShape(args)
+      !isAllowedRemoteWriteInvocation(args)
     ) {
       throw new Error('Destructive git remote operations are not allowed via exec')
     }

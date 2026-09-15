@@ -58,10 +58,26 @@ describe('resolveAgentLaunchRoute', () => {
     )
   })
 
-  it('keeps editable drafts on the terminal-backed native chat path', () => {
+  it('routes editable drafts to the structured chat composer', () => {
     expect(route({ launchText: 'reviewable context', promptDelivery: 'draft' })).toBe(
-      'legacy-native-chat'
+      'structured-native-chat'
     )
+  })
+
+  // Why: the terminal mirror gate caps a draft at forty lines because a TUI cannot clear more;
+  // the structured composer has no such limit and must be chosen before that gate runs.
+  it('routes a draft longer than the terminal mirror cap to structured chat', () => {
+    const sixtyLineDraft = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')
+    expect(route({ launchText: sixtyLineDraft, promptDelivery: 'draft' })).toBe(
+      'structured-native-chat'
+    )
+    expect(
+      route({
+        launchText: sixtyLineDraft,
+        promptDelivery: 'draft',
+        settings: { ...settings, experimentalStructuredNativeChat: false }
+      })
+    ).toBe('terminal-tui')
   })
 
   it('preserves toggle-off and terminal-default behavior', () => {

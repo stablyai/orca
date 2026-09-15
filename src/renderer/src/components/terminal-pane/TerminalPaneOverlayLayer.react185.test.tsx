@@ -174,7 +174,8 @@ describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', ()
       capturedResizeCallback?.()
     })
 
-    expect(terminalPaneRenderCount - rendersAfterMount).toBe(1)
+    // Geometry updates belong to the host and do not rerender terminal content.
+    expect(terminalPaneRenderCount - rendersAfterMount).toBe(0)
     expect(overlay?.style.top).toBe('34px')
     expect(overlay?.style.width).toBe('760px')
   })

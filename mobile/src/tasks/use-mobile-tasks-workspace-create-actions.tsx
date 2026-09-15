@@ -1,3 +1,4 @@
+import { settingsRead } from '../transport/settings-read-operations'
 import type { WorkspaceSshStateModel } from './use-mobile-tasks-workspace-ssh-state'
 import {
   WORKTREE_CREATE_TIMEOUT_MS,
@@ -10,13 +11,18 @@ import {
   useCallback,
   wasSetupHookPreviouslyApproved
 } from './mobile-tasks-dependencies'
-import {
-  type ActionableTaskItem,
-  type GitPushTarget,
-  type RuntimeTaskSettings,
-  type SetupDecision,
-  isSuccess
+import type {
+  ActionableTaskItem,
+  GitPushTarget,
+  RuntimeTaskSettings,
+  SetupDecision
 } from './mobile-tasks-legacy-foundation'
+import type { WorkspaceCreateParams } from './workspace-create-params'
+import {
+  worktreeCreateRun,
+  worktreeMrBaseResolve,
+  worktreePrBaseResolve
+} from './mobile-workspace-create-operations'
 
 export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateModel) {
   const {
@@ -72,11 +78,11 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         await ensureWorkspaceSshReady(targetRepo)
         let latestRuntimeTaskSettings = runtimeTaskSettings
         try {
-          const settingsResponse = await client.sendRequest('settings.get')
-          if (isSuccess(settingsResponse)) {
-            latestRuntimeTaskSettings = ((
-              settingsResponse.result as { settings?: RuntimeTaskSettings }
-            ).settings ?? {}) as RuntimeTaskSettings
+          const settingsReply = await settingsRead.request(client)
+          const settingsResult = settingsRead.interpret(settingsReply)
+          if (settingsResult.accepted) {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+            latestRuntimeTaskSettings = (settingsResult.value ?? {}) as RuntimeTaskSettings
             setRuntimeTaskSettings(latestRuntimeTaskSettings)
           }
         } catch {
@@ -153,7 +159,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         const trimmedWorkspaceName = workspaceNameOverride?.trim() ?? ''
         const nameIsAutoManaged =
           !trimmedWorkspaceName || trimmedWorkspaceName === workspaceLastAutoName
-        let params: Record<string, unknown>
+        let params: WorkspaceCreateParams
         if (item.provider === 'github') {
           const source = item.source
           let prStartPoint: { baseBranch: string; pushTarget?: GitPushTarget } | undefined
@@ -163,8 +169,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               baseBranchOverride
             })
           ) {
-            const response = await client.sendRequest(
-              'worktree.resolvePrBase',
+            const reply = await worktreePrBaseResolve.request(
+              client,
               {
                 repo: `id:${source.repoId}`,
                 prNumber: source.number,
@@ -175,10 +181,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               },
               { timeoutMs: 30_000 }
             )
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            const result = response.result as
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+            const result = worktreePrBaseResolve.interpret(reply) as
               | { baseBranch: string; pushTarget?: GitPushTarget }
               | { error: string }
             if ('error' in result) {
@@ -208,8 +212,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               baseBranchOverride
             })
           ) {
-            const response = await client.sendRequest(
-              'worktree.resolveMrBase',
+            const reply = await worktreeMrBaseResolve.request(
+              client,
               {
                 repo: `id:${source.repoId}`,
                 mrIid: source.number,
@@ -220,10 +224,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               },
               { timeoutMs: 30_000 }
             )
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            const result = response.result as
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+            const result = worktreeMrBaseResolve.interpret(reply) as
               | { baseBranch: string; pushTarget?: GitPushTarget }
               | { error: string }
             if ('error' in result) {
@@ -258,13 +260,11 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             nameIsAutoManaged
           })
         }
-        const response = await client.sendRequest('worktree.create', params, {
+        const createReply = await worktreeCreateRun.request(client, params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
         })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = worktreeCreateRun.interpret(createReply) as {
           worktree: { id: string; displayName?: string }
           warning?: string
         }

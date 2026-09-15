@@ -82,8 +82,17 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
   })
 }
 
+async function abandonHost(abandonedHost: StructuredAgentSessionHost): Promise<void> {
+  abandonedHost['runtimeState'].stopLeaseRenewal()
+  abandonedHost['holds'].dispose()
+  await Promise.all(
+    [...abandonedHost['sessions'].values()].map((session) => session.journal.close())
+  )
+  abandonedHost['sessions'].clear()
+}
+
 async function reopenStore(): Promise<void> {
-  await host.flushAllStreamedEvents()
+  await abandonHost(host)
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
 }
 
@@ -110,8 +119,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await host.flushAllStreamedEvents()
-  await Promise.all([...supersededHosts].map((superseded) => superseded.flushAllStreamedEvents()))
+  await abandonHost(host)
+  await Promise.all([...supersededHosts].map(abandonHost))
   supersededHosts.clear()
   await Promise.all([...spawnedOwners].map((child) => stopOwner(child)))
   await rm(root, { recursive: true, force: true })
