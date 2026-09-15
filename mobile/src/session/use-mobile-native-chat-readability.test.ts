@@ -20,12 +20,25 @@ describe('useMobileNativeChatReadability', () => {
 
   async function mount(
     connectionId: string | null,
-    worktreeId = 'repo::/worktree'
+    worktreeId = 'repo::/worktree',
+    options: { rejectRequest?: boolean; folderWorkspaces?: unknown } = {}
   ): Promise<ReturnType<typeof vi.fn>> {
-    const sendRequest = vi.fn().mockResolvedValue({
-      ok: true,
-      result: { repos: [{ id: 'repo', connectionId }] }
-    })
+    const sendRequest = options.rejectRequest
+      ? vi.fn().mockRejectedValue(new Error('method unavailable'))
+      : vi.fn().mockImplementation((method: string) =>
+          Promise.resolve({
+            ok: true,
+            result:
+              method === 'folderWorkspace.list'
+                ? {
+                    folderWorkspaces:
+                      'folderWorkspaces' in options
+                        ? options.folderWorkspaces
+                        : [{ id: 'folder-1', connectionId }]
+                  }
+                : { repos: [{ id: 'repo', connectionId }] }
+          })
+        )
     const client = {
       sendRequest
     } as unknown as RpcClient
@@ -52,6 +65,69 @@ describe('useMobileNativeChatReadability', () => {
 
   it('fails closed for Model-A SSH transcript hosts', async () => {
     await mount('model-a-ssh')
+    expect(readable).toBe(false)
+  })
+
+  it('resolves folder-workspace transcript readability from the folder catalog', async () => {
+    const localRequest = await mount(null, 'folder:folder-1')
+    expect(readable).toBe(true)
+    expect(localRequest).toHaveBeenCalledWith('folderWorkspace.list')
+    act(() => renderer?.unmount())
+    renderer = null
+
+    await mount('runtime-ssh-environment', 'folder:folder-1')
+    expect(readable).toBe(true)
+    act(() => renderer?.unmount())
+    renderer = null
+
+    await mount('model-a-ssh', 'folder:folder-1')
+    expect(readable).toBe(false)
+  })
+
+  it('fails closed when the folder catalog cannot resolve the route', async () => {
+    await mount(null, 'folder:missing')
+    expect(readable).toBe(false)
+    act(() => renderer?.unmount())
+    renderer = null
+
+    const unavailableRequest = await mount(null, 'folder:folder-1', { rejectRequest: true })
+    expect(readable).toBe(false)
+    expect(unavailableRequest).toHaveBeenCalledWith('folderWorkspace.list')
+  })
+
+  it('fails closed for malformed folder routes without requesting the catalog', async () => {
+    const sendRequest = await mount(null, 'folder:', {
+      folderWorkspaces: [{ id: '', connectionId: null }]
+    })
+
+    expect(readable).toBe(false)
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('rejects duplicate folder catalog IDs regardless of order', async () => {
+    await mount(null, 'folder:folder-1', {
+      folderWorkspaces: [
+        { id: 'folder-1', connectionId: null },
+        { id: 'folder-1', connectionId: 'model-a-ssh' }
+      ]
+    })
+    expect(readable).toBe(false)
+    act(() => renderer?.unmount())
+    renderer = null
+
+    await mount(null, 'folder:folder-1', {
+      folderWorkspaces: [
+        { id: 'folder-1', connectionId: 'model-a-ssh' },
+        { id: 'folder-1', connectionId: null }
+      ]
+    })
+    expect(readable).toBe(false)
+  })
+
+  it('rejects folder catalog matches without explicit authority', async () => {
+    await mount(null, 'folder:folder-1', {
+      folderWorkspaces: [{ id: 'folder-1' }]
+    })
     expect(readable).toBe(false)
   })
 
