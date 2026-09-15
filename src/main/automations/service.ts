@@ -250,7 +250,10 @@ export class AutomationService {
       return
     }
     const graceMs = automation.missedRunGraceMinutes * 60 * 1000
-    if (now - scheduledFor > graceMs) {
+    // Why: grace covers app downtime, not the scheduler's own tick latency.
+    // Without subtracting tickMs, "No grace" (0 min) can never run (#11299).
+    const lateness = now - scheduledFor - this.tickMs
+    if (lateness > graceMs) {
       const missed = this.runs.createRun(automation, scheduledFor)
       this.runs.updateRun({
         runId: missed.id,
