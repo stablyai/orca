@@ -156,8 +156,7 @@ export function createMarkdownPreviewActions(
         file.worktreeId,
         `${file.relativePath} (preview)`,
         'editor',
-        false,
-        options?.targetGroupId
+        { isPreview: false, targetGroupId: options?.targetGroupId }
       )
     },
 

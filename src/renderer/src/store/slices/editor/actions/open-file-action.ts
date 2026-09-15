@@ -34,8 +34,11 @@ export function createOpenFileAction(
         editorItemWorktreeId,
         editorItemLabel,
         editorItemContentType,
-        options?.preview ?? false,
-        scratch.editorItemTargetGroupId
+        {
+          isPreview: options?.preview ?? false,
+          targetGroupId: scratch.editorItemTargetGroupId,
+          pinnedGroupId: options?.targetGroupId
+        }
       )
       if (options?.focusEditor) {
         set({

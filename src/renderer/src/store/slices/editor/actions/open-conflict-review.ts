@@ -98,15 +98,9 @@ export function createOpenConflictReview(
         return
       }
       // Why: the conflict file needs a normal editor backing tab for save/close, but selecting from Conflict Review must keep the review tab visible; restore focus after.
-      void openWorkspaceEditorItem(
-        get(),
-        absolutePath,
-        worktreeId,
-        entry.path,
-        'editor',
-        undefined,
-        reviewTab?.groupId
-      )
+      void openWorkspaceEditorItem(get(), absolutePath, worktreeId, entry.path, 'editor', {
+        targetGroupId: reviewTab?.groupId
+      })
       if (reviewTab) {
         get().activateTab?.(reviewTab.id)
       }
