@@ -32,8 +32,10 @@ vi.mock('@/runtime/runtime-worktree-selector', () => ({
 
 import {
   activateStructuredAgentSessionById,
+  activateStructuredAgentSessionForRow,
   activateStructuredAgentSessionTab
 } from './structured-agent-session-tab-activation'
+import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 
 describe('activateStructuredAgentSessionTab', () => {
   beforeEach(() => {
@@ -73,6 +75,25 @@ describe('activateStructuredAgentSessionTab', () => {
       'session.tabs.activate',
       { worktree: 'id:wt-1', tabId: 'agent-session:session-1' }
     )
+  })
+
+  it('activates a status row whose derived tab id no longer names its surface', () => {
+    // A replaced conversation reuses the superseded tab, so the local id still spells the old
+    // session while the row's key is derived from the new one.
+    expect(
+      activateStructuredAgentSessionForRow({
+        worktreeId: 'wt-1',
+        tabId: structuredAgentSessionTabId('session-1')
+      })
+    ).toBe(true)
+    expect(mocks.activateTab).toHaveBeenCalledWith('structured-tab-1', { worktreeId: 'wt-1' })
+  })
+
+  it('leaves a row whose tab id encodes no session to the caller', () => {
+    expect(activateStructuredAgentSessionForRow({ worktreeId: 'wt-1', tabId: 'worker-tab' })).toBe(
+      false
+    )
+    expect(mocks.activateTab).not.toHaveBeenCalled()
   })
 
   it('routes a provider-owned vault row through its structured session id', () => {

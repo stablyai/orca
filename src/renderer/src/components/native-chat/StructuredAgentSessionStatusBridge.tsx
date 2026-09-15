@@ -131,7 +131,7 @@ function projectStatus(
   summary: AgentSessionStatusSummary | null,
   observation: 'live' | 'unverifiable'
 ): void {
-  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const paneKey = structuredAgentSessionPaneKey(tab.entityId)
   const store = useAppStore.getState()
   // No persisted turn yet (or nothing known): the row shows no agent status at all.
   if (!summary?.status) {
@@ -190,10 +190,8 @@ function projectStatus(
       updatedAt: summary.updatedAt,
       // This ordered host feed can correct a legacy publication clock after upgrade.
       allowOlderTimestamp: true,
-      stateStartedAt:
-        desired.state !== 'done' && current?.state === desired.state
-          ? current.stateStartedAt
-          : summary.updatedAt,
+      // No `stateStartedAt`: passing one overrode the store's own rule, which is the host's. A
+      // settled row keeps its completion time, which `agentEntryCompletionAt` reads.
       evidenceObservedAt: summary.updatedAt
     },
     { tabId: tab.id, worktreeId: tab.worktreeId },
@@ -218,8 +216,17 @@ function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab })
     projectStatus(tab, summary, observation)
   }, [summary, observation, tab])
   useEffect(
-    () => () =>
-      useAppStore.getState().removeAgentStatus(structuredAgentSessionPaneKey(tab.id, tab.entityId)),
+    () => () => {
+      const state = useAppStore.getState()
+      // Two surfaces can mirror one session (the `:history-N` id collision path), and they now share
+      // one pane key. Only the last surface to leave clears the row.
+      const stillMirrored = getStructuredAgentSessionTabs(state.unifiedTabsByWorktree).some(
+        (candidate) => candidate.entityId === tab.entityId && candidate.id !== tab.id
+      )
+      if (!stillMirrored) {
+        state.removeAgentStatus(structuredAgentSessionPaneKey(tab.entityId))
+      }
+    },
     [tab.entityId, tab.id]
   )
   return null

@@ -14,7 +14,9 @@ import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
  */
 export abstract class AgentHookServerIngestStructured extends AgentHookServerIngestTerminal {
   ingestStructuredStatus(summary: AgentSessionStatusSummary): void {
-    const paneKey = structuredStatusPaneKey(summary.sessionId)
+    // The DERIVED pane key, never the orchestration bearer handle or the minted worker pane key:
+    // both of those are credentials.
+    const paneKey = structuredAgentSessionPaneKey(summary.sessionId)
     // No persisted turn yet: the chat shows nothing, so neither does any status reader.
     if (!summary.status) {
       this.dropStructuredStatus(summary.sessionId)
@@ -55,12 +57,8 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
    *  `dropStatusEntry`, not `clearPaneState`: the renderer's own bridge still owns this pane key,
    *  so a pane-status-clear would make main a second writer for it. */
   dropStructuredStatus(sessionId: string): void {
-    this.dropStatusEntry(structuredStatusPaneKey(sessionId), { preserveResumeIdentity: false })
+    this.dropStatusEntry(structuredAgentSessionPaneKey(sessionId), {
+      preserveResumeIdentity: false
+    })
   }
-}
-
-// The DERIVED pane key the renderer publishes, never the orchestration bearer handle or the minted
-// worker pane key: both of those are credentials.
-function structuredStatusPaneKey(sessionId: string): string {
-  return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
 }

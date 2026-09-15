@@ -103,7 +103,7 @@ const staleAgentRowMocks = vi.hoisted(() => ({
 }))
 
 const structuredActivationMocks = vi.hoisted(() => ({
-  activateStructuredAgentSessionTab: vi.fn()
+  activateStructuredAgentSessionForRow: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -128,7 +128,8 @@ vi.mock('../terminal-pane/stale-agent-row', () => ({
 }))
 
 vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
-  activateStructuredAgentSessionTab: structuredActivationMocks.activateStructuredAgentSessionTab
+  activateStructuredAgentSessionForRow:
+    structuredActivationMocks.activateStructuredAgentSessionForRow
 }))
 
 vi.mock('./useWorktreeAgentRows', () => ({
@@ -169,7 +170,7 @@ describe('WorktreeCardAgents activation', () => {
     mockActiveTabId = null
     mockActiveTabType = 'editor'
     capturedRowActivations = []
-    structuredActivationMocks.activateStructuredAgentSessionTab.mockImplementation(
+    structuredActivationMocks.activateStructuredAgentSessionForRow.mockImplementation(
       ({ tabId }: { tabId: string }) => mockStructuredTabIds.has(tabId)
     )
   })
@@ -195,7 +196,7 @@ describe('WorktreeCardAgents activation', () => {
     capturedRowActivations[0].onActivate(tabId, paneKey)
 
     expect(activationMocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
-    expect(structuredActivationMocks.activateStructuredAgentSessionTab).toHaveBeenCalledWith({
+    expect(structuredActivationMocks.activateStructuredAgentSessionForRow).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId
     })

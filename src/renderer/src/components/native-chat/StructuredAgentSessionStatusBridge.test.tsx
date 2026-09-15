@@ -10,6 +10,11 @@ import { buildSubagentChildRows } from '../sidebar/worktree-subagent-child-rows'
 import { resolveAttention } from '../sidebar/smart-attention'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
@@ -440,7 +445,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
   })
 
   it.each(['claude', 'codex'] as const)(
-    'sorts restored %s completions by host time and advances identical turns',
+    'sorts restored %s completions by host time and holds the completion across republishes',
     async (agent) => {
       const now = Date.now()
       mocks.store?.setState({
@@ -465,12 +470,15 @@ describe('StructuredAgentSessionStatusBridge', () => {
       act(() =>
         feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: now - 50 }) })
       )
+      // A settled session whose journal keeps moving has not completed again: `stateStartedAt` is
+      // the start of the state the row is in, and `agentEntryCompletionAt` reads it as the
+      // completion. The host writer has always held it; this is the same rule.
       expect(statuses()).toEqual([
-        expect.objectContaining({ stateStartedAt: now - 50, updatedAt: now - 50 })
+        expect.objectContaining({ stateStartedAt: now - 100, updatedAt: now - 50 })
       ])
       expect(
         resolveAttention([{ kind: 'hook', entry: statuses()[0], hasLivePty: false }], now)
-      ).toEqual({ cls: 2, attentionTimestamp: now - 50 })
+      ).toEqual({ cls: 2, attentionTimestamp: now - 100 })
     }
   )
 
@@ -503,8 +511,10 @@ describe('StructuredAgentSessionStatusBridge', () => {
     act(() =>
       feed().emit({ type: 'snapshot', sessions: [summary({ status: 'idle', updatedAt: 200 })] })
     )
+    // The corrected age is accepted as the row's `updatedAt`; the completion clock stays put
+    // because the state did not change, which is what the host writer does for every agent.
     expect(statuses()).toEqual([
-      expect.objectContaining({ state: 'done', updatedAt: 200, stateStartedAt: 200 })
+      expect.objectContaining({ state: 'done', updatedAt: 200, stateStartedAt: 900 })
     ])
     const before = mocks.store?.getState().agentStatusByPaneKey
     const calls = mocks.setAgentStatus.mock.calls.length
@@ -527,6 +537,48 @@ describe('StructuredAgentSessionStatusBridge', () => {
 
     expect(statuses()).toEqual([])
     await waitFor(() => expect(mocks.unsubscribe).toHaveBeenCalledOnce())
+  })
+
+  // PR 2a: the host writes this same row through `ingestStructuredStatus`, keyed off the session id
+  // alone. A mirrored session that collides with an occupied local id is re-hosted at
+  // `${baseId}:history-N` (`web-session-tabs-sync/terminal-surfaces.ts`); keying on that surface id
+  // gives one chat two rows once the IPC filter comes off, and the extra `:` makes the key
+  // unparseable, which drops it from every sidebar bucket.
+  it('keys a disambiguated mirrored surface on the host key for its session', async () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [{ ...structuredTab, id: `${structuredAgentSessionTabId('session-1')}:history-1` }]
+      }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
+
+    expect(statuses()).toHaveLength(1)
+    expect(statuses()[0].paneKey).toBe(structuredAgentSessionPaneKey('session-1'))
+    expect(parsePaneKey(statuses()[0].paneKey)).toMatchObject({
+      tabId: structuredAgentSessionTabId('session-1')
+    })
+  })
+
+  it('keeps one row while two surfaces mirror the same session', async () => {
+    const historyTab = {
+      ...structuredTab,
+      id: `${structuredAgentSessionTabId('session-1')}:history-1`
+    }
+    mocks.store?.setState({ unifiedTabsByWorktree: { 'wt-1': [structuredTab, historyTab] } })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
+    expect(statuses()).toHaveLength(1)
+
+    // The surviving surface still owns the shared key, so the departing one must not clear it.
+    act(() => mocks.store?.setState({ unifiedTabsByWorktree: { 'wt-1': [historyTab] } }))
+    expect(statuses()).toHaveLength(1)
+
+    act(() => mocks.store?.setState({ unifiedTabsByWorktree: { 'wt-1': [] } }))
+    expect(statuses()).toEqual([])
   })
 
   it('reconnects after the host ends the stream', async () => {

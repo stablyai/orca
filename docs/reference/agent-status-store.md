@@ -12,7 +12,7 @@ this order, each independently shippable:
 3. shared: one worktree-status rollup and one freshness rule for every reader.
 
 The PR that carries this document is PR 1a. Sections below are grouped under
-the step that delivers them; PR 1a and PR 1b have landed.
+the step that delivers them; PR 1a, PR 1b and PR 2a have landed.
 
 ## The problem this solves
 
@@ -92,14 +92,14 @@ The structured feed keeps its job of projecting a session's journal into a
 summary and streaming it to subscribers. On every publish it additionally
 ingests the summary into the hook server as a status row:
 
-| Row field                                           | From                                                                                                                                            |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `paneKey`                                           | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it |
-| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                        |
-| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                  |
-| `state`                                             | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared                                                                  |
-| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it          |
-| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                            |
+| Row field         | From                                                          |
+| ----------------- | ------------------------------------------------------------- |
+| `paneKey`         | `structuredAgentSessionPaneKey(sessionId)`, the key the renderer also derives (PR 2a made it take the session id alone); its leaf is UUID-shaped so pane-key validation accepts it |
+| `tabId`           | `structuredAgentSessionTabId(sessionId)`                      |
+| `worktreeId`      | `summary.workspaceId` (a folder workspace id is a valid value) |
+| `state`           | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared |
+| `structuredHost`  | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it |
+| prompt, tool, last message, model, provider session | the summary's fields    |
 
 Sessions with no persisted turn (`status === null`) produce no row, matching
 what the chat shows. When the host revokes live ownership the row is re-set
@@ -261,7 +261,170 @@ also retain a numeric key only when the runtime supplies the matching tab, PTY,
 and terminal handle. HTTP and relay ingress still require a stable key or a
 registered alias, and numeric rows are never persisted.
 
-## PR 2: the renderer subscribes
+## PR 2a: converge the two derivations before the filter comes off
+
+PR 1a left main and the renderer each deriving a structured row from the same
+host summary, which is safe only while the IPC filter keeps them apart. This
+step closed both divergences so PR 2b can remove the filter without one session
+rendering twice or its clock jumping. No filter came off here and no writer was
+retired.
+
+### The pane key is derived from the session id alone
+
+`structuredAgentSessionPaneKey` now takes the session id and nothing else, and
+builds `structuredAgentSessionTabId(sessionId)` itself. Main's key is unchanged;
+the renderer's three call sites (the status bridge's write and its unmount
+cleanup, and `NativeChatStructuredSession`'s read) stopped passing `tab.id`.
+
+The tab id was the wrong input, but not a simply wrong one: the trade is real in
+both directions, and the section below on readers is the other half of it.
+`web-session-tabs-sync/terminal-surfaces.ts` re-hosts a mirrored session at
+`${baseId}:history-N` when its derived id is already occupied, and the host never
+sees that suffix. Two things followed from keying on it, and both are fixed:
+
+- the renderer and main wrote different keys for one session, so removing the
+  filter would have produced two rows for one chat;
+- the key held a second `:`, which `parsePaneKey` rejects. An unparseable key is
+  dropped by `buildWorktreeAgentRows` (both the `entriesByTabId` bucket and the
+  worktree-attributed fallback), so a surface re-hosted at `:history-N` published
+  a key no reader could bucket. It now publishes the session's key like any other
+  surface.
+
+  That is narrower than a session gaining a row it did not have. The suffix is
+  only assigned when the base id is already occupied, and the occupant is
+  normally the same session's other surface — which was already publishing the
+  base key, and whose row the suffixed surface now shares rather than adds to.
+  The bridge test for a disambiguated mirrored surface pins the derivation, not
+  a reachable end state: its fixture has a suffixed surface with nothing at the
+  base id, which `buildMirroredAgentTabs` does not produce. Read it as a guard
+  on the key, not as evidence of a row the user gains.
+
+Nothing was stranded under an old key: main never wrote a suffixed key, and the
+renderer's `agentStatusByPaneKey` is in-memory, so a `:history-N` row only ever
+lived as long as the window that wrote it — and it was invisible while it did.
+
+One surface behavior needed handling. Two tabs can transiently mirror one
+session (the collision that produces the suffix), and they now share one key, so
+the status bridge's unmount cleanup no longer clears the row while another
+surface still mirrors that session.
+
+### What this converged, and what it did not
+
+The key is now derived from the session id. What the key is derived _from_ is
+not: on the replacement path the renderer's local tab id still trails the **old**
+session, so the session id in the key and the session the surface actually hosts
+disagree. So "the tab id was the wrong input" is only half the story — the tab id
+is wrong because the renderer lets it go stale, and 2a converged the key without
+converging that.
+
+The host does not have this problem, because it re-keys. `replaceConversationInSnapshot`
+(`src/main/runtime/structured-conversation-tab-replacement.ts`) sets the tab's id
+to `agent-session:${replacement.sessionId}` and renames every reference that held
+the old one — `activeTabId`, and each group's `tabOrder`, `activeTabId` and
+`recentTabIds`. `terminal-surfaces.ts` instead reuses `existing?.id`, so the
+renderer is the outlier. `/clear` and `/compact` are what mint a replacement
+session id, so this is a routine action, not an edge case.
+
+That leaves two readers to fix here, and a re-key to do elsewhere.
+
+### The key names the session, so readers resolve the surface by session
+
+A structured pane key's tab-id half is `structuredAgentSessionTabId(sessionId)`,
+not the id of the surface hosting the chat. Two readers were using it as surface
+routing, and `terminal-surfaces.ts` breaks that agreement in both of its
+id-collision paths — a conversation that _replaces_ another reuses the superseded
+tab, so the local id keeps spelling the old session while `entityId` becomes the
+new one:
+
+- `WorktreeCardAgents`'s row click resolved the tab by exact id, so a replaced
+  conversation's row did nothing at all. It now falls back to
+  `activateStructuredAgentSessionForRow`, which reads the session id back out of
+  the tab id (`structuredAgentSessionIdFromTabId`) and resolves the surface by
+  `entityId`.
+- the live-entry worktree index in `worktree-agent-row-selectors.ts` maps tab id
+  to worktree, and a `done` row is bucketed only through that index (a live row
+  still has `entry.worktreeId` to fall back on). A replaced conversation's
+  settled row therefore vanished from the sidebar. The index now registers each
+  agent-session tab under its derived session tab id as well as its local id.
+
+`structured-agent-session-projection.ts` owns both directions of the derivation,
+so no reader re-spells the prefix.
+
+This is the invariant guard, not a substitute for the re-key below: it resolves
+from the pane key, never from `entry.tabId`, so PR 2b making main the sole writer
+of that field does not decay it — and it covers the `:history-N` surface, which a
+re-key cannot, because the suffix exists precisely when the derived id is taken.
+
+### For the re-key PR: what was already measured
+
+Making the renderer's tab id follow the session, as the host's does, is the
+durable fix and belongs in its own PR ahead of this one. It was probed against
+`structured-conversation-tab-replacement.test.ts` and the `web-session-tabs-sync`
+suites (28 files / 249 tests green at the baseline) and then reverted. Do not
+re-derive this:
+
+- **Re-keying alone breaks focus continuity.** `resolveWebSessionVisibleTabId`
+  (`web-session-focus-intent.ts`) matches the sticky visible tab by exact id and
+  then falls back to `entityId`. A replacement changes both, so it resolves to
+  null and `nextActiveUnifiedTabId` falls through to the first agent tab in
+  snapshot order — in the `history: 'before'` variants that is the reopened
+  archive, so `/clear` leaves the user looking at the old conversation. The id
+  carry-forward is load-bearing for focus, which is why the code does it.
+- **The repair channel already exists.** `apply-preparation-groups.ts` builds
+  `rekeyedTabIds` for exactly this ("an entity-identical replacement ... is a
+  rename — its position and focus must carry over") and already feeds it from
+  provisional-terminal and local-editor renames. Adding agent tabs to it restored
+  correct focus in all six variants; 5 of 7 cases then pass.
+- **Residue to cover with its own test:** `activeTabIdByWorktree` lands on the
+  reopened history tab in the two agent-session × history-present variants. All
+  three `terminal` variants pass.
+- **`layoutByWorktree` is not at risk.** `TabGroupLayoutNode` holds `groupId`,
+  never tab ids, so persisted layouts survive a re-key untouched.
+- **It would remove the main source of `:history-N`.** The suffix exists because
+  the replaced tab squats on `structured-agent-session-<old>`; freeing that id
+  gives the reopened history tab its natural one.
+- The replaced-conversation fixture in
+  `components/sidebar/replaced-structured-session-agent-row.test.tsx` retargets to
+  `applyWebSessionTabsSnapshot` for that PR rather than needing a new one.
+
+The contract that PR rewrites is `clear pane identity`, seven pinned cases
+covering agent-session **and** the terminal→chat conversion (`contentType:
+'terminal'` with `structuredSessionId`, where the reused surface is a terminal
+holding `ptyIdsByTabId`, `terminalLayoutsByTabId` and `runtimePaneTitlesByTabId`).
+That is why it is not a rider on a status-row refactor.
+
+### `stateStartedAt`: the renderer stops overriding the store's rule
+
+A row's `stateStartedAt` is the start of the state the row is in, so republished
+evidence never moves it and only a state change (or Command Code's same-state
+new turn) resets it. `attachStatusTiming` had this rule already, and so did the
+renderer store's own default in `agent-status-live-entry-builder.ts` — including
+the Command Code clause, which it computes internally.
+
+The divergence was that the bridge's `projectStatus` _passed_ a
+`timing.stateStartedAt`, which is exactly the override that displaces that
+default, and the value it passed carried an extra `desired.state !== 'done'`
+clause that restamped a settled row on every republish. The bridge now passes no
+`stateStartedAt` at all, so the store applies its own rule. There is no shared
+helper: one would have had a single caller, and it could not express the store's
+Command Code clause from the bridge's call site. `server-reaping.ts` still holds
+its own inline copy of the same shape, so "one rule for every writer" would not
+have been true either.
+
+`done` is not an exception, because `agentEntryCompletionAt` reads a settled
+row's `stateStartedAt` as its completion time. A moving one re-dates a turn that
+already finished, and `smart-attention` already documents the opposite
+expectation for hook rows: same-state `done` writes advance `updatedAt` without
+moving the completion.
+
+The visible effect is narrower than this document first claimed. `stateStartedAt`
+reaches `NativeChatResolvedView`'s `hookWorkingEpoch` and
+`NativeChatWorkingStatus`'s elapsed time, but both are read only while the row is
+`working`, where the two rules already agreed. What changes is Class 2 ordering
+in the sidebar and dashboard: a settled structured session whose journal keeps
+moving now sorts by when it finished rather than by its latest journal write.
+
+## PR 2b: the renderer subscribes
 
 With structured rows arriving over `agentStatus:set`, the renderer's
 `StructuredAgentSessionStatusBridge` no longer needs to write status; its

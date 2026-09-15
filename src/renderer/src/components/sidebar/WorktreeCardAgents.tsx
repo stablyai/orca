@@ -26,7 +26,7 @@ import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constant
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
-import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateStructuredAgentSessionForRow } from '@/lib/structured-agent-session-tab-activation'
 import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
@@ -178,7 +178,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           flashFocusedPane: true,
           scrollToBottomIfOutputSinceLastView: true
         })
-      } else if (!activateStructuredAgentSessionTab({ worktreeId, tabId })) {
+      } else if (!activateStructuredAgentSessionForRow({ worktreeId, tabId })) {
         const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
         if (liveEntry?.worktreeId === worktreeId) {
           // Why: orchestration worker status can be worktree-attributed before the renderer knows its tab; keep the live row instead of dismissing as stale.
