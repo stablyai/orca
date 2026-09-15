@@ -14,6 +14,10 @@ function checkpointFile(
   metadata: CheckpointMetadata
 ): TerminalCheckpointFile {
   return {
+    // Why first: warm reattach only needs the generation number, and probing it
+    // from the file head lets TerminalHistorySessionWriter skip parsing a body
+    // that can reach TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES.
+    generation: metadata.generation,
     snapshotAnsi: snapshot.snapshotAnsi,
     scrollbackAnsi: snapshot.scrollbackAnsi,
     oscLinks: snapshot.oscLinks,
@@ -28,7 +32,6 @@ function checkpointFile(
     scrollbackLines: snapshot.scrollbackLines,
     ...(snapshot.lastTitle ? { lastTitle: snapshot.lastTitle } : {}),
     ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {}),
-    generation: metadata.generation,
     ...(metadata.pendingOutputSeq !== undefined
       ? { pendingOutputSeq: metadata.pendingOutputSeq }
       : {}),
