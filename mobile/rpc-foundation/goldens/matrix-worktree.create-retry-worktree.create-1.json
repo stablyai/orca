@@ -89,32 +89,12 @@
         }
       }
     },
-    "199931225ca2": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'displayName')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "240b0b1c72b2": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "error": ""
-      }
-    },
-    "2588fd63a157": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'worktree')",
-        "isRpcDeliveryUnknown": false
       }
     },
     "292579caa07d": {
@@ -358,6 +338,14 @@
         }
       }
     },
+    "9df0ac2b0247": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Failed to create workspace"
+      }
+    },
     "a947768bc0ed": {
       "status": "rejected",
       "startedAt": 0,
@@ -375,16 +363,6 @@
       "value": {
         "name": "kestrel",
         "worktreeId": "repo-1::/w"
-      }
-    },
-    "b5447f4dd931": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'worktree')",
-        "isRpcDeliveryUnknown": false
       }
     },
     "b6ebedadd49b": {
@@ -511,6 +489,11 @@
         "name": "kestrel",
         "worktreeId": "repo-1::/w"
       }
+    },
+    "ed1eb862d036": {
+      "outcome": {
+        "error": "Failed to create workspace"
+      }
     }
   },
   "recording": {
@@ -534,9 +517,9 @@
           "sender": ["cf574d8c995b"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "2588fd63a157"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -546,9 +529,9 @@
           "sender": ["0938d32a2ec2"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "b5447f4dd931"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -558,9 +541,9 @@
           "sender": ["6bf7db287168"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "199931225ca2"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -570,9 +553,9 @@
           "sender": ["96a4c62e654d"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "199931225ca2"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -582,9 +565,9 @@
           "sender": ["2e78a1dad2ea"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "199931225ca2"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },

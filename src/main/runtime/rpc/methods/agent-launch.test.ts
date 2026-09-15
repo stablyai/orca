@@ -40,6 +40,8 @@ function runtimeStub(
       state: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
       terminalHandle?: string
     }
+    /** What `createManagedWorktree` reports when the workspace exists but is incomplete. */
+    createWarning?: string
   } = {}
 ) {
   const worktreeCreateResults = new Map<string, Promise<unknown>>()
@@ -73,7 +75,8 @@ function runtimeStub(
     createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => ({
       worktree: { id: 'wt-new' },
       startupTerminal: args.startupAgent ? { handle: 'term_agent_first' } : undefined,
-      ...(options.setupReceipt ? { setupReceipt: options.setupReceipt } : {})
+      ...(options.setupReceipt ? { setupReceipt: options.setupReceipt } : {}),
+      ...(options.createWarning ? { warning: options.createWarning } : {})
     })),
     createTerminal: vi.fn(async () => ({ handle: 'term_1' })),
     showTerminal: vi.fn(async (handle: string) => ({ handle, worktreeId: 'wt-7' })),
@@ -425,6 +428,43 @@ describe('the structured session factory', () => {
     expect(createStructuredSession.mock.calls[0]?.[0]).toMatchObject({
       options: { model: 'sonnet', effort: 'high' }
     })
+  })
+})
+
+describe('a create that succeeded but is incomplete', () => {
+  // createManagedWorktree reports an unspawned startup terminal or an uncopied working tree as a
+  // top-level `warning`, and worktree.create hands it straight to mobile. This path narrowed the
+  // create down to {worktreeId, startupTerminalHandle} and dropped it — on BOTH arms, but the
+  // structured arm is the one that had no channel for a warning at all.
+  it('carries a create warning onto a structured launch', async () => {
+    const runtime = runtimeStub({
+      createWarning: 'Could not copy untracked files into the new workspace.'
+    })
+
+    const result = await launch(CREATE_LAUNCH, runtime)
+
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.warning).toBe('Could not copy untracked files into the new workspace.')
+  })
+
+  it('carries a create warning onto an agent-first terminal launch', async () => {
+    // settings: {} leaves the structured preference off, so the launch is agent-first and returns
+    // on the cached startup handle - the early path that also had to learn to carry a warning.
+    const runtime = runtimeStub({
+      settings: {},
+      createWarning: 'Failed to create the startup terminal: no pty'
+    })
+
+    const result = await launch(CREATE_LAUNCH, runtime)
+
+    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_agent_first' })
+    expect(result.warning).toBe('Failed to create the startup terminal: no pty')
+  })
+
+  it('reports no warning when the create had none', async () => {
+    const runtime = runtimeStub()
+    const result = await launch(CREATE_LAUNCH, runtime)
+    expect(result.warning).toBeUndefined()
   })
 })
 

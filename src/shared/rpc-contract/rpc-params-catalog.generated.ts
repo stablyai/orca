@@ -33,6 +33,7 @@ import {
   SelectCodexAccountForTargetParams
 } from './accounts-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
+import { AgentLaunch } from './agent-launch-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
 import {
   AiVaultListSessionsParams,
@@ -554,6 +555,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.subscribe': null,
   'accounts.unsubscribe': AccountsUnsubscribeParams,
+  'agent.launch': AgentLaunch,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.cancel': CancelParams,
   'agentSession.close': OptionsParams,
@@ -1160,7 +1162,6 @@ export const RPC_PARAMS_BY_METHOD = {
 // Why: these methods bind a schema the shared contract cannot hold because its value
 // graph reaches into src/main. Listing them keeps the gap visible instead of absent.
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
-  'agent.launch',
   'emulator.install',
   'orchestration.send',
   'orchestration.taskUpdate'

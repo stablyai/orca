@@ -21,6 +21,21 @@ export const worktreeCreateRun = bindDeferredRpcOperation(
 )
 
 /**
+ * agent.launch carrying a create payload: the host settles whether the agent lands in a structured
+ * session or a terminal. Same reply discipline as worktreeCreateRun, and for the same reason — the
+ * two share one clientMutationId, so the retry loop must see an unlost reply either way.
+ */
+export const agentLaunchRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'agent.launch',
+    method: 'agent.launch',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcUncheckedPayloadReader('agent-launch-receipt')
+  })
+)
+
+/**
  * The start point for a workspace created from a linked pull request. Refusal throws the host's
  * message; an accepted reply can still carry a soft `{ error }` the caller raises itself.
  */

@@ -13,6 +13,31 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "041e5e32563c": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": false,
+        "worktreeCreateIdempotency": false
+      }
+    },
+    "120979f40a68": {
+      "capabilities": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
     "16cd464bf664": {
       "name": "status.get#1",
       "args": [
@@ -79,6 +104,21 @@
           "category": "Error",
           "message": "",
           "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "3a7704ccec26": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
         }
       }
     },
@@ -152,17 +192,6 @@
         }
       }
     },
-    "62aaf19f0b16": {
-      "capabilities": {
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 45000
-        }
-      }
-    },
     "7d3dd7f9381b": {
       "name": "status.get#1",
       "args": [
@@ -191,18 +220,6 @@
           "id": "frame-1",
           "ok": true
         }
-      }
-    },
-    "86f7fa8089fe": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": false,
-        "worktreeCreateIdempotency": false
       }
     },
     "88200d49083c": {
@@ -342,20 +359,6 @@
         }
       }
     },
-    "b33d34bddc4e": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 45000
-        }
-      }
-    },
     "c71b2f8a6993": {
       "name": "status.get#1",
       "args": [
@@ -421,8 +424,9 @@
         }
       }
     },
-    "f80e92134eb1": {
+    "f793cb0dfb40": {
       "capabilities": {
+        "agentLaunch": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -440,9 +444,9 @@
           "sender": ["5242fad3532f"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "b33d34bddc4e"
+            "probe": "3a7704ccec26"
           },
-          "state": "62aaf19f0b16",
+          "state": "120979f40a68",
           "effects": []
         }
       },
@@ -452,9 +456,9 @@
           "sender": ["7d3dd7f9381b"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       },
@@ -464,9 +468,9 @@
           "sender": ["88200d49083c"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       },
@@ -476,9 +480,9 @@
           "sender": ["4451bb95a76e"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       },
@@ -488,9 +492,9 @@
           "sender": ["944bf432f199"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       },
@@ -500,9 +504,9 @@
           "sender": ["89236e432861"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       },
@@ -512,9 +516,9 @@
           "sender": ["16cd464bf664"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       },
@@ -524,9 +528,9 @@
           "sender": ["9cdf3c107e7b"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       },
@@ -536,9 +540,9 @@
           "sender": ["c71b2f8a6993"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       },
@@ -548,9 +552,9 @@
           "sender": ["de87f6266897"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       },
@@ -560,9 +564,9 @@
           "sender": ["2698c9770ad3"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "86f7fa8089fe"
+            "probe": "041e5e32563c"
           },
-          "state": "f80e92134eb1",
+          "state": "f793cb0dfb40",
           "effects": []
         }
       }

@@ -13,9 +13,36 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "120979f40a68": {
+      "capabilities": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
     "1e5b32902af7": {
       "name": "status.get#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "3a7704ccec26": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
     },
     "5242fad3532f": {
       "name": "status.get#1",
@@ -53,31 +80,6 @@
           }
         }
       }
-    },
-    "62aaf19f0b16": {
-      "capabilities": {
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 45000
-        }
-      }
-    },
-    "b33d34bddc4e": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 45000
-        }
-      }
     }
   },
   "recording": {
@@ -89,9 +91,9 @@
           "sender": ["5242fad3532f"],
           "payloads": ["1e5b32902af7"],
           "settlements": {
-            "probe": "b33d34bddc4e"
+            "probe": "3a7704ccec26"
           },
-          "state": "62aaf19f0b16",
+          "state": "120979f40a68",
           "effects": []
         }
       }

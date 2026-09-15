@@ -18,13 +18,23 @@ function fakeClient(script: (method: string, call: number) => unknown, calls: Ca
         return {
           id: '1',
           ok: false,
-          error: { code: 'x', message: result.message },
+          // `name` stands in for the wire error code, which is what tells a refused method apart
+          // from a refused create.
+          error: { code: result.name === 'Error' ? 'x' : result.name, message: result.message },
           _meta: { runtimeId: 'r' }
         }
       }
       return { id: '1', ok: true, result, _meta: { runtimeId: 'r' } }
-    }
-  } as unknown as RpcClient
+    },
+    subscribe: () => () => {},
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
 }
 
 describe('createBlankWorkspace', () => {
@@ -40,7 +50,9 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'inherit',
       nameWasGenerated: false,
-      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      // Default the existing cases to an old host so they keep pinning the legacy create.
+      agentLaunchSupported: false
     })
 
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'octopus' })
@@ -77,7 +89,9 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'inherit',
       nameWasGenerated: true,
-      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      // Default the existing cases to an old host so they keep pinning the legacy create.
+      agentLaunchSupported: false
     })
 
     expect(calls[0]?.params).toMatchObject({ nameWasGenerated: true })
@@ -97,7 +111,9 @@ describe('createBlankWorkspace', () => {
       comment: 'spike',
       setupDecision: 'run',
       nameWasGenerated: false,
-      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      // Default the existing cases to an old host so they keep pinning the legacy create.
+      agentLaunchSupported: false
     })
 
     const params = calls[0]?.params as Record<string, unknown>
@@ -110,6 +126,146 @@ describe('createBlankWorkspace', () => {
       comment: 'spike'
     })
     expect('startupCommand' in params).toBe(false)
+  })
+
+  it('routes a picked agent through agent.launch on a host that advertises it', async () => {
+    // The bug: `worktree.create` + `startupAgent` creates the worktree agent-first, so its startup
+    // terminal IS the agent and the user's structured-chat default can never apply.
+    const calls: Call[] = []
+    const client = fakeClient(
+      () => ({ worktreeId: 'wt-9', outcome: { kind: 'structured' } }),
+      calls
+    )
+
+    const result = await createBlankWorkspace({
+      client,
+      repoId: 'repo-2',
+      baseName: 'manatee',
+      createdWithAgentId: 'claude',
+      comment: 'spike',
+      setupDecision: 'run',
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      agentLaunchSupported: true
+    })
+
+    expect(result).toEqual({ worktreeId: 'wt-9', name: 'manatee' })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.method).toBe('agent.launch')
+    // Everything the create needs survives the move; only the agent fields the launch owns go.
+    expect(calls[0]?.params).toMatchObject({
+      agent: 'claude',
+      target: {
+        kind: 'create-worktree',
+        create: {
+          repo: 'id:repo-2',
+          name: 'manatee',
+          setupDecision: 'run',
+          displayName: 'manatee',
+          displayNameKind: 'user',
+          comment: 'spike',
+          clientMutationId: expect.any(String)
+        }
+      }
+    })
+    expect(calls[0]?.params).not.toHaveProperty(['target', 'create', 'startupAgent'])
+  })
+
+  it('keeps the agent-first create on a host that does not advertise agent.launch', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-10' } }), calls)
+
+    const result = await createBlankWorkspace({
+      client,
+      repoId: 'repo-2',
+      baseName: 'manatee',
+      createdWithAgentId: 'claude',
+      comment: undefined,
+      setupDecision: 'inherit',
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      agentLaunchSupported: false
+    })
+
+    expect(result).toEqual({ worktreeId: 'wt-10', name: 'manatee' })
+    expect(calls[0]?.method).toBe('worktree.create')
+    expect(calls[0]?.params).toMatchObject({ startupAgent: 'claude', createdWithAgent: 'claude' })
+  })
+
+  it('never launches for a blank choice, however capable the host is', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-11' } }), calls)
+
+    await createBlankWorkspace({
+      client,
+      repoId: 'repo-2',
+      baseName: 'manatee',
+      createdWithAgentId: undefined,
+      comment: undefined,
+      setupDecision: 'inherit',
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      agentLaunchSupported: true
+    })
+
+    expect(calls[0]?.method).toBe('worktree.create')
+    expect(calls[0]?.params).not.toHaveProperty('startupAgent')
+  })
+
+  it('keeps the name-collision retry when the create goes through agent.launch', async () => {
+    const calls: Call[] = []
+    const client = fakeClient((_method, call) => {
+      if (call === 1) {
+        return new Error('Branch "octopus" already exists locally. Pick a different branch name.')
+      }
+      return { worktreeId: 'wt-12', outcome: { kind: 'terminal', handle: 't-1' } }
+    }, calls)
+
+    const result = await createBlankWorkspace({
+      client,
+      repoId: 'repo-1',
+      baseName: 'octopus',
+      createdWithAgentId: 'codex',
+      comment: undefined,
+      setupDecision: 'inherit',
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      agentLaunchSupported: true
+    })
+
+    expect(result).toEqual({ worktreeId: 'wt-12', name: 'octopus-2' })
+    expect(calls.map((call) => call.method)).toEqual(['agent.launch', 'agent.launch'])
+    expect(calls[1]?.params).toMatchObject({ target: { create: { name: 'octopus-2' } } })
+  })
+
+  it('downgrades to worktree.create when the host refuses the method itself', async () => {
+    // The status.get probe can win the race against this client's own capability advertisement;
+    // a refused method must not fail the create outright.
+    const calls: Call[] = []
+    const client = fakeClient((method) => {
+      if (method === 'agent.launch') {
+        const refusal = new Error("Method 'agent.launch' is not available to mobile clients")
+        refusal.name = 'forbidden'
+        return refusal
+      }
+      return { worktree: { id: 'wt-13' } }
+    }, calls)
+
+    const result = await createBlankWorkspace({
+      client,
+      repoId: 'repo-1',
+      baseName: 'octopus',
+      createdWithAgentId: 'codex',
+      comment: undefined,
+      setupDecision: 'inherit',
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      agentLaunchSupported: true
+    })
+
+    expect(result).toEqual({ worktreeId: 'wt-13', name: 'octopus' })
+    expect(calls.map((call) => call.method)).toEqual(['agent.launch', 'worktree.create'])
+    expect(calls[1]?.params).toMatchObject({ startupAgent: 'codex' })
   })
 
   it('retries with a numeric suffix on a branch-collision error', async () => {
@@ -129,7 +285,9 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'inherit',
       nameWasGenerated: false,
-      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      // Default the existing cases to an old host so they keep pinning the legacy create.
+      agentLaunchSupported: false
     })
 
     expect(result).toEqual({ worktreeId: 'wt-3', name: 'octopus-2' })
@@ -155,7 +313,9 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'inherit',
       nameWasGenerated: false,
-      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      // Default the existing cases to an old host so they keep pinning the legacy create.
+      agentLaunchSupported: false
     })
 
     expect(result).toEqual({ worktreeId: 'wt-4', name: 'octopus-2' })
@@ -174,10 +334,48 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'skip',
       nameWasGenerated: false,
-      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+      // Default the existing cases to an old host so they keep pinning the legacy create.
+      agentLaunchSupported: false
     })
 
     expect(result).toEqual({ error: 'SSH connection is not available' })
     expect(calls).toHaveLength(1)
   })
+
+  it.each([
+    { label: 'worktree.create', supported: false, agent: undefined, reply: { worktree: {} } },
+    {
+      label: 'agent.launch',
+      supported: true,
+      agent: 'codex' as const,
+      reply: { outcome: { kind: 'structured', sessionId: 's-1' } }
+    }
+  ])(
+    'fails without retrying when an accepted $label reply names no workspace',
+    async ({ supported, agent, reply }) => {
+      // The break branch. The host accepted the call but the reply carries no workspace, so there
+      // is nothing to navigate to and a retry cannot help — a malformed reply is not a name
+      // collision. Both routes reach it: worktree.create with no `worktree.id`, agent.launch with
+      // no `worktreeId`. Before the guard, the legacy route read `.worktree.displayName` straight
+      // off the reply and surfaced a TypeError instead of a message.
+      const calls: Call[] = []
+      const client = fakeClient(() => reply, calls)
+
+      const result = await createBlankWorkspace({
+        client,
+        repoId: 'repo-1',
+        baseName: 'octopus',
+        createdWithAgentId: agent,
+        comment: undefined,
+        setupDecision: 'inherit',
+        nameWasGenerated: false,
+        worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+        agentLaunchSupported: supported
+      })
+
+      expect(result).toEqual({ error: 'Failed to create workspace' })
+      expect(calls).toHaveLength(1)
+    }
+  )
 })
