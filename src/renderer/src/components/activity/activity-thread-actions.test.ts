@@ -82,6 +82,9 @@ describe('activity thread host routing', () => {
       workspaceHostScope: 'all',
       tabsByWorktree: { [thread.worktree.id]: [thread.tab] },
       unifiedTabsByWorktree: {},
+      unreadAgentCompletionPanes: {},
+      unreadTerminalTabs: {},
+      clearWorktreeUnread: vi.fn(),
       activeRepoId: thread.worktree.repoId,
       activeWorktreeId: thread.worktree.id,
       activeWorkspaceExecutionHostId: 'local',
@@ -200,5 +203,133 @@ describe('activity thread host routing', () => {
     markAllSet = [thread, readThread]
     actions.markAllThreadsRead()
     expect(acknowledgeAgents).toHaveBeenCalledWith([thread.paneKey])
+  })
+})
+
+describe('worktree unread cleanup after acknowledging panes', () => {
+  const thread = makeRemoteThread()
+  // A second unread completion in the same worktree, outside the mark-all set.
+  const siblingPaneKey = 'tab-1:22222222-2222-4222-8222-222222222222'
+  const clearWorktreeUnread = vi.fn()
+  let state: {
+    worktreesByRepo: Record<string, unknown[]>
+    detectedWorktreesByRepo: Record<string, unknown[]>
+    folderWorkspaces: unknown[]
+    showSleepingWorkspaces: boolean
+    filterRepoIds: unknown[]
+    hideDefaultBranchWorkspace: boolean
+    hideAutomationGeneratedWorkspaces: boolean
+    hideCliCreatedWorkspaces: boolean
+    hideDetachedHeadWorkspaces: boolean
+    hideWorkspacesFromOtherDevices: boolean
+    alwaysShowDefaultBranchWorkspace: boolean
+    visibleWorkspaceHostIds: unknown
+    workspaceHostScope: string
+    tabsByWorktree: Record<string, Array<{ id: string }>>
+    unreadAgentCompletionPanes: Record<string, true>
+    unreadTerminalTabs: Record<string, true>
+    clearWorktreeUnread: typeof clearWorktreeUnread
+  }
+  // Stateful: the real ack reducer drops the pane from unreadAgentCompletionPanes, so the
+  // post-ack getState() read in clearWorktreeUnreadIfNoOtherAttention sees it gone — a
+  // non-mutating mock would leave the pane in place and make these assertions vacuous.
+  const acknowledgeAgents = vi.fn((paneKeys: string[]) => {
+    for (const key of paneKeys) {
+      delete state.unreadAgentCompletionPanes[key]
+    }
+  })
+
+  function makeActions(markAllThreads: AgentPaneThread[] = [thread]) {
+    return createActivityThreadActions({
+      getMarkAllReadThreads: () => markAllThreads,
+      acknowledgeAgents,
+      unacknowledgeAgents: vi.fn(),
+      setSelectedPaneKey: vi.fn()
+    })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    state = {
+      worktreesByRepo: { [thread.worktree.repoId]: [thread.worktree] },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [],
+      showSleepingWorkspaces: true,
+      filterRepoIds: [],
+      hideDefaultBranchWorkspace: false,
+      hideAutomationGeneratedWorkspaces: false,
+      hideCliCreatedWorkspaces: false,
+      hideDetachedHeadWorkspaces: false,
+      hideWorkspacesFromOtherDevices: false,
+      alwaysShowDefaultBranchWorkspace: true,
+      visibleWorkspaceHostIds: null,
+      workspaceHostScope: 'all',
+      tabsByWorktree: { [thread.worktree.id]: [thread.tab] },
+      unreadAgentCompletionPanes: { [thread.paneKey]: true },
+      unreadTerminalTabs: {},
+      clearWorktreeUnread
+    }
+    mocks.getState.mockImplementation(() => state)
+  })
+
+  it('markThreadRead clears the worktree flag when the pane was the last unread completion', () => {
+    makeActions().markThreadRead(thread)
+
+    expect(acknowledgeAgents).toHaveBeenCalledWith([thread.paneKey])
+    expect(clearWorktreeUnread).toHaveBeenCalledWith(thread.worktree.id)
+  })
+
+  it('markThreadRead preserves the worktree flag when another unread agent pane remains', () => {
+    state.unreadAgentCompletionPanes[siblingPaneKey] = true
+
+    makeActions().markThreadRead(thread)
+
+    expect(clearWorktreeUnread).not.toHaveBeenCalled()
+  })
+
+  it('markThreadRead preserves the worktree flag when an unread terminal tab remains', () => {
+    state.unreadTerminalTabs[thread.tab.id] = true
+
+    makeActions().markThreadRead(thread)
+
+    expect(clearWorktreeUnread).not.toHaveBeenCalled()
+  })
+
+  it('markAllThreadsRead clears the worktree flag when the acknowledged panes were the last unread', () => {
+    makeActions().markAllThreadsRead()
+
+    expect(acknowledgeAgents).toHaveBeenCalledWith([thread.paneKey])
+    expect(clearWorktreeUnread).toHaveBeenCalledWith(thread.worktree.id)
+  })
+
+  it('markAllThreadsRead preserves the worktree flag when an unread pane remains outside the mark-all set', () => {
+    state.unreadAgentCompletionPanes[siblingPaneKey] = true
+
+    makeActions().markAllThreadsRead()
+
+    expect(clearWorktreeUnread).not.toHaveBeenCalled()
+  })
+
+  it('markAllThreadsRead preserves the worktree flag when an unread terminal tab remains', () => {
+    state.unreadTerminalTabs[thread.tab.id] = true
+
+    makeActions().markAllThreadsRead()
+
+    expect(clearWorktreeUnread).not.toHaveBeenCalled()
+  })
+
+  it('automatic acknowledgment on jump clears the worktree flag for the last unread pane', () => {
+    makeActions().jumpToWorkspace(thread)
+
+    expect(acknowledgeAgents).toHaveBeenCalledWith([thread.paneKey])
+    expect(clearWorktreeUnread).toHaveBeenCalledWith(thread.worktree.id)
+  })
+
+  it('automatic acknowledgment on jump preserves the worktree flag when another unread pane remains', () => {
+    state.unreadAgentCompletionPanes[siblingPaneKey] = true
+
+    makeActions().jumpToWorkspace(thread)
+
+    expect(clearWorktreeUnread).not.toHaveBeenCalled()
   })
 })
