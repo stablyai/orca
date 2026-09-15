@@ -168,7 +168,7 @@ function codexUnavailable(error: string, status: 'error' | 'unavailable'): Provi
   }
 }
 
-async function fetchWslBackend(
+async function fetchBackendUsage(
   options: CodexRateLimitFetchOptions
 ): Promise<ProviderRateLimits | null> {
   try {
@@ -208,11 +208,13 @@ export async function fetchCodexRateLimits(
     )
   }
 
-  if (options?.codexHomePath && parseWslUncPath(options.codexHomePath)) {
-    const backendResult = await fetchWslBackend(options)
-    if (backendResult) {
-      return options.signal?.aborted ? abortedCodexRateLimitResult() : backendResult
-    }
+  // Why: the backend usage endpoint is one authenticated GET off the local auth.json
+  // (no subprocess spawn, no RPC handshake) and is the same source OpenAI's own Codex
+  // Desktop client reads (originator: 'Codex Desktop') — try it before the much slower
+  // RPC/PTY probes on every platform, not just WSL homes.
+  const backendResult = await fetchBackendUsage(options ?? {})
+  if (backendResult) {
+    return options?.signal?.aborted ? abortedCodexRateLimitResult() : backendResult
   }
 
   if (options?.codexHomePath && isCodexStateDbBackfillPending(options.codexHomePath)) {

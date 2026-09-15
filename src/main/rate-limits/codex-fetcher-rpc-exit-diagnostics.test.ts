@@ -5,10 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Win32Utils from '../win32-utils'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 
-const { getSpawnArgsForWindowsMock, ptySpawnMock, resolveCodexCommandMock } = vi.hoisted(() => ({
-  getSpawnArgsForWindowsMock: vi.fn(),
-  ptySpawnMock: vi.fn(),
-  resolveCodexCommandMock: vi.fn()
+const { getSpawnArgsForWindowsMock, ptySpawnMock, resolveCodexCommandMock, readFileMock } =
+  vi.hoisted(() => ({
+    getSpawnArgsForWindowsMock: vi.fn(),
+    ptySpawnMock: vi.fn(),
+    resolveCodexCommandMock: vi.fn(),
+    readFileMock: vi.fn()
+  }))
+
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock
 }))
 
 vi.mock('../win32-utils', async (importOriginal) => ({
@@ -66,12 +72,15 @@ describe('Codex RPC exit diagnostics', () => {
       spawnCmd: process.execPath,
       spawnArgs: [stubPath, ...args]
     }))
+    readFileMock.mockRejectedValue(new Error('no auth fixture'))
+    vi.stubGlobal('fetch', vi.fn())
   })
 
   afterEach(() => {
     delete process.env.ORCA_STUB_CODEX_STDERR
     delete process.env.ORCA_STUB_CODEX_EXIT_CODE
     rmSync(tempRoot, { recursive: true, force: true })
+    vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
 
