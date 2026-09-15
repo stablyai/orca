@@ -74,6 +74,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -162,6 +163,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -267,6 +269,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -383,6 +386,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -483,6 +487,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -590,6 +595,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),

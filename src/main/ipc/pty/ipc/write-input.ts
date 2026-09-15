@@ -162,6 +162,7 @@ export function createPtyWriteInput(deps: {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
+      runtime?.notePtyInput(args.id)
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
@@ -184,6 +185,7 @@ export function createPtyWriteInput(deps: {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
+      runtime?.notePtyInput(args.id)
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false

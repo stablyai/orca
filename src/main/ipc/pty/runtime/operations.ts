@@ -13,13 +13,19 @@ import {
   type WriteSettlement
 } from '../../../../shared/pty-write-settlement'
 
-export function writePtyFromRuntimeController(ptyId: string, data: string): boolean
 export function writePtyFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string,
+  data: string
+): boolean
+export function writePtyFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
   ptyId: string,
   data: string,
   options: { waitForSettlement: true }
 ): WriteSettlement | Promise<WriteSettlement>
 export function writePtyFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
   ptyId: string,
   data: string,
   options?: { waitForSettlement: true }
@@ -30,6 +36,7 @@ export function writePtyFromRuntimeController(
   } catch {
     return options?.waitForSettlement ? writeRefused('provider_unavailable') : false
   }
+  deps.runtime?.notePtyInput(ptyId)
   if (options?.waitForSettlement) {
     // A provider that cannot settle says so before any effect; synthesizing acceptance
     // from the fire-and-forget write is what cleared durable mailbox reservations.
