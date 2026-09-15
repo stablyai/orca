@@ -20,6 +20,17 @@ describe('mobile file syntax highlighting', () => {
     expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')
   })
 
+  it('detects the whole dotenv family as ini and resolves a registered grammar', () => {
+    expect(detectMobileFileLanguage('.env')).toBe('ini')
+    expect(detectMobileFileLanguage('apps/api/.env.local')).toBe('ini')
+    expect(detectMobileFileLanguage('.env.functions.local')).toBe('ini')
+    expect(detectMobileFileLanguage('.ENV.STAGING')).toBe('ini')
+    expect(detectMobileFileLanguage('deploy/dev.env')).toBe('ini')
+    expect(detectMobileFileLanguage('scripts/.env.sh')).toBe('shell')
+    expect(detectMobileFileLanguage('.envrc')).toBe('plaintext')
+    expect(resolveMobileSyntaxLanguage('.env.functions.local')).toBe('ini')
+  })
+
   it('emits semantic syntax segments for highlighted code', () => {
     const result = highlightMobileCode('const label: string = "Orca"', 'typescript')
 
