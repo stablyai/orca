@@ -179,6 +179,28 @@ const MODEL_DOWNLOAD_FILES = {
       ['tokens.txt', 28_557, '732f64c53909f2620c713f4106b487d92e6f54a6915b3cd3d1dbd32f9f4f392a']
     ]
   ),
+  'gigaam-v3-rnnt-ru': huggingFaceFiles(
+    'csukuangfj/sherpa-onnx-nemo-transducer-giga-am-v3-russian-2025-12-16',
+    '0424d62637b37d8b7b1eb0f75a04d78dec55fdcc',
+    [
+      [
+        'encoder.int8.onnx',
+        224_570_814,
+        '0ec54e5f130a91c0f228d21795ede10b31c992a1f73e45dcd827e843a71a9b50'
+      ],
+      [
+        'decoder.onnx',
+        3_331_651,
+        '5d1cfef155d8e07f213bd2f3229b5f6c5c29355c7fa5c1b9eb62cb1925725254'
+      ],
+      [
+        'joiner.onnx',
+        1_440_448,
+        'fd1d02f45c2ad3d6b67cc149811ad794ab4b020ed49a0a9e2790a8619d1cddd8'
+      ],
+      ['tokens.txt', 196, '17cc514451bcceac9c280068c71502f8448f99e9fb1456b8d0761651fd0392f2']
+    ]
+  ),
   'whisper-tiny': huggingFaceFiles(
     'csukuangfj/sherpa-onnx-whisper-tiny',
     '65176e2deb88badc814a94058666cadccc29b61c',
