@@ -12,10 +12,10 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 type CompleteGitRepoAddOptions = {
   closeModal: () => void
-  setHideDefaultBranchWorkspace: (hide: boolean) => void
   /** Why: the nested Add Project flow (hosted inside the workspace composer)
    *  keeps the composer open and selects the new project instead of running
-   *  the default-checkout navigation handoff. Telemetry above still applies. */
+   *  the default-checkout navigation handoff. The existing-workspaces telemetry
+   *  still fires either way. */
   finishProjectAdd?: (
     repoId: string,
     source: AddRepoExistingWorkspaceSource,
@@ -25,7 +25,6 @@ type CompleteGitRepoAddOptions = {
 
 export function useCompleteGitRepoAdd({
   closeModal,
-  setHideDefaultBranchWorkspace,
   finishProjectAdd
 }: CompleteGitRepoAddOptions): (
   repoId: string,
@@ -72,10 +71,9 @@ export function useCompleteGitRepoAdd({
         repoId,
         source,
         executionHostId,
-        closeModal,
-        setHideDefaultBranchWorkspace
+        closeModal
       })
     },
-    [closeModal, finishProjectAdd, setHideDefaultBranchWorkspace]
+    [closeModal, finishProjectAdd]
   )
 }

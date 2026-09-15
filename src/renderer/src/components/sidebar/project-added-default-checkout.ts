@@ -1,6 +1,10 @@
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { getRepoMapFromState } from '@/store/selectors'
+import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { track } from '@/lib/telemetry'
+import { translate } from '@/i18n/i18n'
 import type {
   AddRepoDefaultCheckoutHandoffSource,
   EventProps
@@ -9,6 +13,8 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/wo
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import { getProjectHeaderRevealTarget } from './worktree-list/grouping/project-grouping'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
@@ -165,6 +171,18 @@ async function findDetectedDefaultCheckout(
   }
 }
 
+/** Lands on the project header: outside project grouping the reveal request is what switches grouping and scrolls there. */
+function revealImportedProject(repoId: string): void {
+  const state = useAppStore.getState()
+  finalizeImportedRepoAfterSkip(state, repoId)
+  const projection = getProjectHostSetupProjectionFromState(state)
+  const target = getProjectHeaderRevealTarget(repoId, getRepoMapFromState(state), {
+    projects: projection.projects,
+    projectHostSetups: projection.setups
+  })
+  state.revealSidebarRow(target.key, { behavior: 'smooth', highlight: true })
+}
+
 function resolveInitialCwdForDefaultCheckout(
   defaultCheckout: Worktree,
   selectedPath: string | undefined
@@ -180,13 +198,11 @@ export async function openProjectDefaultCheckout({
   repoId,
   source,
   selectedPath,
-  setHideDefaultBranchWorkspace,
   executionHostId
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
   selectedPath?: string
-  setHideDefaultBranchWorkspace: (value: boolean) => void
   executionHostId?: ExecutionHostId
 }): Promise<void> {
   let defaultCheckout = getProjectDefaultCheckout(
@@ -213,21 +229,29 @@ export async function openProjectDefaultCheckout({
         result: 'revealed_project',
         reason: revealLinkedFailureReason
       })
-      finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
+      revealImportedProject(repoId)
       return
     }
-    // Why: the onboarding handoff should land on the default checkout even
-    // when the user normally hides default-branch workspaces in the sidebar.
-    const state = useAppStore.getState()
-    if (state.hideDefaultBranchWorkspace) {
-      setHideDefaultBranchWorkspace(false)
+    const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
+    const hiddenByDefaultBranchFilter =
+      useAppStore.getState().hideDefaultBranchWorkspace && isDefaultBranchWorkspace(defaultCheckout)
+    // Why: a user who hides default-branch rows opted out of landing on one, so
+    // reveal the project header instead of silently flipping their filter. A
+    // folder they picked inside the checkout was their real target and still opens.
+    if (hiddenByDefaultBranchFilter && !initialCwd) {
+      track('add_repo_default_checkout_handoff', {
+        source,
+        result: 'revealed_project',
+        reason: 'default_checkout_hidden'
+      })
+      revealImportedProject(repoId)
+      return
     }
     track('add_repo_default_checkout_handoff', {
       source,
       result: 'opened_default_checkout',
       reason
     })
-    const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
     if (initialCwd || executionHostId) {
       activateAndRevealWorktree(defaultCheckout.id, {
         ...(initialCwd ? { initialCwd } : {}),
@@ -235,6 +259,14 @@ export async function openProjectDefaultCheckout({
       })
     } else {
       activateAndRevealWorktree(defaultCheckout.id)
+    }
+    if (hiddenByDefaultBranchFilter) {
+      toast.warning(
+        translate(
+          'auto.lib.worktreeJumpNavigation.filteredNotice',
+          'This worktree is hidden by sidebar filters. The workspace was opened, but it is not shown in Spaces.'
+        )
+      )
     }
     return
   }
@@ -244,7 +276,7 @@ export async function openProjectDefaultCheckout({
     result: 'revealed_project',
     reason
   })
-  finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
+  revealImportedProject(repoId)
 }
 
 export async function finishProjectAddWithDefaultCheckout({
@@ -252,14 +284,12 @@ export async function finishProjectAddWithDefaultCheckout({
   source,
   selectedPath,
   closeModal,
-  setHideDefaultBranchWorkspace,
   executionHostId
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
   selectedPath?: string
   closeModal: () => void
-  setHideDefaultBranchWorkspace: (value: boolean) => void
   executionHostId?: ExecutionHostId
 }): Promise<void> {
   await markOnboardingProjectAdded('addedRepo')
@@ -268,7 +298,6 @@ export async function finishProjectAddWithDefaultCheckout({
     repoId,
     source,
     selectedPath,
-    executionHostId,
-    setHideDefaultBranchWorkspace
+    executionHostId
   })
 }

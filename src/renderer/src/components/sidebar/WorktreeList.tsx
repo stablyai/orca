@@ -171,6 +171,7 @@ const WorktreeList = React.memo(function WorktreeList({
     importedWorktreesByRepo: externalWorktreeCards.importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo: externalWorktreeCards.newExternalWorktreesInboxByRepo,
     filterRepoIds: filterState.filterRepoIds,
+    hideDefaultBranchWorkspace: filterState.hideDefaultBranchWorkspace,
     visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
     workspaceHostScope: filterState.workspaceHostScope
   })

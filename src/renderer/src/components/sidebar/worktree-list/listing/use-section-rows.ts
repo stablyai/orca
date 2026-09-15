@@ -42,6 +42,7 @@ type SectionRowsArgs = {
   importedWorktreesByRepo: Parameters<typeof buildRows>[14]
   newExternalWorktreesInboxByRepo: Parameters<typeof buildRows>[15]
   filterRepoIds: readonly string[]
+  hideDefaultBranchWorkspace: boolean
   visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
   workspaceHostScope: AppState['workspaceHostScope']
 }
@@ -91,9 +92,17 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         repos: args.visibleReposForRows,
         worktreesByRepo,
         visibleWorktrees: worktrees,
-        filterRepoIds: args.filterRepoIds
+        filterRepoIds: args.filterRepoIds,
+        hideDefaultBranchWorkspace: args.hideDefaultBranchWorkspace
       }),
-    [args.filterRepoIds, args.groupBy, args.visibleReposForRows, worktrees, worktreesByRepo]
+    [
+      args.filterRepoIds,
+      args.groupBy,
+      args.hideDefaultBranchWorkspace,
+      args.visibleReposForRows,
+      worktrees,
+      worktreesByRepo
+    ]
   )
 
   // Why: subscribe on a flat key array (useShallow) so progress ticks don't rebuild the whole row model.

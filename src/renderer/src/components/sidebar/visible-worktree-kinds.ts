@@ -62,13 +62,3 @@ export type SidebarFilterState = {
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   workspaceHostScope?: ExecutionHostScope
 }
-
-/**
- * Whether at least one sidebar filter is active — drives the "Clear Filters"
- * escape hatch in the empty-state message. Kept pure so it can be unit-tested
- * alongside the sorting pipeline.
- *
- * Why include hideDefaultBranchWorkspace here: without it, a user whose only
- * worktree is the default-branch row and who toggles hide-on would see the
- * "No workspaces found" message with no in-sidebar recovery path.
- */

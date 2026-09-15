@@ -5,6 +5,8 @@ export type AddRepoSkipFinalizationState = {
   activeRepoId: string | null
   filterRepoIds: readonly string[]
   showActiveOnly: boolean
+  /** Read, never reset: empty-project-placeholder-repos keeps a header for a
+   *  default-checkout-only project, so the import still lands visibly. */
   hideDefaultBranchWorkspace: boolean
   showSleepingWorkspaces: boolean
   alwaysShowDefaultBranchWorkspace: boolean
@@ -12,7 +14,6 @@ export type AddRepoSkipFinalizationState = {
   setActiveRepo: (repoId: string | null) => void
   setFilterRepoIds: (repoIds: string[]) => void
   setShowActiveOnly: (value: boolean) => void
-  setHideDefaultBranchWorkspace: (value: boolean) => void
   setAlwaysShowDefaultBranchWorkspace: (value: boolean) => void
 }
 
@@ -33,17 +34,16 @@ export function finalizeImportedRepoAfterSkip(
   if (state.showActiveOnly) {
     state.setShowActiveOnly(false)
   }
-  if (
-    importedWorktrees.length > 0 &&
-    state.hideDefaultBranchWorkspace &&
-    importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree))
-  ) {
-    state.setHideDefaultBranchWorkspace(false)
-  }
   // Why: with "Hide sleeping" on, a freshly imported project has no live PTY
   // yet, so the opted-out exemption would leave it invisible on arrival.
+  // Rows the default-branch filter already hides stay hidden either way, so
+  // the exemption is only flipped for imports that filter leaves visible.
+  const hiddenByDefaultBranchFilter =
+    state.hideDefaultBranchWorkspace &&
+    importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree))
   if (
     importedWorktrees.length > 0 &&
+    !hiddenByDefaultBranchFilter &&
     state.alwaysShowDefaultBranchWorkspace === false &&
     !state.showSleepingWorkspaces &&
     importedWorktrees.every((worktree) => worktree.isMainWorktree)

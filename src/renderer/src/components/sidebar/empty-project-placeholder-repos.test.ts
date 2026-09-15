@@ -40,7 +40,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           repos: [repo],
           worktreesByRepo: { [repo.id]: [] },
           visibleWorktrees: [],
-          filterRepoIds: []
+          filterRepoIds: [],
+          hideDefaultBranchWorkspace: false
         })
       )
     ).toEqual([repo.id])
@@ -54,7 +55,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           repos: [repo],
           worktreesByRepo: {},
           visibleWorktrees: [],
-          filterRepoIds: []
+          filterRepoIds: [],
+          hideDefaultBranchWorkspace: false
         })
       )
     ).toEqual([repo.id])
@@ -71,7 +73,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           repos: [selectedRepo, hiddenRepo],
           worktreesByRepo: { [selectedRepo.id]: [], [hiddenRepo.id]: [] },
           visibleWorktrees: [],
-          filterRepoIds: [selectedRepo.id]
+          filterRepoIds: [selectedRepo.id],
+          hideDefaultBranchWorkspace: false
         })
       )
     ).toEqual([selectedRepo.id])
@@ -84,7 +87,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
         repos: [repo],
         worktreesByRepo: { [repo.id]: [] },
         visibleWorktrees: [],
-        filterRepoIds: []
+        filterRepoIds: [],
+        hideDefaultBranchWorkspace: false
       }).size
     ).toBe(0)
   })
@@ -96,7 +100,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
         repos: [repo],
         worktreesByRepo: { [repo.id]: [worktree] },
         visibleWorktrees: [],
-        filterRepoIds: []
+        filterRepoIds: [],
+        hideDefaultBranchWorkspace: false
       }).size
     ).toBe(0)
   })
@@ -112,7 +117,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           repos: [groupedRepo],
           worktreesByRepo: { [groupedRepo.id]: [groupedWorktree] },
           visibleWorktrees: [],
-          filterRepoIds: []
+          filterRepoIds: [],
+          hideDefaultBranchWorkspace: false
         })
       )
     ).toEqual([groupedRepo.id])
@@ -128,7 +134,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
         repos: [groupedRepo],
         worktreesByRepo: { [groupedRepo.id]: [groupedWorktree] },
         visibleWorktrees: [groupedWorktree],
-        filterRepoIds: []
+        filterRepoIds: [],
+        hideDefaultBranchWorkspace: false
       }).size
     ).toBe(0)
   })
@@ -151,7 +158,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           // Why: simulate Hide sleeping removing every card while the project
           // filter still intentionally excludes `filteredOut`.
           visibleWorktrees: [],
-          filterRepoIds: [selected.id]
+          filterRepoIds: [selected.id],
+          hideDefaultBranchWorkspace: false
         })
       )
     ).toEqual([selected.id])
@@ -173,7 +181,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
             [awake.id]: [awakeWt]
           },
           visibleWorktrees: [awakeWt],
-          filterRepoIds: []
+          filterRepoIds: [],
+          hideDefaultBranchWorkspace: false
         })
       )
     ).toEqual([sleeping.id])
@@ -195,9 +204,132 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
             [ungrouped.id]: [ungroupedWt]
           },
           visibleWorktrees: [],
-          filterRepoIds: []
+          filterRepoIds: [],
+          hideDefaultBranchWorkspace: false
         })
       )
     ).toEqual([grouped.id])
+  })
+
+  it('does not create placeholders outside repo grouping even under Hide default branch', () => {
+    expect(
+      getEmptyProjectPlaceholderRepoIds({
+        groupBy: 'none',
+        repos: [repo],
+        worktreesByRepo: { [repo.id]: [worktree] },
+        visibleWorktrees: [],
+        filterRepoIds: [],
+        hideDefaultBranchWorkspace: true
+      }).size
+    ).toBe(0)
+  })
+
+  it('does not placeholder a provisioned-root checkout, which the filter leaves visible', () => {
+    expect(
+      getEmptyProjectPlaceholderRepoIds({
+        groupBy: 'repo',
+        repos: [repo],
+        worktreesByRepo: {
+          [repo.id]: [{ ...worktree, ephemeralVmCheckoutMode: 'provisioned-root' }]
+        },
+        visibleWorktrees: [],
+        filterRepoIds: [],
+        hideDefaultBranchWorkspace: true
+      }).size
+    ).toBe(0)
+  })
+
+  it('keeps an ungrouped repo visible when Hide default branch hides its only checkout', () => {
+    expect(
+      Array.from(
+        getEmptyProjectPlaceholderRepoIds({
+          groupBy: 'repo',
+          repos: [repo],
+          worktreesByRepo: { [repo.id]: [worktree] },
+          visibleWorktrees: [],
+          filterRepoIds: [],
+          hideDefaultBranchWorkspace: true
+        })
+      )
+    ).toEqual([repo.id])
+  })
+
+  it('ignores archived rows when deciding a repo is default-checkout-only', () => {
+    const archivedFeature: Worktree = {
+      ...worktree,
+      id: 'wt-archived',
+      branch: 'refs/heads/feature',
+      isMainWorktree: false,
+      isArchived: true
+    }
+
+    expect(
+      Array.from(
+        getEmptyProjectPlaceholderRepoIds({
+          groupBy: 'repo',
+          repos: [repo],
+          worktreesByRepo: { [repo.id]: [worktree, archivedFeature] },
+          visibleWorktrees: [],
+          filterRepoIds: [],
+          hideDefaultBranchWorkspace: true
+        })
+      )
+    ).toEqual([repo.id])
+  })
+
+  it('does not placeholder a repo whose non-default rows are hidden by other filters', () => {
+    const feature: Worktree = {
+      ...worktree,
+      id: 'wt-feature',
+      branch: 'refs/heads/feature',
+      isMainWorktree: false
+    }
+
+    // Why: one non-default row disqualifies the repo — the placeholder is for
+    // default-checkout-only projects, not for any repo whose rows a filter hid.
+    expect(
+      getEmptyProjectPlaceholderRepoIds({
+        groupBy: 'repo',
+        repos: [repo],
+        worktreesByRepo: { [repo.id]: [worktree, feature] },
+        visibleWorktrees: [],
+        filterRepoIds: [],
+        hideDefaultBranchWorkspace: true
+      }).size
+    ).toBe(0)
+  })
+
+  it('does not placeholder a default-checkout-only repo while one of its rows is visible', () => {
+    expect(
+      getEmptyProjectPlaceholderRepoIds({
+        groupBy: 'repo',
+        repos: [repo],
+        worktreesByRepo: { [repo.id]: [worktree] },
+        visibleWorktrees: [worktree],
+        filterRepoIds: [],
+        hideDefaultBranchWorkspace: true
+      }).size
+    ).toBe(0)
+  })
+
+  it('applies repo filters to default-checkout-only placeholder candidates', () => {
+    const selectedRepo = { ...repo, id: 'repo-selected' }
+    const hiddenRepo = { ...repo, id: 'repo-hidden' }
+
+    expect(
+      Array.from(
+        getEmptyProjectPlaceholderRepoIds({
+          groupBy: 'repo',
+          repos: [selectedRepo, hiddenRepo],
+          worktreesByRepo: {
+            [selectedRepo.id]: [{ ...worktree, id: 'wt-selected', repoId: selectedRepo.id }],
+            [hiddenRepo.id]: [{ ...worktree, id: 'wt-hidden', repoId: hiddenRepo.id }]
+          },
+          visibleWorktrees: [],
+          filterRepoIds: [selectedRepo.id],
+          hideDefaultBranchWorkspace: true
+        })
+      )
+    ).toEqual([selectedRepo.id])
   })
 })

@@ -11,8 +11,7 @@ const mocks = vi.hoisted(() => ({
     repos: [] as Repo[],
     worktreesByRepo: {} as Record<string, unknown[]>,
     fetchRepos: vi.fn(),
-    fetchWorktrees: vi.fn(),
-    setHideDefaultBranchWorkspace: vi.fn()
+    fetchWorktrees: vi.fn()
   },
   activateAndRevealWorktree: vi.fn(),
   finishProjectAddWithDefaultCheckout: vi.fn()
@@ -83,8 +82,7 @@ describe('ProjectAddedDialog', () => {
     expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
       repoId: 'repo-1',
       source: 'project_added_compat',
-      closeModal: mocks.state.closeModal,
-      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+      closeModal: mocks.state.closeModal
     })
   })
 
@@ -115,8 +113,7 @@ describe('ProjectAddedDialog', () => {
     expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
       repoId: 'repo-1',
       source: 'project_added_compat',
-      closeModal: mocks.state.closeModal,
-      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+      closeModal: mocks.state.closeModal
     })
   })
 

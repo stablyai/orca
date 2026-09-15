@@ -37,7 +37,6 @@ export default React.memo(function AddRepoDialog({
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
   const repos = useAppStore((s) => s.repos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
   const { closeModal, closeForFolderHandoff, finishProjectAdd, handleOpenSshSettings } =
     useAddRepoHostedController(hosted)
@@ -46,7 +45,6 @@ export default React.memo(function AddRepoDialog({
   const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
   const completeGitRepoAdd = useCompleteGitRepoAdd({
     closeModal,
-    setHideDefaultBranchWorkspace,
     finishProjectAdd
   })
   const hostSelection = useAddRepoHostSelection({ isOpen, setStep })

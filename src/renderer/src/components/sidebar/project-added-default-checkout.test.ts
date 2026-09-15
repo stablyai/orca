@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
     filterRepoIds: [] as string[],
     showActiveOnly: false,
     hideDefaultBranchWorkspace: false,
+    showSleepingWorkspaces: true,
+    alwaysShowDefaultBranchWorkspace: true,
     repos: [] as Repo[],
     worktreesByRepo: {} as Record<string, Worktree[]>,
     detectedWorktreesByRepo: {} as Record<string, DetectedWorktreeListResult>,
@@ -25,10 +27,13 @@ const mocks = vi.hoisted(() => ({
     setFilterRepoIds: vi.fn(),
     setShowActiveOnly: vi.fn(),
     setHideDefaultBranchWorkspace: vi.fn(),
+    setAlwaysShowDefaultBranchWorkspace: vi.fn(),
+    revealSidebarRow: vi.fn(),
     updateRepo: vi.fn(),
     fetchWorktrees: vi.fn()
   },
   activateAndRevealWorktree: vi.fn(),
+  toastWarning: vi.fn(),
   onboardingGet: vi.fn(),
   onboardingUpdate: vi.fn(),
   track: vi.fn()
@@ -46,6 +51,14 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/lib/telemetry', () => ({
   track: mocks.track
+}))
+
+vi.mock('sonner', () => ({
+  toast: { warning: mocks.toastWarning }
+}))
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string) => fallback
 }))
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -127,6 +140,8 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     mocks.state.filterRepoIds = []
     mocks.state.showActiveOnly = false
     mocks.state.hideDefaultBranchWorkspace = false
+    mocks.state.showSleepingWorkspaces = true
+    mocks.state.alwaysShowDefaultBranchWorkspace = true
     mocks.state.repos = []
     mocks.state.worktreesByRepo = {}
     mocks.state.detectedWorktreesByRepo = {}
@@ -146,8 +161,6 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
   it('closes the modal and activates the default checkout', async () => {
     const closeModal = vi.fn()
-    const setHideDefaultBranchWorkspace = vi.fn()
-    mocks.state.hideDefaultBranchWorkspace = true
     mocks.state.worktreesByRepo = {
       'repo-1': [makeWorktree()]
     }
@@ -155,15 +168,13 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     await finishProjectAddWithDefaultCheckout({
       repoId: 'repo-1',
       source: 'clone_url',
-      closeModal,
-      setHideDefaultBranchWorkspace
+      closeModal
     })
 
     expect(closeModal).toHaveBeenCalledTimes(1)
     expect(mocks.onboardingUpdate).toHaveBeenCalledWith({
       checklist: { addedRepo: true }
     })
-    expect(setHideDefaultBranchWorkspace).toHaveBeenCalledWith(false)
     expect(mocks.track).toHaveBeenCalledWith('activation_checklist_item_completed', {
       item: 'addedRepo',
       time_since_completed_ms: 0
@@ -174,6 +185,130 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       reason: 'loaded_default_checkout'
     })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+  })
+
+  it('reveals the project instead of opening a default checkout hidden by Hide default branch', async () => {
+    const closeModal = vi.fn()
+    mocks.state.hideDefaultBranchWorkspace = true
+    mocks.state.worktreesByRepo = {
+      'repo-1': [makeWorktree()]
+    }
+
+    await finishProjectAddWithDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'clone_url',
+      closeModal
+    })
+
+    expect(closeModal).toHaveBeenCalledTimes(1)
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
+    expect(mocks.state.setActiveRepo).toHaveBeenCalledWith('repo-1')
+    expect(mocks.track).toHaveBeenCalledWith('add_repo_default_checkout_handoff', {
+      source: 'clone_url',
+      result: 'revealed_project',
+      reason: 'default_checkout_hidden'
+    })
+    // Why: outside project grouping there is no header row, so the reveal request is
+    // what switches grouping and scrolls to the new project.
+    expect(mocks.state.revealSidebarRow).toHaveBeenCalledWith(
+      'repo:repo-1',
+      expect.objectContaining({ highlight: true })
+    )
+    expect(mocks.toastWarning).not.toHaveBeenCalled()
+  })
+
+  it('opens a hidden default checkout anyway when the user picked a folder inside it', async () => {
+    mocks.state.hideDefaultBranchWorkspace = true
+    mocks.state.worktreesByRepo = {
+      'repo-1': [makeWorktree()]
+    }
+
+    await openProjectDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'local_folder_picker',
+      selectedPath: '/repo/packages/web'
+    })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      initialCwd: '/repo/packages/web'
+    })
+    expect(mocks.state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
+    expect(mocks.state.revealSidebarRow).not.toHaveBeenCalled()
+    expect(mocks.toastWarning).toHaveBeenCalledTimes(1)
+    expect(mocks.track).toHaveBeenCalledWith('add_repo_default_checkout_handoff', {
+      source: 'local_folder_picker',
+      result: 'opened_default_checkout',
+      reason: 'loaded_default_checkout'
+    })
+  })
+
+  it('leaves both the filter and the sleeping exemption alone when Hide sleeping is also on', async () => {
+    mocks.state.hideDefaultBranchWorkspace = true
+    mocks.state.showSleepingWorkspaces = false
+    mocks.state.alwaysShowDefaultBranchWorkspace = false
+    mocks.state.worktreesByRepo = {
+      'repo-1': [makeWorktree()]
+    }
+
+    await openProjectDefaultCheckout({ repoId: 'repo-1', source: 'clone_url' })
+
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
+    expect(mocks.state.setAlwaysShowDefaultBranchWorkspace).not.toHaveBeenCalled()
+    expect(mocks.track).toHaveBeenCalledWith('add_repo_default_checkout_handoff', {
+      source: 'clone_url',
+      result: 'revealed_project',
+      reason: 'default_checkout_hidden'
+    })
+  })
+
+  it('reveals only once when colliding repo IDs share a hidden default checkout', async () => {
+    mocks.state.hideDefaultBranchWorkspace = true
+    mocks.state.worktreesByRepo = {
+      'repo-1': [
+        makeWorktree({ id: 'repo-1::same-id', path: '/local/repo', hostId: 'local' }),
+        makeWorktree({ id: 'repo-1::same-id', path: '/runtime/repo', hostId: 'runtime:env-1' })
+      ]
+    }
+
+    await openProjectDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'runtime_server_path',
+      executionHostId: 'runtime:env-1'
+    })
+
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.setActiveRepo).toHaveBeenCalledWith('repo-1')
+    expect(
+      mocks.track.mock.calls.filter(([event]) => event === 'add_repo_default_checkout_handoff')
+    ).toHaveLength(1)
+  })
+
+  it('still opens a provisioned-root default checkout while Hide default branch is on', async () => {
+    mocks.state.hideDefaultBranchWorkspace = true
+    mocks.state.worktreesByRepo = {
+      'repo-1': [makeWorktree({ ephemeralVmCheckoutMode: 'provisioned-root' })]
+    }
+
+    await openProjectDefaultCheckout({ repoId: 'repo-1', source: 'clone_url' })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.state.revealSidebarRow).not.toHaveBeenCalled()
+  })
+
+  it('still opens a detached-HEAD default checkout while Hide default branch is on', async () => {
+    mocks.state.hideDefaultBranchWorkspace = true
+    mocks.state.worktreesByRepo = {
+      'repo-1': [makeWorktree({ branch: '' })]
+    }
+
+    await openProjectDefaultCheckout({ repoId: 'repo-1', source: 'clone_url' })
+
+    // Why: the filter only hides rows that pass isDefaultBranchWorkspace, so a
+    // branchless main row is visible and the handoff can land on it.
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
   })
 
   it('activates only the captured host default checkout when repo IDs collide', async () => {
@@ -212,8 +347,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
       source: 'clone_url',
-      executionHostId: 'runtime:env-1',
-      setHideDefaultBranchWorkspace: vi.fn()
+      executionHostId: 'runtime:env-1'
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
@@ -232,8 +366,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
       source: 'runtime_server_path',
-      executionHostId: 'runtime:env-1',
-      setHideDefaultBranchWorkspace: vi.fn()
+      executionHostId: 'runtime:env-1'
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
@@ -249,8 +382,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
       source: 'local_folder_picker',
-      selectedPath: '/repo/packages/web',
-      setHideDefaultBranchWorkspace: vi.fn()
+      selectedPath: '/repo/packages/web'
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
@@ -266,8 +398,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
       source: 'local_folder_picker',
-      selectedPath: '/repo',
-      setHideDefaultBranchWorkspace: vi.fn()
+      selectedPath: '/repo'
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
@@ -299,8 +430,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
-      source: 'local_folder_picker',
-      setHideDefaultBranchWorkspace: vi.fn()
+      source: 'local_folder_picker'
     })
 
     expect(mocks.state.updateRepo).toHaveBeenCalledWith('repo-1', {
@@ -328,8 +458,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
-      source: 'local_folder_picker',
-      setHideDefaultBranchWorkspace: vi.fn()
+      source: 'local_folder_picker'
     })
 
     expect(mocks.state.updateRepo).toHaveBeenCalledWith('repo-1', {
@@ -357,8 +486,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
-      source: 'local_folder_picker',
-      setHideDefaultBranchWorkspace: vi.fn()
+      source: 'local_folder_picker'
     })
 
     expect(mocks.state.updateRepo).not.toHaveBeenCalled()
@@ -382,8 +510,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
-      source: 'local_folder_picker',
-      setHideDefaultBranchWorkspace: vi.fn()
+      source: 'local_folder_picker'
     })
 
     expect(mocks.state.updateRepo).not.toHaveBeenCalled()
@@ -419,8 +546,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
-      source: 'local_folder_picker',
-      setHideDefaultBranchWorkspace: vi.fn()
+      source: 'local_folder_picker'
     })
 
     expect(mocks.state.updateRepo).toHaveBeenCalledTimes(1)
@@ -448,8 +574,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
-      source: 'local_folder_picker',
-      setHideDefaultBranchWorkspace: vi.fn()
+      source: 'local_folder_picker'
     })
 
     expect(mocks.track).toHaveBeenCalledWith('add_repo_default_checkout_handoff', {
@@ -473,8 +598,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
-      source: 'local_folder_picker',
-      setHideDefaultBranchWorkspace: vi.fn()
+      source: 'local_folder_picker'
     })
 
     expect(mocks.track).toHaveBeenCalledWith('add_repo_default_checkout_handoff', {
@@ -488,7 +612,6 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
   it('reveals the project if no default checkout is available', async () => {
     const closeModal = vi.fn()
-    const setHideDefaultBranchWorkspace = vi.fn()
     mocks.state.worktreesByRepo = {
       'repo-1': [makeWorktree({ isMainWorktree: false })]
     }
@@ -496,8 +619,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     await finishProjectAddWithDefaultCheckout({
       repoId: 'repo-1',
       source: 'ssh_remote_path',
-      closeModal,
-      setHideDefaultBranchWorkspace
+      closeModal
     })
 
     expect(closeModal).toHaveBeenCalledTimes(1)
@@ -508,7 +630,6 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       reason: 'no_authoritative_detection'
     })
     expect(mocks.state.setActiveRepo).toHaveBeenCalledWith('repo-1')
-    expect(setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
   })
 
   it('reveals the project even when no worktrees are loaded', async () => {
@@ -518,8 +639,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
-      source: 'project_added_compat',
-      setHideDefaultBranchWorkspace: vi.fn()
+      source: 'project_added_compat'
     })
 
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
