@@ -635,11 +635,18 @@ describe('OrcaRuntimeService', () => {
   it('keeps Claude agents management evidence when controller refresh reports a Claude process title', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg', incarnationId: 'synthetic-stable' }),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => 'claude',
-      listProcesses: async () => [{ id: 'pty-bg', cwd: TEST_WORKTREE_PATH, title: 'claude' }]
+      listProcesses: async () => [
+        {
+          id: 'pty-bg',
+          incarnationId: 'synthetic-stable',
+          cwd: TEST_WORKTREE_PATH,
+          title: 'claude'
+        }
+      ]
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })

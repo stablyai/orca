@@ -74,8 +74,8 @@ describe('TerminalHost agent-session claims', () => {
       rows: 24,
       streamClient: { onData: vi.fn(), onExit: vi.fn() },
       agentSessionEnsure: {
-        claim,
-        surface: { ...surface, terminalHandle: 'term_retry' }
+        claim: { ...claim, worktreeScopeDigest: 'other-worktree-scope' },
+        surface: { ...surface, worktreeId: 'other-worktree', terminalHandle: 'term_retry' }
       }
     })
 

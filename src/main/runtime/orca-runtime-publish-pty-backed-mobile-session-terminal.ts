@@ -2,7 +2,7 @@
 import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from './orca-runtime-has-live-or-persisted-serve-or-ssh-owned-pty-binding'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { normalizeCompatibleAgentTitleForOwner } from '../../shared/agent-title-owner'
-import { getLatestPtyTitle } from './runtime-worktree-status-projection'
+import { getIncumbentTerminalMetadata } from './runtime-incumbent-terminal-metadata'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
@@ -42,9 +42,15 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       return
     }
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const incumbentMetadata = getIncumbentTerminalMetadata(
+      pty,
+      existing?.tabs,
+      args.tabId,
+      args.leafId
+    )
     const ownerAgent = pty.launchAgent ?? pty.foregroundAgent
     const title = normalizeCompatibleAgentTitleForOwner(
-      args.title ?? getLatestPtyTitle(pty) ?? 'Terminal',
+      args.title ?? incumbentMetadata.title ?? 'Terminal',
       ownerAgent,
       { ownerIsLaunch: Boolean(pty.launchAgent) }
     )
@@ -74,13 +80,18 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
     // host's explicit tab mode before the renderer graph catches up.
     const viewMode =
       args.viewMode ??
-      existingTab?.viewMode ??
+      incumbentMetadata.viewMode ??
       existing?.tabs.find(
         (candidate): candidate is RuntimeMobileSessionTerminalTab =>
           candidate.type === 'terminal' &&
           candidate.parentTabId === args.tabId &&
+          candidate.leafId !== args.leafId &&
+          candidate.ptyId !== pty.ptyId &&
           candidate.viewMode !== undefined
       )?.viewMode
+    const startupCwd = pty.launchSurface
+      ? incumbentMetadata.cwd
+      : (incumbentMetadata.cwd ?? args.startupCwd)
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,
@@ -90,7 +101,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       incarnationId: pty.incarnationId,
       title,
       ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
-      ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+      ...(startupCwd ? { startupCwd } : {}),
       ...(viewMode ? { viewMode } : {}),
       parentLayout,
       isActive:

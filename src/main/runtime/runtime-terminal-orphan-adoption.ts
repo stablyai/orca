@@ -16,6 +16,7 @@ import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
 
 type RuntimeTerminalOrphanAdoptionPorts = {
+  bindPtySurface: (ptyId: string, tabId: string, paneKey: string) => void
   getPty: (handle: string) => RuntimePtyWorktreeRecord | null
   getLeaves: (ptyId: string) => readonly RuntimeLeafRecord[]
   getLeaf: (tabId: string, leafId: string) => RuntimeLeafRecord | undefined
@@ -134,8 +135,7 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
   })
   if (isExactPersisted && sessionWorktreeId === workspace.id) {
     for (const { claim, pty, paneKey } of validated) {
-      pty.tabId = claim.tabId
-      pty.paneKey = paneKey
+      ports.bindPtySurface(pty.ptyId, claim.tabId, paneKey)
     }
     return {
       adopted: false,
@@ -235,8 +235,7 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
     throw error
   }
   for (const { claim, pty, paneKey } of validated) {
-    pty.tabId = claim.tabId
-    pty.paneKey = paneKey
+    ports.bindPtySurface(pty.ptyId, claim.tabId, paneKey)
   }
   ports.hydrateSession(workspace.id)
   ports.notifySessionChanged(workspace.id)

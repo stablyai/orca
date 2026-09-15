@@ -168,7 +168,9 @@ describe('terminal side-effect fact channel', () => {
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null,
-        listProcesses: async () => [{ id: ptyId, cwd: '/tmp/worktree-a', title: 'shell' }]
+        listProcesses: async () => [
+          { id: ptyId, incarnationId: 'synthetic-stable', cwd: '/tmp/worktree-a', title: 'shell' }
+        ]
       })
       runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
       runtime.onClientEvent((event) => mobileEvents.push(event), {
@@ -176,6 +178,7 @@ describe('terminal side-effect fact channel', () => {
       })
       const unsubscribeDesktop = runtime.onClientEvent(() => {})
 
+      await runtime.listTerminals()
       runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData(ptyId, 'output without a title\r\n', 101)
       // The phone is still subscribed: disposing trackers on this edge would cancel
