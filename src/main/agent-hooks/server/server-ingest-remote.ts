@@ -64,13 +64,19 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     }
     // Why: trim paneKey to match the HTTP path, else remote-vs-local events for one pane diverge.
     const physicalPaneKey = envelope.paneKey.trim()
-    const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
+    let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
       return
     }
     if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
+      return
+    }
+    if (
+      (envelope.isReplay !== undefined && typeof envelope.isReplay !== 'boolean') ||
+      (envelope.launchToken !== undefined && typeof envelope.launchToken !== 'string')
+    ) {
       return
     }
     // Why: fence relay spool replay at main so stale generations cannot overwrite hydrated state.
@@ -99,7 +105,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     ) {
       return
     }
-    const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
+    let tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
     const hookEventName =
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
         ? envelope.hookEventName.trim()
@@ -118,23 +124,6 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       (envelope.compactTrigger === 'manual' || envelope.compactTrigger === 'auto')
         ? envelope.compactTrigger
         : undefined
-    const statusDisposition = this.getAgentStatusDisposition(paneKey, {
-      source,
-      rawSource: envelope.source,
-      hookEventName,
-      isReplay: envelope.isReplay === true,
-      hasExplicitPrompt: envelope.hasExplicitPrompt === true,
-      launchToken: envelope.launchToken
-    })
-    if (statusDisposition === 'suppress') {
-      return
-    }
-    if (statusDisposition === 'restart') {
-      // Why: same rebind as the HTTP path — a retired pane taking a new turn is a new session.
-      // Why paneKey, not envelope.paneKey: alias resolution already mapped it to the
-      // stable pane, so the rebind cannot land on a legacy key.
-      this.observations.rebind(paneKey)
-    }
     const worktreeId =
       envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
@@ -166,12 +155,54 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     if (!validatedPayload) {
       return
     }
+    if (
+      envelope.source !== undefined &&
+      (source === 'omp' || validatedPayload.agentType === 'omp') &&
+      envelope.source !== validatedPayload.agentType
+    ) {
+      return
+    }
     // Why: restore a shed roster only when its digest and turn identity still match the cache.
     let normalizedPayload = restoreShedStatusFields(
       validatedPayload,
       envelope.shedFields,
       this.state.lastStatusByPaneKey.get(paneKey)?.payload
     )
+    if (
+      envelope.providerSessionOnly === true &&
+      !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
+    ) {
+      return
+    }
+    // Older relays omit source; canonical OMP identity preserves boundary provenance.
+    const effectiveSource =
+      source ??
+      (envelope.source === undefined && validatedPayload.agentType === 'omp' ? 'omp' : undefined)
+    const statusDisposition = this.getAgentStatusDisposition(paneKey, {
+      source: effectiveSource,
+      rawSource: envelope.source,
+      hookEventName,
+      isReplay: envelope.isReplay === true,
+      hasExplicitPrompt: envelope.hasExplicitPrompt === true,
+      launchToken: envelope.launchToken
+    })
+    if (statusDisposition === 'suppress') {
+      return
+    }
+    const restartedAuthority =
+      statusDisposition === 'restart' && effectiveSource === 'omp'
+        ? this.restoreRetiredStatusRestart(paneKey)
+        : undefined
+    if (restartedAuthority && restartedAuthority.paneKey !== paneKey) {
+      paneKey = restartedAuthority.paneKey
+      tabId = parsePaneKey(paneKey)?.tabId
+    }
+    if (statusDisposition === 'restart') {
+      // Why: same rebind as the HTTP path — a retired pane taking a new turn is a new session.
+      // Why paneKey, not envelope.paneKey: alias resolution already mapped it to the
+      // stable pane, so the rebind cannot land on a legacy key.
+      this.observations.rebind(paneKey)
+    }
     const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
     let acceptedCompactCompletion = false
     if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {
@@ -231,12 +262,6 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     ) {
       normalizedPayload = { ...normalizedPayload, prompt: previousStatus.payload.prompt }
     }
-    if (
-      envelope.providerSessionOnly === true &&
-      !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
-    ) {
-      return
-    }
     const applyClaudeBackgroundWork =
       normalizedPayload.agentType === 'claude' &&
       typeof envelope.claudeRunningNonAgentTask === 'boolean' &&
@@ -248,9 +273,12 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       env: envelope.env,
       expectedEnv: this.env
     })
-    const event: AgentHookEventPayload = {
+    const event: AgentHookEventPayload & { authorityRestartId?: string } = {
       paneKey,
-      source,
+      source: effectiveSource,
+      ...(restartedAuthority?.authorityRestartId
+        ? { authorityRestartId: restartedAuthority.authorityRestartId }
+        : {}),
       launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
       tabId,
       worktreeId,

@@ -61,7 +61,7 @@ export type AgentStatusSlice = {
   recentlyClosedAgentStatusTabIds: Record<string, true>
 
   /** Exact pane authorities retired while sibling panes in the tab stay live. */
-  recentlyRetiredAgentStatusPaneKeys: Record<string, true>
+  recentlyRetiredAgentStatusPaneKeys: Record<string, true | string>
 
   retireAgentPaneAuthority: (
     paneKey: string,

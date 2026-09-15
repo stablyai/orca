@@ -4,6 +4,7 @@ import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsup
 import {
   boundRecentlyClosedAgentStatusTabIds,
   boundRecentlyRetiredAgentStatusPaneKeys,
+  closedAgentStatusRetirementKeys,
   removePaneKeysByTabPrefix
 } from './agent-status-pane-keyed-records'
 import { findCompletedOrphanPaneKeysForTabClose } from './agent-status-pane-key-tab-binding'
@@ -87,7 +88,11 @@ export function buildAgentStatusTabPrefixDropPatch(
     )
     const nextRetiredPaneKeys = boundRecentlyRetiredAgentStatusPaneKeys(
       s.recentlyRetiredAgentStatusPaneKeys,
-      retiredAliasPaneKeys
+      closedAgentStatusRetirementKeys(
+        s.recentlyRetiredAgentStatusPaneKeys,
+        prefix,
+        retiredAliasPaneKeys
+      )
     )
     const nextClearedAt = opts?.preserveActivityClearedState
       ? s.activityClearedAtByPaneKey

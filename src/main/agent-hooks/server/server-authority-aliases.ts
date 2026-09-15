@@ -140,6 +140,9 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     }
     const previousOwnerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
+    for (const key of [fromPaneKey, previousOwnerPaneKey, physicalPaneKey, toPaneKey]) {
+      this.takeRetiredPaneRestartId(key)
+    }
     const existing = this.legacyPaneKeyAliases.get(physicalPaneKey)
     const normalizedPtyId = ptyId?.trim() || existing?.ptyId || null
     const previousStatus = this.state.lastStatusByPaneKey.get(previousOwnerPaneKey) as

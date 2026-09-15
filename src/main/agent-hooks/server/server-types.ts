@@ -10,6 +10,8 @@ import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-ty
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
+  /** Live acknowledgement of the matching renderer retirement; never cached. */
+  authorityRestartId?: string
   receivedAt: number
   /** When this evidence was first observed, as distinct from `receivedAt`. A relay reconnect
    *  replays cached rows and `receivedAt` must restamp to clear the connection watermark, so
@@ -29,6 +31,7 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
 
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
+  | 'authorityRestartId'
   | 'claudeRunningNonAgentTask'
   | 'launchToken'
   | 'promptInteractionKey'
@@ -114,6 +117,8 @@ export type RetiredPaneAlias = { physicalPaneKey: string; entry: PaneKeyAliasEnt
 export type RetiredPaneFence = {
   paneKeys: readonly string[]
   aliases: readonly RetiredPaneAlias[]
+  closed?: true
+  retirementIdsByPaneKey: Record<string, string>
 }
 
 export type LastStatusFile = {
