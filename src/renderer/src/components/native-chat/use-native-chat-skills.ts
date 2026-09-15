@@ -11,6 +11,7 @@ import {
   selectNativeChatSkillStateInputs,
   type NativeChatSkillDiscoveryContext
 } from './native-chat-skill-discovery-context'
+import { isSkillSourceVisibleToAgent } from '../../../../shared/skill-install-providers'
 
 export {
   resolveNativeChatSkillDiscoveryContext,
@@ -71,10 +72,15 @@ export function isNativeChatSkillForAgent(
   // be reachable through several roots; any shared or agent-owned root grants
   // visibility regardless of which root the scanner happened to list first.
   const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
-  return rootPaths.some((rootPath) => {
-    const source = result.sources.find((entry) => entry.path === rootPath)
-    return source?.owner === null || source?.owner === profile.skillSourceOwner
-  })
+  // Why `some` and not `find`: one path can be scanned as both a home and a repo root
+  // (see `rootScanKey` in main/skills/discovery.ts), and visibility now differs by
+  // `sourceKind`, so scan order must not decide the answer.
+  return rootPaths.some((rootPath) =>
+    result.sources.some(
+      (source) =>
+        source.path === rootPath && isSkillSourceVisibleToAgent(profile.skillSourceOwner, source)
+    )
+  )
 }
 
 export function useNativeChatSkills(
