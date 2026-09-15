@@ -13,6 +13,7 @@ type ProbeCalls = {
   invalidateDiff: ReturnType<typeof vi.fn>
   loadDiff: ReturnType<typeof vi.fn>
   loadFile: ReturnType<typeof vi.fn>
+  requestDiff: ReturnType<typeof vi.fn>
 }
 
 type ProbeProps = {
@@ -45,6 +46,7 @@ function ExternalContentProbe({ activeFileId, calls, isVisible, openFiles }: Pro
     loadDiffContent: calls.loadDiff,
     loadFileContent: calls.loadFile,
     openFilesRef,
+    requestDiffContentReload: calls.requestDiff,
     setDiffContents,
     setFileContents
   } as Parameters<typeof useEditorPanelExternalContentEvents>[0])
@@ -69,7 +71,8 @@ function makeCalls(): ProbeCalls {
     invalidate: vi.fn(),
     invalidateDiff: vi.fn(),
     loadDiff: vi.fn(async () => undefined),
-    loadFile: vi.fn(async () => undefined)
+    loadFile: vi.fn(async () => undefined),
+    requestDiff: vi.fn()
   }
 }
 
@@ -238,5 +241,24 @@ describe('useEditorPanelExternalContentEvents', () => {
     const previewOptions = previewCalls.loadFile.mock.calls[0]?.[4]
     expect(sourceOptions?.externalEventGeneration).toBeTypeOf('number')
     expect(previewOptions?.externalEventGeneration).toBe(sourceOptions?.externalEventGeneration)
+  })
+
+  it('rotates a visible diff model after the replacement load resolves', async () => {
+    const file = makeFile('changed', { mode: 'diff', diffSource: 'unstaged' })
+    const calls = makeCalls()
+    let resolveLoad!: (replaced: boolean) => void
+    calls.loadDiff = vi.fn(() => new Promise<boolean>((resolve) => (resolveLoad = resolve)))
+
+    act(() => {
+      root.render(
+        <ExternalContentProbe activeFileId={file.id} calls={calls} isVisible openFiles={[file]} />
+      )
+    })
+    dispatchExternalChange(file.relativePath)
+
+    expect(calls.loadDiff).toHaveBeenCalledOnce()
+    expect(calls.requestDiff).not.toHaveBeenCalled()
+    await act(async () => resolveLoad(true))
+    await vi.waitFor(() => expect(calls.requestDiff).toHaveBeenCalledWith(file.id))
   })
 })

@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
-import type { useAppStore } from '@/store'
+import { useAppStore } from '@/store'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import {
   useEditorPanelExternalContentEvents,
@@ -54,6 +54,9 @@ export function useEditorPanelContentState({
   const openFilesRef = useRef(openFiles)
   const editorViewModeRef = useRef(editorViewMode)
   const isVisibleRef = useRef(isVisible)
+  const requestDiffContentReload = useCallback((fileId: string): void => {
+    useAppStore.getState().requestDiffContentReload(fileId)
+  }, [])
   const selectedConflictReviewFile =
     activeFile?.mode === 'conflict-review' && activeFile.conflictReview?.selectedFileId
       ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
@@ -151,7 +154,11 @@ export function useEditorPanelContentState({
           delete next[file.id]
           return next
         })
-        void loadDiffContent(file, { force: true })
+        void loadDiffContent(file, { force: true }).then((replaced) => {
+          if (replaced) {
+            requestDiffContentReload(file.id)
+          }
+        })
         return
       }
       delete fileLoadRetryAttemptsRef.current[file.id]
@@ -167,7 +174,7 @@ export function useEditorPanelContentState({
         force: true
       })
     },
-    [loadDiffContent, loadFileContent]
+    [loadDiffContent, loadFileContent, requestDiffContentReload]
   )
 
   useLocalLogTail({ openFiles, fileContents, setFileContents, reloadContent })
@@ -207,7 +214,8 @@ export function useEditorPanelContentState({
     invalidateDiffContent,
     invalidateFileContent,
     loadDiffContent,
-    loadFileContent
+    loadFileContent,
+    requestDiffContentReload
   })
 
   useEditorPanelExternalContentEvents({
@@ -220,7 +228,8 @@ export function useEditorPanelContentState({
     openFilesRef,
     editorViewModeRef,
     setFileContents,
-    setDiffContents
+    setDiffContents,
+    requestDiffContentReload
   })
   usePruneClosedEditorContent(
     openFiles,
