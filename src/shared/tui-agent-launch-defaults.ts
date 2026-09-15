@@ -9,8 +9,18 @@ const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> =
 
 export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = YOLO_TUI_AGENT_ARGS
 
-export const DEFAULT_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> =
-  YOLO_TUI_AGENT_ENV
+// Why: privacy-sensitive defaults that are not permission/YOLO modes. Grok Build
+// can upload session traces when trace_upload is on; Orca-launched Grok sessions
+// opt out by default (users can override via Settings → agent default env).
+// See open-source xai-org/grok-build telemetry config + GROK_TELEMETRY_TRACE_UPLOAD.
+const GROK_LAUNCH_PRIVACY_ENV: Record<string, string> = {
+  GROK_TELEMETRY_TRACE_UPLOAD: '0'
+}
+
+export const DEFAULT_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
+  ...YOLO_TUI_AGENT_ENV,
+  grok: { ...GROK_LAUNCH_PRIVACY_ENV }
+}
 
 function argPattern(arg: string): RegExp {
   return new RegExp(`(^|\\s)${arg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'g')
