@@ -1,11 +1,11 @@
 import { isAgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
-import { retireUnexpectedAttachOnlySpawn } from './daemon-attach-only-retirement'
+import { refuseAttachOnlyAccidentalSpawn } from './daemon-attach-only-retirement'
 import { DaemonPtySpawnRequest, type DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import { providerSequenceFromCreateOrAttach } from './daemon-pty-provider-sequence'
 import { takeHistoryRecoveryFreeze } from './daemon-history-recovery-freeze'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
-import { SessionNotFoundError, type CreateOrAttachResult } from './types'
+import type { CreateOrAttachResult } from './types'
 import type { PtySpawnResult } from '../providers/types'
 
 export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
@@ -61,11 +61,12 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       historySeedSegments = null
     }
     if (attachOnly && result.isNew) {
-      operation.ignoreNextExit = true
-      await retireUnexpectedAttachOnlySpawn(requestedSessionId, () =>
-        this.client.request('kill', { sessionId: requestedSessionId, immediate: true })
+      await refuseAttachOnlyAccidentalSpawn(
+        this.protocolVersion,
+        context,
+        result.incarnationId,
+        this.client
       )
-      throw new SessionNotFoundError(requestedSessionId)
     }
     await adoptSpawnResultSession(result)
     // Both ids: adoptSpawnResultSession may have rewritten sessionId to the claim owner.
