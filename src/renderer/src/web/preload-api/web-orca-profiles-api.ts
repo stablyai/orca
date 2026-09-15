@@ -49,6 +49,7 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
         status: 'unconfigured',
         auth: await webOrcaProfileAuthStatus()
       }),
+      /** Nothing to cancel: the fallback never starts a sign-in. */
       cancelConnect: () => Promise.resolve(),
       refreshAuth: async () => ({
         status: 'unconfigured',

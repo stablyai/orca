@@ -84,6 +84,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
       {
         cancel: {
           label: translate('auto.store.slices.orca.profiles.cancelSignIn', 'Cancel'),
+          /** Asks main to abort the loopback wait; the pending connect then settles as cancelled. */
           onClick: () => {
             window.api.orcaProfiles.cancelConnect().catch((err: unknown) => {
               console.error('Failed to cancel Orca profile sign-in:', err)

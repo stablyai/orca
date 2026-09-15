@@ -57,6 +57,7 @@ export function beginOrcaCloudPkceFlow(
     let settled = false
     let redirectUri = ''
 
+    /** Settles the flow once with an error and tears the loopback server down. */
     function rejectFlow(error: Error): void {
       if (settled) {
         return
@@ -66,6 +67,7 @@ export function beginOrcaCloudPkceFlow(
       closeServer(server)
     }
 
+    /** Settles the flow once with the callback code and tears the loopback server down. */
     function resolveFlow(code: string): void {
       if (settled) {
         return
