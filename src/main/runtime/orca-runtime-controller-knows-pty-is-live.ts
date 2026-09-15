@@ -73,8 +73,12 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
           return false
         }
         const now = Date.now()
-        this.pruneExpiredLeafPtyVerdicts(now)
         this.provenAbsentLeafPtyVerdicts.set(ptyId, now)
+        pruneExpiredProvenAbsentLeafPtyVerdicts(
+          this.provenAbsentLeafPtyVerdicts,
+          now,
+          PROVEN_ABSENT_LEAF_PTY_TTL_MS
+        )
         return true
       } catch {
         // Why: a failed probe is unknown, and unknown never rejects a write.

@@ -23,4 +23,13 @@ describe('pruneExpiredProvenAbsentLeafPtyVerdicts', () => {
     pruneExpiredProvenAbsentLeafPtyVerdicts(map, 100, 0)
     expect(map.size).toBe(0)
   })
+
+  it('drops oldest entries when still over the cap after TTL prune', () => {
+    const map = new Map<string, number>()
+    for (let i = 0; i < 8; i += 1) {
+      map.set(`pty-${i}`, 1_000 + i)
+    }
+    pruneExpiredProvenAbsentLeafPtyVerdicts(map, 1_000, 15_000, 3)
+    expect([...map.keys()]).toEqual(['pty-5', 'pty-6', 'pty-7'])
+  })
 })
