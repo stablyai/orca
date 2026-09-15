@@ -5,7 +5,7 @@ import { RelayContext } from './context'
 import type { RelayDispatcher } from './dispatcher'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { subscribeWithInProcessWatcher } from '../main/ipc/parcel-watcher-in-process-fallback'
 import { createMockDispatcher } from './relay-fs-test-dispatcher'
@@ -27,6 +27,27 @@ function statIdentity(stats: {
 }) {
   return `${stats.dev}:${stats.ino}:${stats.nlink ?? 'unknown'}:${stats.size}:${stats.mtimeMs}`
 }
+
+function canCreateFileSymlinks(): boolean {
+  const probeDir = mkdtempSync(path.join(tmpdir(), 'orca-symlink-capability-'))
+  const targetPath = path.join(probeDir, 'target')
+  const linkPath = path.join(probeDir, 'link')
+  try {
+    writeFileSync(targetPath, '')
+    symlinkSync(targetPath, linkPath)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) {
+      return false
+    }
+    throw error
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+}
+
+const symlinkIt = it.skipIf(!canCreateFileSymlinks())
 
 describe('FsHandler', () => {
   let dispatcher: ReturnType<typeof createMockDispatcher>
@@ -300,27 +321,30 @@ describe('FsHandler', () => {
     await expect(fs.readFile(filePath, 'utf-8')).resolves.toBe('abcdef')
   })
 
-  it('writeTerminalArtifact rejects a retargeted symlink before writing outside temp', async () => {
-    const filePath = path.join(tmpDir, 'artifact-link.json')
-    const outsidePath = path.join(tmpDir, 'outside.json')
-    writeFileSync(filePath, '{"ok":true}')
-    writeFileSync(outsidePath, '{"secret":true}')
-    const stats = await fs.stat(filePath)
-    const expectedRealPath = await fs.realpath(filePath)
-    await fs.rm(filePath)
-    symlinkSync(outsidePath, filePath)
+  symlinkIt(
+    'writeTerminalArtifact rejects a retargeted symlink before writing outside temp',
+    async () => {
+      const filePath = path.join(tmpDir, 'artifact-link.json')
+      const outsidePath = path.join(tmpDir, 'outside.json')
+      writeFileSync(filePath, '{"ok":true}')
+      writeFileSync(outsidePath, '{"secret":true}')
+      const stats = await fs.stat(filePath)
+      const expectedRealPath = await fs.realpath(filePath)
+      await fs.rm(filePath)
+      symlinkSync(outsidePath, filePath)
 
-    await expect(
-      dispatcher.callRequest('fs.writeTerminalArtifact', {
-        filePath,
-        content: '{"ok":false}',
-        expectedRealPath,
-        expectedStatIdentity: statIdentity(stats),
-        maxBytes: 512 * 1024
-      })
-    ).rejects.toThrow('terminal_file_grant_stale')
-    await expect(fs.readFile(outsidePath, 'utf-8')).resolves.toBe('{"secret":true}')
-  })
+      await expect(
+        dispatcher.callRequest('fs.writeTerminalArtifact', {
+          filePath,
+          content: '{"ok":false}',
+          expectedRealPath,
+          expectedStatIdentity: statIdentity(stats),
+          maxBytes: 512 * 1024
+        })
+      ).rejects.toThrow('terminal_file_grant_stale')
+      await expect(fs.readFile(outsidePath, 'utf-8')).resolves.toBe('{"secret":true}')
+    }
+  )
 
   it('writeTerminalArtifact rejects hard-linked files before writing', async () => {
     const outsidePath = path.join(tmpDir, 'outside-hardlink.json')
@@ -375,7 +399,7 @@ describe('FsHandler', () => {
     expect(result.type).toBe('directory')
   })
 
-  it('lstat returns symlink type without following links', async () => {
+  symlinkIt('lstat returns symlink type without following links', async () => {
     const targetFile = path.join(tmpDir, 'target.txt')
     const linkPath = path.join(tmpDir, 'link.txt')
     writeFileSync(targetFile, 'target')
@@ -534,7 +558,7 @@ describe('FsHandler', () => {
     expect(content).toBe('existing')
   })
 
-  it('realpath resolves symlinks', async () => {
+  symlinkIt('realpath resolves symlinks', async () => {
     const realFile = path.join(tmpDir, 'real.txt')
     const linkPath = path.join(tmpDir, 'link.txt')
     writeFileSync(realFile, 'real')

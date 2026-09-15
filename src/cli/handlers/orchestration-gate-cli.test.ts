@@ -28,6 +28,7 @@ vi.mock('../selectors', async (importOriginal) => ({
   getTerminalHandle: getTerminalHandleMock
 }))
 
+import { renderCommand } from '../orchestration-mutation-recovery'
 import { main } from '../index'
 import { RuntimeClientError } from '../runtime/types'
 import { okFixture, queueFixtures } from '../test-fixtures'
@@ -236,7 +237,20 @@ describe('orchestration gate commands carry caller identity', () => {
     const output = JSON.parse(String(logSpy.mock.calls[0]?.[0])) as {
       error: { message: string; data: Record<string, unknown> }
     }
-    expect(output.error.message).toContain('--retry-request mutation_1')
+    expect(output.error.message).toContain(
+      renderCommand([
+        'orca',
+        'orchestration',
+        'gate-create',
+        '--task',
+        'task_1',
+        '--question',
+        'ship?',
+        '--json',
+        '--retry-request',
+        'mutation_1'
+      ])
+    )
     expect(output.error.message).toContain('may already have taken effect')
     expect(output.error.message).toContain('Failed stage: dispatch_input')
     expect(output.error.message).toMatch(/Residual resources:.*repo::child.*term_worker/)

@@ -6,6 +6,8 @@ import {
   mkdtempSync,
   readFileSync,
   statSync,
+  rmSync,
+  symlinkSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -79,6 +81,27 @@ function spawnRelayEntry(
 function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
   return spawnRelayEntry(relayEntry, args, env)
 }
+
+function canCreateFileSymlinks(): boolean {
+  const probeDir = mkdtempSync(path.join(tmpdir(), 'orca-symlink-capability-'))
+  const targetPath = path.join(probeDir, 'target')
+  const linkPath = path.join(probeDir, 'link')
+  try {
+    writeFileSync(targetPath, '')
+    symlinkSync(targetPath, linkPath)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) {
+      return false
+    }
+    throw error
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+}
+
+const symlinkIt = it.skipIf(!canCreateFileSymlinks())
 
 function waitForChildExit(
   proc: ReturnType<typeof spawnChild>,
@@ -894,29 +917,32 @@ describe('Subprocess: Relay entry point', () => {
     await rm(outsideDir, { recursive: true, force: true }).catch(() => {})
   }, 10_000)
 
-  it('reads files via symlinks resolving outside the workspace', async () => {
-    // Regression test for issue #1661: a symlink under the workspace pointing
-    // to a directory outside it must resolve transparently. The pre-removal
-    // relay rejected this with "Path outside authorized workspace".
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
-    const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-outside-'))
-    writeFileSync(path.join(outsideDir, 'data.txt'), 'symlinked-target')
-    const { symlinkSync } = require('node:fs')
-    symlinkSync(outsideDir, path.join(tmpDir, 'link'))
+  symlinkIt(
+    'reads files via symlinks resolving outside the workspace',
+    async () => {
+      // Regression test for issue #1661: a symlink under the workspace pointing
+      // to a directory outside it must resolve transparently. The pre-removal
+      // relay rejected this with "Path outside authorized workspace".
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
+      const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-outside-'))
+      writeFileSync(path.join(outsideDir, 'data.txt'), 'symlinked-target')
+      symlinkSync(outsideDir, path.join(tmpDir, 'link'))
 
-    relay = spawn()
-    await relay.sentinelReceived
+      relay = spawn()
+      await relay.sentinelReceived
 
-    const id = relay.send('fs.readFile', {
-      filePath: path.join(tmpDir, 'link', 'data.txt')
-    })
-    const resp = await relay.waitForResponse(id)
+      const id = relay.send('fs.readFile', {
+        filePath: path.join(tmpDir, 'link', 'data.txt')
+      })
+      const resp = await relay.waitForResponse(id)
 
-    expect(resp.error).toBeUndefined()
-    expect((resp.result as { content: string }).content).toBe('symlinked-target')
+      expect(resp.error).toBeUndefined()
+      expect((resp.result as { content: string }).content).toBe('symlinked-target')
 
-    await rm(outsideDir, { recursive: true, force: true }).catch(() => {})
-  }, 10_000)
+      await rm(outsideDir, { recursive: true, force: true }).catch(() => {})
+    },
+    10_000
+  )
 
   it('resolves ~ to home directory via session.resolveHome', async () => {
     relay = spawn()

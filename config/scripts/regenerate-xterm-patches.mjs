@@ -19,6 +19,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   CHECKOUT_DIFF_FLAGS,
+  GIT_EOL_ISOLATION,
   PNPM_DIFF_FLAGS,
   assertSourceDerivationsAgree,
   escapeRegExp,
@@ -174,6 +175,13 @@ function run(command, args, options = {}) {
     ...options
   })
 }
+function runGit(args, options = {}) {
+  const { ambientConfig = false, env, ...runOptions } = options
+  return run('git', [...GIT_EOL_ISOLATION, ...args], {
+    ...runOptions,
+    env: ambientConfig ? (env ?? process.env) : pnpmDiffEnvironment(env ?? process.env)
+  })
+}
 
 function listFilesRelative(root, base = root) {
   const files = []
@@ -209,7 +217,7 @@ function fetchPristinePackage(packageEntry, workDir) {
 
 function hasCommit(root, commit) {
   try {
-    return run('git', ['cat-file', '-t', commit], { cwd: root, stdio: 'pipe' }).trim() === 'commit'
+    return runGit(['cat-file', '-t', commit], { cwd: root, stdio: 'pipe' }).trim() === 'commit'
   } catch {
     return false
   }
@@ -220,14 +228,18 @@ function ensureUpstreamCheckout(manifest, workDir) {
   const { repository, commit } = manifest.upstream
   if (!existsSync(path.join(root, '.git'))) {
     mkdirSync(root, { recursive: true })
-    run('git', ['init', '--quiet'], { cwd: root })
-    run('git', ['remote', 'add', 'origin', repository], { cwd: root })
+    runGit(['init', '--quiet'], { cwd: root })
+    runGit(['remote', 'add', 'origin', repository], { cwd: root, ambientConfig: true })
   }
   if (!hasCommit(root, commit)) {
-    run('git', ['fetch', '--depth=1', 'origin', commit], { cwd: root, stdio: 'inherit' })
+    runGit(['fetch', '--depth=1', 'origin', commit], {
+      cwd: root,
+      stdio: 'inherit',
+      ambientConfig: true
+    })
   }
-  run('git', ['checkout', '--quiet', '--detach', commit], { cwd: root })
-  run('git', ['reset', '--quiet', '--hard', commit], { cwd: root })
+  runGit(['checkout', '--quiet', '--detach', commit], { cwd: root })
+  runGit(['reset', '--quiet', '--hard', commit], { cwd: root })
   return root
 }
 
@@ -358,7 +370,7 @@ function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination
 function diffFolders(folderA, folderB) {
   let stdout
   try {
-    stdout = execFileSync('git', [...PNPM_DIFF_FLAGS, folderA, folderB], {
+    stdout = execFileSync('git', [...GIT_EOL_ISOLATION, ...PNPM_DIFF_FLAGS, folderA, folderB], {
       encoding: 'utf8',
       maxBuffer: 512 * 1024 * 1024,
       env: pnpmDiffEnvironment(),
@@ -376,9 +388,8 @@ function diffFolders(folderA, folderB) {
 
 /** The source of truth for the hand-written half: what the checkout itself holds. */
 function diffCheckoutSource(packageRoot) {
-  return run('git', [...CHECKOUT_DIFF_FLAGS, 'src/'], {
+  return runGit([...CHECKOUT_DIFF_FLAGS, 'src/'], {
     cwd: packageRoot,
-    env: pnpmDiffEnvironment(),
     maxBuffer: 64 * 1024 * 1024
   })
 }
@@ -396,10 +407,9 @@ function regeneratePackage(packageEntry, manifest, context) {
   buildPackage(upstreamRoot, packageEntry, manifest)
   assertReproducesPristineBundles(pristineDir, upstreamRoot, packageEntry)
 
-  run('git', ['reset', '--quiet', '--hard', manifest.upstream.commit], { cwd: upstreamRoot })
+  runGit(['reset', '--quiet', '--hard', manifest.upstream.commit], { cwd: upstreamRoot })
   const packageDir = toPosix(packageEntry.packageDir)
-  run(
-    'git',
+  runGit(
     [
       'apply',
       '--whitespace=nowarn',
@@ -417,7 +427,7 @@ function regeneratePackage(packageEntry, manifest, context) {
   // no publish-time version stamp mixed in, so `git diff` there is the source
   // patch and nothing else.
   if (packageEntry.versionStampFile) {
-    run('git', ['checkout', '--', packageEntry.versionStampFile], {
+    runGit(['checkout', '--', packageEntry.versionStampFile], {
       cwd: path.join(upstreamRoot, packageEntry.packageDir)
     })
   }
