@@ -300,14 +300,14 @@ describe('OrcaRuntimeService', () => {
     expect(read.tail).toEqual(['after omitted leaf'])
   })
 
-  it('keeps preallocated terminal handles valid after graph unavailable during reload', async () => {
+  it('keeps preallocated terminal handles valid after the graph window closes and a successor publishes', async () => {
     const runtime = new OrcaRuntimeService(store)
     const handle = runtime.preAllocateHandleForPty('pty-1')
 
     syncSinglePty(runtime)
     runtime.markGraphUnavailable(1)
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    runtime.attachWindow(2)
+    runtime.syncWindowGraph(2, {
       tabs: [],
       leaves: []
     })

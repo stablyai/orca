@@ -351,5 +351,5 @@ export type RuntimeCommandSurfaceHost<T> = T & RuntimeInstalledCommandSurfaces
 
 export type RuntimeRendererReloadFence = Readonly<{
   revision: number
-  recovery: 'renderer' | 'headless' | 'reloading'
+  recovery: 'renderer' | 'headless' | 'reloading' | 'unavailable'
 }>
