@@ -118,13 +118,14 @@ export abstract class RateLimitServiceState {
 
   protected buildInactiveArray(
     cache: Map<string, ProviderRateLimits>,
-    fetching: Set<string>
+    fetching: Set<string>,
+    project: (limits: ProviderRateLimits) => ProviderRateLimits = (limits) => limits
   ): InactiveAccountUsage[] {
     const result: InactiveAccountUsage[] = []
     for (const [accountId, limits] of cache) {
       result.push({
         accountId,
-        rateLimits: limits,
+        rateLimits: project(limits),
         updatedAt: limits.updatedAt,
         isFetching: fetching.has(accountId)
       })
