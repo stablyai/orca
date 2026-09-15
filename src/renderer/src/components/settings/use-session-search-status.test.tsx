@@ -1,10 +1,15 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault-search-client'
 import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
-import { SessionHistoryIndexStatus } from './SessionHistoryIndexStatus'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  sessionSearchStatusDetails,
+  sessionSearchStatusMessage
+} from './session-history-status-copy'
+import { useSessionSearchStatus } from './use-session-search-status'
 
 const mocks = vi.hoisted(() => ({ visible: true, status: vi.fn() }))
 vi.mock('@/hooks/use-window-stream-visibility', () => ({
@@ -21,6 +26,20 @@ const current: AiVaultSearchStatus = {
   phase: 'current',
   filesIndexed: 12,
   lastSweepCompletedAt: 1
+}
+function poll(active = true, refresh = 0) {
+  return renderHook(
+    (props: { active: boolean; refresh: number }) =>
+      useSessionSearchStatus({
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        active: props.active,
+        refresh: props.refresh
+      }),
+    { initialProps: { active, refresh } }
+  )
+}
+function message(status: AiVaultSearchStatus | null): string {
+  return status ? sessionSearchStatusMessage(status) : 'no status read yet'
 }
 beforeEach(() => {
   vi.useFakeTimers()
@@ -39,15 +58,15 @@ afterEach(() => {
 })
 
 it('keeps polling a settled index so counts stay live between sweeps', async () => {
-  render(<SessionHistoryIndexStatus enabled refresh={0} />)
+  const view = poll()
   await act(async () => {})
   expect(mocks.status).toHaveBeenCalledWith('local')
-  expect(screen.getByRole('status')).toHaveTextContent('Up to date · 12 files indexed')
+  expect(message(view.result.current.status)).toBe('Ready · 12 sessions searchable')
   mocks.status.mockResolvedValue({ ...current, filesIndexed: 30 })
   await act(async () => {
     await vi.advanceTimersByTimeAsync(10_000)
   })
-  expect(screen.getByRole('status')).toHaveTextContent('Up to date · 30 files indexed')
+  expect(message(view.result.current.status)).toBe('Ready · 30 sessions searchable')
 })
 
 it('reports a first scan by count and later sweeps by percentage', async () => {
@@ -58,10 +77,10 @@ it('reports a first scan by count and later sweeps by percentage', async () => {
     filesDue: 6,
     lastSweepCompletedAt: null
   })
-  render(<SessionHistoryIndexStatus enabled refresh={0} />)
+  const view = poll()
   await act(async () => {})
-  expect(screen.getByRole('status')).toHaveTextContent('Indexing… 4 files so far')
-  expect(screen.getByRole('status')).toHaveTextContent('Turn off search to stop')
+  expect(message(view.result.current.status)).toBe('Preparing search · 4 sessions so far')
+  expect(sessionSearchStatusDetails(view.result.current.status)).toEqual([])
   mocks.status.mockResolvedValue({
     ...current,
     phase: 'indexing',
@@ -73,12 +92,12 @@ it('reports a first scan by count and later sweeps by percentage', async () => {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(2_000)
   })
-  expect(screen.getByRole('status')).toHaveTextContent('Indexing · 40% · 4 of 10 files')
+  expect(message(view.result.current.status)).toBe('Preparing search · 40% · 4 of 10 sessions')
 })
 
 it('polls a sweep faster than a settled index', async () => {
   mocks.status.mockResolvedValue({ ...current, phase: 'indexing', filesDue: 3 })
-  render(<SessionHistoryIndexStatus enabled refresh={0} />)
+  poll()
   await act(async () => {})
   const started = mocks.status.mock.calls.length
   await act(async () => {
@@ -96,12 +115,13 @@ it('names unreadable files while degraded and still reports progress', async () 
     filesFailed: 1,
     degradedRoots: [{ reason: 'unreadable' }]
   })
-  render(<SessionHistoryIndexStatus enabled refresh={0} />)
+  const view = poll()
   await act(async () => {})
-  const status = screen.getByRole('status')
-  expect(status).toHaveTextContent('Indexing · 80% · 8 of 10 files')
-  expect(status).toHaveTextContent('1 files could not be read and will be retried.')
-  expect(status).toHaveTextContent('Unverified source roots: 1')
+  expect(message(view.result.current.status)).toBe('Preparing search · 80% · 8 of 10 sessions')
+  expect(sessionSearchStatusDetails(view.result.current.status)).toEqual([
+    '1 sessions could not be read and will be retried.',
+    '1 session folders could not be checked.'
+  ])
 })
 
 it('calls a drained degraded index up to date', async () => {
@@ -112,78 +132,82 @@ it('calls a drained degraded index up to date', async () => {
     filesDue: 0,
     filesFailed: 2
   })
-  render(<SessionHistoryIndexStatus enabled refresh={0} />)
+  const view = poll()
   await act(async () => {})
-  expect(screen.getByRole('status')).toHaveTextContent('Up to date · 9 files indexed')
-  expect(screen.getByRole('status')).toHaveTextContent('2 files could not be read')
-  expect(screen.queryByText(/Turn off search to stop/)).not.toBeInTheDocument()
-})
-
-it('offers no refresh control now that status is live', async () => {
-  render(<SessionHistoryIndexStatus enabled refresh={0} />)
-  await act(async () => {})
-  expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  expect(message(view.result.current.status)).toBe('Ready · 9 sessions searchable')
+  expect(sessionSearchStatusDetails(view.result.current.status)).toEqual([
+    '2 sessions could not be read and will be retried.'
+  ])
 })
 
 it('does not describe an absent service as an empty current index', async () => {
   mocks.status.mockResolvedValue(unavailableSessionSearchStatus())
-  render(<SessionHistoryIndexStatus enabled refresh={0} />)
+  const view = poll()
   await act(async () => {})
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'not ready or the search service is unavailable'
+  expect(message(view.result.current.status)).toBe(
+    'Search is not available on this computer right now.'
   )
-  expect(screen.queryByText(/files indexed/)).not.toBeInTheDocument()
 })
 
 it('recovers on its own after a failed read', async () => {
   mocks.status.mockRejectedValueOnce(new Error('offline'))
-  render(<SessionHistoryIndexStatus enabled refresh={0} />)
+  const view = poll()
   await act(async () => {})
-  expect(screen.getByRole('status')).toHaveTextContent('Could not read index status')
+  expect(view.result.current.failed).toBe(true)
+  expect(view.result.current.status).toBeNull()
   await act(async () => {
     await vi.advanceTimersByTimeAsync(10_000)
   })
-  expect(screen.getByRole('status')).toHaveTextContent('Up to date · 12 files indexed')
+  expect(view.result.current.failed).toBe(false)
+  expect(view.result.current.status).toEqual(current)
 })
 
 it('handles a synchronous bridge failure without losing the poll', async () => {
   mocks.status.mockImplementationOnce(() => {
     throw new Error('bridge unavailable')
   })
-  render(<SessionHistoryIndexStatus enabled refresh={0} />)
+  const view = poll()
   await act(async () => {})
-  expect(screen.getByRole('status')).toHaveTextContent('Could not read index status')
+  expect(view.result.current.failed).toBe(true)
   await act(async () => {
     await vi.advanceTimersByTimeAsync(10_000)
   })
-  expect(screen.getByRole('status')).toHaveTextContent('Up to date · 12 files indexed')
+  expect(view.result.current.status).toEqual(current)
 })
 
-it('fences pending responses across disable and hiding', async () => {
-  let answer: (value: AiVaultSearchStatus) => void = () => undefined
-  mocks.status.mockReturnValue(
-    new Promise<AiVaultSearchStatus>((resolve) => {
-      answer = resolve
-    })
-  )
-  const view = render(<SessionHistoryIndexStatus enabled refresh={0} />)
-  view.rerender(<SessionHistoryIndexStatus enabled={false} refresh={0} />)
-  await act(async () => {
-    answer(current)
-  })
-  expect(screen.getByRole('status')).toHaveTextContent('Search is off')
-  expect(screen.queryByText(/files indexed/)).not.toBeInTheDocument()
+it('stops polling while inactive or hidden and re-reads on a refresh bump', async () => {
   mocks.visible = false
-  view.rerender(<SessionHistoryIndexStatus enabled refresh={0} />)
+  const view = poll()
   await act(async () => {
     await vi.advanceTimersByTimeAsync(60_000)
   })
-  expect(mocks.status).toHaveBeenCalledTimes(1)
+  expect(mocks.status).not.toHaveBeenCalled()
   mocks.visible = true
-  mocks.status.mockResolvedValue(current)
-  view.rerender(<SessionHistoryIndexStatus enabled refresh={1} />)
+  view.rerender({ active: false, refresh: 0 })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_000)
+  })
+  expect(mocks.status).not.toHaveBeenCalled()
+  view.rerender({ active: true, refresh: 1 })
   await act(async () => {})
-  expect(mocks.status).toHaveBeenCalledTimes(2)
+  expect(mocks.status).toHaveBeenCalledTimes(1)
+})
+
+it('keeps the last answer when a host goes inactive so an offline row reports it', async () => {
+  const view = poll()
+  await act(async () => {})
+  view.rerender({ active: false, refresh: 0 })
+  expect(view.result.current.status).toEqual(current)
+  expect(view.result.current.failed).toBe(false)
+})
+
+it('adopts a status handed to it without waiting for the next poll', async () => {
+  const view = poll(false)
+  act(() => {
+    view.result.current.adopt({ ...current, filesIndexed: 99 })
+  })
+  expect(view.result.current.status?.filesIndexed).toBe(99)
+  expect(mocks.status).not.toHaveBeenCalled()
 })
 
 it('does not overlap slow status requests and stops polling on unmount', async () => {
@@ -193,7 +217,7 @@ it('does not overlap slow status requests and stops polling on unmount', async (
       answer = resolve
     })
   )
-  const view = render(<SessionHistoryIndexStatus enabled refresh={0} />)
+  const view = poll()
   await act(async () => {
     await vi.advanceTimersByTimeAsync(30_000)
   })
@@ -207,4 +231,19 @@ it('does not overlap slow status requests and stops polling on unmount', async (
     await vi.advanceTimersByTimeAsync(60_000)
   })
   expect(mocks.status).toHaveBeenCalledTimes(beforeUnmount)
+})
+
+it('marks the host too old on a host-too-old rejection and stops polling', async () => {
+  mocks.status.mockRejectedValue(new Error('Error invoking remote method: host-too-old'))
+  const { result } = poll()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(result.current.hostTooOld).toBe(true)
+  expect(result.current.failed).toBe(true)
+  const calls = mocks.status.mock.calls.length
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30_000)
+  })
+  expect(mocks.status.mock.calls.length).toBe(calls)
 })

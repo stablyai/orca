@@ -74,15 +74,15 @@ export function buildWorkflowSettingsSections(
       title: translate('sessionHistory.settings.title', 'Agent Session History'),
       description: translate(
         'sessionHistory.settings.description',
-        'Manage session search on this computer. These settings do not enable indexing on SSH or paired hosts.'
+        'Search everything your agents have said and done, on this computer and on any paired Orca server.'
       ),
       icon: History,
       searchEntries: [
         {
-          title: translate('sessionHistory.settings.enable', 'Enable session history search'),
+          title: translate('sessionHistory.settings.indexComputers', 'Search agent sessions'),
           description: translate(
             'sessionHistory.settings.searchDescription',
-            'Transcript indexing, index status and delete index.'
+            'Turn on session search for this computer and paired servers, or clear search data.'
           )
         }
       ],
