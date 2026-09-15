@@ -397,6 +397,65 @@ describe('createWebRuntimeSessionTerminal', () => {
     )
   })
 
+  it('keeps an explicit empty agentArgs in the structured create payload', async () => {
+    // Why (#15373): Manual is stored as an empty string; dropping it here would let the host re-resolve YOLO.
+    const runtimeCall = vi.fn(async (request: { method: string }) => {
+      if (request.method === 'status.get') {
+        return {
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'runtime-1',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: ['agent-session.host-authority.v1']
+          }
+        }
+      }
+      if (request.method === 'terminal.createAgentSession') {
+        return {
+          id: 'agent-session',
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'term-manual',
+              worktreeId: WORKTREE_ID,
+              tabId: 'host-tab-manual',
+              paneKey: `host-tab-manual:${FOCUS_LEAF_ID}`
+            },
+            disposition: 'created'
+          }
+        }
+      }
+      return { id: 'list', ok: true, result: makeSnapshot() }
+    })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await expect(
+      createWebRuntimeSessionTerminal({
+        worktreeId: WORKTREE_ID,
+        agent: 'claude',
+        agentSessionKind: 'fresh',
+        agentArgs: '',
+        activate: true
+      })
+    ).resolves.toEqual({ status: 'created' })
+
+    const createRequest = runtimeCall.mock.calls.find(
+      ([request]) => request.method === 'terminal.createAgentSession'
+    )?.[0] as { params: Record<string, unknown> } | undefined
+    expect(createRequest?.params).toEqual({
+      clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
+      worktree: `id:${WORKTREE_ID}`,
+      agent: 'claude',
+      agentArgs: '',
+      presentation: 'background'
+    })
+  })
+
   it.each(['session.tabs.move', 'session.tabs.list'] as const)(
     'treats %s failure after host creation as accepted so callers do not duplicate the agent',
     async (failedMethod) => {
