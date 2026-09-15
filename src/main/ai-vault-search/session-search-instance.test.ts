@@ -167,6 +167,27 @@ it('removes the database on clear and rebuilds only while consent stands', async
   expect(errors).toEqual([])
 })
 
+it('refuses a page cursor minted before clear even when the rebuilt generation matches', async () => {
+  for (const id of [RECENT_SESSION_ID, ANCIENT_SESSION_ID]) {
+    await writeClaudeTranscript(transcriptPath(id), [`shared clear fence ${id}`], id)
+  }
+  const subject = newInstance()
+  subject.apply({ enabled: true, historyDays: null })
+  await subject.settled()
+  const first = await subject.search({ query: 'shared clear fence', limit: 1 })
+  if (first.kind !== 'results' || !first.page.cursor) {
+    throw new Error('expected a paged result')
+  }
+
+  subject.clear()
+  await subject.settled()
+  expect(subject.status().generation).toBe(first.generation)
+  expect(
+    await subject.search({ query: 'shared clear fence', limit: 1, cursor: first.page.cursor })
+  ).toMatchObject({ kind: 'stale-cursor', generation: first.generation })
+  expect(errors).toEqual([])
+})
+
 it('keeps pagination stable when the clock crosses retention before a purge', async () => {
   for (const id of [RECENT_SESSION_ID, ANCIENT_SESSION_ID]) {
     await writeClaudeTranscript(transcriptPath(id), [`distinctive conversation ${id}`], id)

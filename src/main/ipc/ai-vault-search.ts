@@ -20,6 +20,7 @@ import {
   type ParsedExecutionHost
 } from '../../shared/execution-host'
 import { requestActiveSshSessionSearch } from './ssh'
+import { clearSessionSearchInService } from '../ai-vault/session-scanner-service-spawn'
 
 export type RuntimeSessionSearchCall = (
   environmentId: string,
@@ -48,6 +49,7 @@ export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptio
     const scope = requestedSearchScope(rawScope)
     return statusByExecutionHost(scope)
   })
+  ipcMain.handle('aiVault:clearSearchIndex', () => clearSessionSearchInService())
 }
 
 /**

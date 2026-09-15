@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import SyncDatabase from '../sqlite/sync-database'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
@@ -131,6 +132,10 @@ function openExisting(path: string): SyncDatabase {
       db = openWithPragmas(path)
     }
     db.exec(SCHEMA_SQL)
+    db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
+      'index_incarnation',
+      randomUUID()
+    )
     db.prepare('INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)').run(
       'schema_version',
       String(SESSION_SEARCH_SCHEMA_VERSION)

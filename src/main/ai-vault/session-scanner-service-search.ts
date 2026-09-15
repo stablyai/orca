@@ -15,7 +15,7 @@ import type {
 
 type SearchOperation = Extract<
   AiVaultServiceRequest,
-  { operation: 'searchSessions' | 'searchStatus' | 'searchReconcile' }
+  { operation: 'searchSessions' | 'searchStatus' | 'searchReconcile' | 'searchClear' }
 >
 
 /**
@@ -61,7 +61,8 @@ export class SessionScannerServiceSearch {
     return (
       request.operation === 'searchSessions' ||
       request.operation === 'searchStatus' ||
-      request.operation === 'searchReconcile'
+      request.operation === 'searchReconcile' ||
+      request.operation === 'searchClear'
     )
   }
 
@@ -76,6 +77,13 @@ export class SessionScannerServiceSearch {
     if (request.operation === 'searchReconcile') {
       await instance?.reconcile()
       return { operation: 'searchReconcile', value: null }
+    }
+    if (request.operation === 'searchClear') {
+      if (!instance) {
+        throw new Error('Agent Session History search is not available.')
+      }
+      instance.clear()
+      return { operation: 'searchClear', value: null }
     }
     return {
       operation: 'searchSessions',

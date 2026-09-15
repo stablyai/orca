@@ -33,6 +33,8 @@ export type AiVaultApi = {
   ) => Promise<AiVaultSearchResponse>
   /** Status describes one index, so it never accepts the `all` scope. */
   searchStatus: (executionHostScope?: ExecutionHostId) => Promise<AiVaultSearchStatus>
+  /** Deletes and rebuilds this desktop's local search index. */
+  clearSearchIndex: () => Promise<void>
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>

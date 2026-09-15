@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, sshSearch, runtimeSearch } = vi.hoisted(() => ({
+const { clearSearch, handlers, sshSearch, runtimeSearch } = vi.hoisted(() => ({
+  clearSearch: vi.fn(),
   handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
   sshSearch: vi.fn(),
   runtimeSearch: vi.fn()
+}))
+vi.mock('../ai-vault/session-scanner-service-spawn', () => ({
+  clearSessionSearchInService: clearSearch
 }))
 vi.mock('electron', () => ({
   ipcMain: {
@@ -25,6 +29,7 @@ beforeEach(() => {
   handlers.clear()
   sshSearch.mockReset()
   runtimeSearch.mockReset()
+  clearSearch.mockReset()
   registerAiVaultSearchHandlers({
     callRuntimeSearch: runtimeSearch
   })
@@ -47,6 +52,13 @@ describe('desktop IPC and preload search boundary', () => {
       hits: [{ source: { filePath: '/host/transcript.jsonl' } }]
     })
     expect(await aiVaultApi.searchStatus()).toMatchObject({ enabled: true, generation: 7 })
+    expect(sshSearch).not.toHaveBeenCalled()
+    expect(runtimeSearch).not.toHaveBeenCalled()
+  })
+  it('clears only the desktop-local child-owned index', async () => {
+    clearSearch.mockResolvedValue(undefined)
+    await aiVaultApi.clearSearchIndex()
+    expect(clearSearch).toHaveBeenCalledOnce()
     expect(sshSearch).not.toHaveBeenCalled()
     expect(runtimeSearch).not.toHaveBeenCalled()
   })

@@ -16,7 +16,7 @@ import {
   type SessionSearchScope,
   type SessionSearchSourcePresence
 } from './session-search-engine-types'
-import { readIndexGeneration } from './session-search-index-generation'
+import { readIndexGeneration, readIndexIncarnation } from './session-search-index-generation'
 import {
   rankSessionHits,
   type MessageRow,
@@ -97,6 +97,7 @@ export class SessionSearchEngine {
     const startedAt = performance.now()
     ensureSessionSearchQuerySchema(this.db)
     const generation = readIndexGeneration(this.db)
+    const incarnation = readIndexIncarnation(this.db)
     const scope = request.scope ?? 'all'
     const sort = request.filters?.sort ?? 'relevance'
     // Not a bare `slice`: cutting between a surrogate pair leaves a lone half
@@ -114,7 +115,7 @@ export class SessionSearchEngine {
     // cost a query, and the caller has to hear about it either way.
     const pageKey = sessionSearchPageKey(request)
     const offset = request.cursor
-      ? decodeSessionSearchCursor(request.cursor, generation, pageKey)
+      ? decodeSessionSearchCursor(request.cursor, generation, pageKey, incarnation)
       : 0
 
     const plan = planSessionSearchQuery(split.text)
@@ -140,7 +141,9 @@ export class SessionSearchEngine {
       },
       page: {
         hasMore,
-        cursor: hasMore ? encodeSessionSearchCursor(generation, offset + limit, pageKey) : null
+        cursor: hasMore
+          ? encodeSessionSearchCursor(generation, offset + limit, pageKey, incarnation)
+          : null
       },
       truncated: {
         // Decided by retrieval, which is the only layer that knows whether a cap

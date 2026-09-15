@@ -17914,6 +17914,41 @@
       "finished": "finished"
     }
   },
+  "sessionHistory": {
+    "status": {
+      "checking": "Checking index…",
+      "off": "Search is off. Any existing index copy is kept.",
+      "error": "Could not read index status. Retrying…",
+      "unavailable": "Index is not ready or the search service is unavailable.",
+      "title": "Index status",
+      "firstScan": "Indexing… {{indexed}} files so far",
+      "progress": "Indexing · {{percent}}% · {{indexed}} of {{total}} files",
+      "upToDate": "Up to date · {{indexed}} files indexed",
+      "unreadable": "{{failed}} files could not be read and will be retried.",
+      "stopHint": "Turn off search to stop. Progress is kept and resumes when you turn it back on.",
+      "roots": "Unverified source roots: {{roots}}"
+    },
+    "settings": {
+      "saveError": "Could not save session search settings. Try again.",
+      "enableTitle": "Start indexing agent sessions?",
+      "enableConsent": "Orca will build a local search index on this computer. It copies conversation text and tool output from agent transcripts as written; content is not redacted. Indexing starts now, runs in the background, and the first scan can take several minutes. You can turn it off at any time; progress is kept.",
+      "enableConfirm": "Start indexing",
+      "advanced": "Advanced",
+      "deleteIndexCopy": "Delete index copy",
+      "deleteTitle": "Delete this computer’s search index?",
+      "deleteEnabled": "Remove the search index from this computer. Original transcripts are not touched. Search is on, so Orca scans them again from scratch afterward.",
+      "deleteDisabled": "Remove the search index from this computer. Original transcripts are not touched. Search stays off.",
+      "delete": "Delete index",
+      "cleared": "Search index cleared. Original transcripts were kept.",
+      "clearError": "Could not clear the index. Try again.",
+      "enable": "Enable session history search",
+      "webUnsupported": "Manage indexing in the Orca desktop app on the computer that owns the transcripts. These controls are unavailable from a paired client.",
+      "consent": "Create a local index copy of agent transcripts on this computer, including conversation text and tool output as written. Content is not redacted. Turning search off stops indexing and keeps the index copy.",
+      "title": "Agent Session History",
+      "description": "Manage session search on this computer. These settings do not enable indexing on SSH or paired hosts.",
+      "searchDescription": "Transcript indexing, index status and delete index."
+    }
+  },
   "aiVault": {
     "subagents": {
       "loading": "Loading subagents…",
