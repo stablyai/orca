@@ -134,3 +134,15 @@ describe('buildRelayAiVaultServiceEnv', () => {
     expect(buildRelayAiVaultServiceEnv({}, 'linux').ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
 })
+
+it('carries OMP root/profile inputs only to the desktop service, retaining empty canonical profile', () => {
+  const roots = {
+    OMP_PROFILE: '',
+    PI_PROFILE: 'work',
+    PI_CONFIG_DIR: '.config/omp',
+    PI_CODING_AGENT_DIR: '/home/dev/custom',
+    XDG_DATA_HOME: '/home/dev/data'
+  }
+  expect(buildAiVaultServiceEnv(roots, 'linux')).toEqual({ ...roots, ELECTRON_RUN_AS_NODE: '1' })
+  expect(buildRelayAiVaultServiceEnv(roots, 'linux')).toEqual({})
+})
