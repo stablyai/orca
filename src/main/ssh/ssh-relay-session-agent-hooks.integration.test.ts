@@ -6,6 +6,9 @@ import type { SshConnection } from './ssh-connection'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
 import { RelayDispatcher } from '../../relay/dispatcher'
+import { buildRelayHookEnvelope } from '../../relay/agent-hook-envelope-build'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
@@ -635,6 +638,59 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     )
     ingestSpy.mockRestore()
   })
+
+  it.each([
+    ['bypassPermissions', 'PermissionRequest', 'Bash', 'working'],
+    ['default', 'PermissionRequest', 'Bash', 'waiting'],
+    [undefined, 'PermissionRequest', 'Bash', 'waiting'],
+    ['bypassPermissions', 'PermissionRequest', 'request_user_input', 'waiting'],
+    ['bypassPermissions', 'PreToolUse', 'request_user_input', 'waiting']
+  ])(
+    'carries Codex permission mode %s through SSH (%s, %s)',
+    async (mode, eventName, toolName, state) => {
+      relay = createFakeRelay()
+      vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+        transport: relay.transport,
+        serverBuildId: 'test-relay-build',
+        platform: 'linux-x64'
+      })
+      session = createSession('conn-codex-permission')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked deployment never reads the SSH connection.
+      await session.establish({} as SshConnection)
+      const event = normalizeHookPayload(
+        createHookListenerState(),
+        'codex',
+        {
+          paneKey: `tab-ssh:${SSH_LEAF_ID}`,
+          worktreeId: 'synthetic-folder',
+          payload: {
+            hook_event_name: eventName,
+            permission_mode: mode,
+            tool_name: toolName,
+            tool_input:
+              toolName === 'Bash'
+                ? { command: 'sleep 10' }
+                : { questions: [{ id: 'choice', header: 'Choice', question: 'Which option?' }] }
+          }
+        },
+        REMOTE_AGENT_HOOK_ENV
+      )
+      if (!event) {
+        throw new Error('Expected a normalized Codex hook')
+      }
+      relay.notifyAgentHook(buildRelayHookEnvelope(event, 'codex', REMOTE_AGENT_HOOK_ENV))
+      await vi.waitFor(() =>
+        expect(agentHookServer.getStatusSnapshot()[0]).toMatchObject({
+          state,
+          toolName,
+          worktreeId: 'synthetic-folder'
+        })
+      )
+      expect(Boolean(agentHookServer.getStatusSnapshot()[0]?.interactivePrompt)).toBe(
+        state === 'waiting'
+      )
+    }
+  )
 
   it('tracks prompt sent from live SSH agent hooks but not replayed hooks', async () => {
     relay = createFakeRelay()

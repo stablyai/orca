@@ -30,6 +30,7 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
   | 'claudeRunningNonAgentTask'
+  | 'codexNonInteractivePermission'
   | 'launchToken'
   | 'promptInteractionKey'
   | 'restoredUnconfirmed'

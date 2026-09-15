@@ -1,3 +1,4 @@
+import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
 import {
   codexRosterEffectiveState,
@@ -73,13 +74,18 @@ export function markCodexLeadTurnInterrupted(state: HookListenerState, paneKey: 
 }
 
 export function codexLeadStateForHookEvent(
-  eventName: string | undefined
+  eventName: string | undefined,
+  nonInteractivePermission = false,
+  toolName?: string
 ): CodexLeadTurnState['state'] | undefined {
   if (eventName === 'Stop') {
     return 'done'
   }
-  if (eventName === 'PermissionRequest') {
+  if (eventName === 'PreToolUse' && isAskUserQuestionTool(toolName)) {
     return 'waiting'
+  }
+  if (eventName === 'PermissionRequest') {
+    return nonInteractivePermission ? 'working' : 'waiting'
   }
   if (
     eventName === 'SessionStart' ||
@@ -99,7 +105,8 @@ export function reconcileRemoteCodexState(
   eventName: string | undefined,
   agentId: string | undefined,
   payload: ParsedAgentStatusPayload,
-  previous: ParsedAgentStatusPayload | undefined
+  previous: ParsedAgentStatusPayload | undefined,
+  nonInteractivePermission = false
 ): ParsedAgentStatusPayload {
   if (previous?.agentType === 'codex') {
     seedCodexStateFromSnapshot(state, paneKey, previous)
@@ -120,7 +127,11 @@ export function reconcileRemoteCodexState(
       finishCodexSubagent(roster, agentId)
     }
   } else {
-    const leadState = codexLeadStateForHookEvent(eventName)
+    const leadState = codexLeadStateForHookEvent(
+      eventName,
+      nonInteractivePermission,
+      payload.toolName
+    )
     if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
       roster.clear()
     }

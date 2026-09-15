@@ -17,6 +17,7 @@ import type { HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
+import { isCodexNonInteractivePermissionRequest } from './codex-permission-request'
 import {
   getOrCreateCodexSubagentRoster,
   getOrCreateCodexSubagentTranscriptState,
@@ -117,6 +118,7 @@ export function normalizeCodexEvent(
   const stateName =
     eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
+    isCodexNonInteractivePermissionRequest(eventName, hookPayload) ||
     (eventName === 'PreToolUse' && !isUserInputPreTool) ||
     eventName === 'PostToolUse'
       ? 'working'

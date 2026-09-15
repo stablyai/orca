@@ -91,6 +91,8 @@ export type AgentHookRelayEnvelope = {
   grokPromptBoundary?: true
   /** Active Claude compact generation, keyed by provider prompt identity. */
   compactTrigger?: 'manual' | 'auto'
+  /** Optional execution-host proof; older relays retain ordinary permission attention. */
+  codexNonInteractivePermission?: true
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
   /** Claude subagent identity, when the source hook provides one. */
