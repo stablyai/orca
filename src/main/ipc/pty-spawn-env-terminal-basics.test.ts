@@ -1,3 +1,4 @@
+import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
@@ -58,6 +59,22 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it('prepares fresh OMP settings even when status hooks are disabled', () => {
+      const env = buildPtyHostEnv(
+        'fresh-without-hooks',
+        { ORCA_OMP_FRESH_CONFIG: '/other-host/stale.yml' },
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: false,
+          launchCommand: withFreshOmpLaunch('omp', 'posix')
+        }
+      )
+      expect(env.ORCA_OMP_FRESH_CONFIG).toBe('/tmp/orca-fresh-session.yml')
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
+    })
+
     it('routes headless browser launches through the owning Orca workspace', () => {
       const inheritedBrowser = process.env.BROWSER
       delete process.env.BROWSER

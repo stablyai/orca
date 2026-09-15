@@ -188,6 +188,9 @@ export function buildPtyHostEnv(
       overlay: 'ORCA_OMP_CODING_AGENT_DIR',
       source: 'ORCA_OMP_SOURCE_AGENT_DIR'
     })
+    if (shouldPrepareOmpShadow) {
+      Object.assign(baseEnv, piTitlebarExtensionService.buildFreshOmpEnv())
+    }
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION

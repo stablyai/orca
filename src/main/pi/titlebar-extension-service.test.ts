@@ -205,6 +205,8 @@ describe('PiTitlebarExtensionService', () => {
     const content = 'agent.db credentials'
 
     expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+    expect(readFileSync(env.ORCA_OMP_FRESH_CONFIG, 'utf8')).toBe('autoResume: false\n')
+    expect(env.ORCA_OMP_FRESH_CONFIG.startsWith(userDataDir)).toBe(true)
     expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe(piHome)
     expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(join(piHome, 'extensions', 'orca-agent-status.ts'))
     expect(existsSync(sourcePath)).toBe(false)

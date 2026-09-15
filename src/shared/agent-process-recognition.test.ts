@@ -16,6 +16,14 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('codex-aarch64-ap')).toBe(true)
   })
 
+  it('recognizes OMP inside the fresh-launch cleanup wrapper', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        '( omp --config "$ORCA_OMP_FRESH_CONFIG"; __orca_launch_status=$?; unset ORCA_OMP_PREFILL; exit $__orca_launch_status )'
+      )
+    ).toEqual({ agent: 'omp', processName: 'omp' })
+  })
+
   it('recognizes the OpenClaude foreground process', () => {
     expect(recognizeAgentProcess('/usr/local/bin/openclaude')).toEqual({
       agent: 'openclaude',

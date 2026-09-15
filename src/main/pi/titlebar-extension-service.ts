@@ -1,3 +1,4 @@
+import { materializeOmpFreshConfig } from '../../shared/omp-fresh-config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -173,12 +174,21 @@ export class PiTitlebarExtensionService {
     }
   }
 
+  buildFreshOmpEnv(): Record<string, string> {
+    return {
+      ORCA_OMP_FRESH_CONFIG: materializeOmpFreshConfig(
+        join(getAppEnvironment().getPath('userData'), OMP_MANAGED_STATUS_EXTENSION_DIR)
+      )
+    }
+  }
+
   buildPtyEnv(
     ptyId: string,
     existingAgentDir: string | undefined,
     kind: PiAgentKind,
     options?: { materializeDefaultHome?: boolean }
   ): Record<string, string> {
+    const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind)
     if (kind !== 'prime-agent') {
       try {
@@ -199,7 +209,9 @@ export class PiTitlebarExtensionService {
       if (kind === 'omp') {
         const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
         const statusExtensionPath = this.writeOmpFallbackStatusExtension(statusSource)
-        return statusExtensionPath ? { ORCA_OMP_STATUS_EXTENSION: statusExtensionPath } : {}
+        return statusExtensionPath
+          ? { ...freshConfigEnv, ORCA_OMP_STATUS_EXTENSION: statusExtensionPath }
+          : freshConfigEnv
       }
       return {}
     }
@@ -209,7 +221,7 @@ export class PiTitlebarExtensionService {
     }
 
     const installed = this.installManagedExtensions(sourceAgentDir, kind)
-    const env: Record<string, string> = {}
+    const env: Record<string, string> = { ...freshConfigEnv }
     if (kind === 'omp') {
       env.ORCA_OMP_SOURCE_AGENT_DIR = installed.sourceAgentDir
       if (installed.statusExtensionPath) {

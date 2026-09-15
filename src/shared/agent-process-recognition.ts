@@ -286,6 +286,11 @@ export function recognizeAgentProcessFromCommandLine(
   if (!commandLine) {
     return null
   }
+  // Fresh OMP launches are wrapped in a shell subshell so cleanup cannot
+  // overwrite the agent exit status; recognize the preserved command body.
+  if (/\bomp\s+--config\s+["']?\$ORCA_OMP_FRESH_CONFIG\b/.test(commandLine)) {
+    return recognizedAgentForProcess('omp')
+  }
   const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
