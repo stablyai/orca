@@ -240,6 +240,7 @@ export type RuntimeTerminalAgentStatus = {
   handle: string
   isRunningAgent: boolean
   status: RuntimeTerminalAgentStatusState
+  supportsGuardedAgentPrompt?: boolean
 }
 
 export type RuntimeTerminalPresentation = 'background' | 'focused'

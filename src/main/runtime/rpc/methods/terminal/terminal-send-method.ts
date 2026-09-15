@@ -114,7 +114,7 @@ export const TERMINAL_SEND_METHODS = [
           'refresh',
           true
         )
-        // Why: a stream-less request can't safely create ownership, so never write at stale geometry.
+        // Stream-less input must not write at stale geometry.
         if (!claim.updated || isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
           return {
             send: {
@@ -127,8 +127,16 @@ export const TERMINAL_SEND_METHODS = [
       }
       const hasText = typeof params.text === 'string' && params.text.length > 0
       const hasSuffix = params.enter === true || params.interrupt === true
-      if (params.requireAgentStatus === 'sendable' && hasText && hasSuffix) {
-        // Why: guarded sends are two-phase; reject combined payload + submit so a guard flip can't cause partial delivery.
+      const useSettledAgentPrompt =
+        params.agentPrompt === true &&
+        hasText &&
+        params.enter === true &&
+        params.interrupt !== true &&
+        params.client?.type === 'desktop' &&
+        (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
+      const combinedGuardedSend = params.requireAgentStatus === 'sendable' && hasText && hasSuffix
+      if (combinedGuardedSend && !useSettledAgentPrompt) {
+        // Only the verified transaction rechecks the guard between paste and submit.
         return {
           send: {
             handle: params.terminal,
@@ -189,13 +197,6 @@ export const TERMINAL_SEND_METHODS = [
               markMutationEffectPossible?.()
             }
           : assertSendPreconditions
-      const useSettledAgentPrompt =
-        params.agentPrompt === true &&
-        hasText &&
-        params.enter === true &&
-        params.interrupt !== true &&
-        params.client?.type === 'desktop' &&
-        (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
@@ -244,8 +245,7 @@ export const TERMINAL_SEND_METHODS = [
       } catch (error) {
         mobileFloorClaim.current?.rollback()
         if (isAgentSessionPtyWriteRefusedError(error)) {
-          // Why: name the owner and the stage instead of a bare not-writable, so a client can say
-          // who holds the session rather than retrying into a lease it will never win.
+          // Report the session owner so callers do not retry a refused lease.
           return {
             send: {
               handle: params.terminal,
