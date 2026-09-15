@@ -141,7 +141,8 @@ export function prepareWebSessionTabsSnapshotGroups(
         validUnifiedTabIds,
         environmentId,
         worktreeId,
-        clientGroupIdByLocalTabId
+        clientGroupIdByLocalTabId,
+        honorSnapshotActiveFocus
       })
     }
     const strippedGroups = retainClientPlacedMirroredTabs({
