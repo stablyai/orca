@@ -49,7 +49,7 @@ const { dirname, join, resolve } = require('node:path')
 
 const EXPECTED_NODE_PTY_VERSION = '1.1.0'
 const ORIGINAL_SOURCE_SHA256 = '5e1005d6bdcfbe97b486ee415419fe7adae99035047f07340fbad36419e0bae6'
-const PATCHED_SOURCE_SHA256 = '3e6bc1a688aae187d231687130cfc0a11781c672f5f616d73183d471ee8ee65c'
+const PATCHED_SOURCE_SHA256 = '9cf87b8acf2e454849213359249bfaed480226e6b4c0f8be5e150e2d35883ad5'
 
 const STATUS_PREFIX = 'ORCA-NPTY-CLOEXEC:'
 const SKIP_MARKER_FILENAME = '.node-pty-cloexec-skip'
@@ -60,7 +60,7 @@ const VERIFY_TIMEOUT_MS = 15000
 
 const FORWARD_DECLARATION = [
   'static int\npty_nonblock(int);\n',
-  'static int\npty_nonblock(int);\n\nstatic int\npty_cloexec(int);\n'
+  'static int\npty_nonblock(int);\n\nstatic int\npty_cloexec(int);\n\nstatic void\npty_cleanup_failed_spawn(int, pid_t);\n'
 ]
 
 const DEFINITION = [
@@ -94,6 +94,21 @@ pty_cloexec(int fd) {
   if (flags & FD_CLOEXEC) return 0;
   return fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
 }
+
+static void
+pty_cleanup_failed_spawn(int master, pid_t pid) {
+  close(master);
+  if (pid <= 0) return;
+  int status;
+  pid_t waited;
+  do {
+    waited = waitpid(pid, &status, WNOHANG);
+  } while (waited == -1 && errno == EINTR);
+  // Orca: a failed spawn never transfers ownership to SetupExitCallback.
+  if (waited != 0) return;
+  if (kill(pid, SIGKILL) == -1 && errno != ESRCH) return;
+  while (waitpid(pid, &status, 0) == -1 && errno == EINTR) {}
+}
 `
 ]
 
@@ -106,9 +121,11 @@ const FORKPTY_CALL_SITE = [
 `,
   `    default:
       if (pty_nonblock(master) == -1) {
+        pty_cleanup_failed_spawn(master, pid);
         throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
       }
       if (pty_cloexec(master) == -1) {
+        pty_cleanup_failed_spawn(master, pid);
         throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
       }
   }
@@ -124,9 +141,11 @@ const POSIX_SPAWN_CALL_SITE = [
 #else
 `,
   `  if (pty_nonblock(master) == -1) {
+    pty_cleanup_failed_spawn(master, pid);
     throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
   }
   if (pty_cloexec(master) == -1) {
+    pty_cleanup_failed_spawn(master, pid);
     throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
   }
 #else

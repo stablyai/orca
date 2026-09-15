@@ -326,17 +326,20 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
  /* Some platforms name VWERASE and VDISCARD differently */
  #if !defined(VWERASE) && defined(VWERSE)
  #define VWERASE	VWERSE
-@@ -228,6 +249,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
+@@ -228,6 +254,12 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
  static int
  pty_nonblock(int);
  
 +static int
 +pty_cloexec(int);
 +
++static void
++pty_cleanup_failed_spawn(int, pid_t);
++
  #if defined(__APPLE__)
  static char *
  pty_getproc(int);
-@@ -237,13 +261,23 @@ pty_getproc(int, char *);
+@@ -237,13 +269,23 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -361,7 +364,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
  #endif
  
  struct DelBuf {
-@@ -367,14 +401,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,14 +409,20 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
  
@@ -376,25 +379,29 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
 +    throw Napi::Error::New(napiEnv, spawn_message);
    }
    if (pty_nonblock(master) == -1) {
++    pty_cleanup_failed_spawn(master, pid);
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
    }
 +  if (pty_cloexec(master) == -1) {
++    pty_cleanup_failed_spawn(master, pid);
 +    throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
 +  }
  #else
    int argc = argv_.Length();
    int argl = argc + 2;
-@@ -445,6 +483,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -445,6 +493,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
        if (pty_nonblock(master) == -1) {
++        pty_cleanup_failed_spawn(master, pid);
          throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
        }
 +      if (pty_cloexec(master) == -1) {
++        pty_cleanup_failed_spawn(master, pid);
 +        throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
 +      }
    }
  #endif
  
-@@ -586,6 +627,23 @@ pty_nonblock(int fd) {
+@@ -586,6 +639,38 @@ pty_nonblock(int fd) {
    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
  }
  
@@ -415,10 +422,25 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
 +  return fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
 +}
 +
++static void
++pty_cleanup_failed_spawn(int master, pid_t pid) {
++  close(master);
++  if (pid <= 0) return;
++  int status;
++  pid_t waited;
++  do {
++    waited = waitpid(pid, &status, WNOHANG);
++  } while (waited == -1 && errno == EINTR);
++  // Orca: a failed spawn never transfers ownership to SetupExitCallback.
++  if (waited != 0) return;
++  if (kill(pid, SIGKILL) == -1 && errno != ESRCH) return;
++  while (waitpid(pid, &status, 0) == -1 && errno == EINTR) {}
++}
++
  /**
   * pty_getproc
   * Taken from tmux.
-@@ -684,15 +742,73 @@ pty_getproc(int fd, char *tty) {
+@@ -684,15 +769,73 @@ pty_getproc(int fd, char *tty) {
  #endif
  
  #if defined(__APPLE__)
@@ -494,7 +516,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +822,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,80 +849,118 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {

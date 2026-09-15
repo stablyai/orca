@@ -60,6 +60,7 @@ describe('SSH relay node-pty pty fd-leak patch', () => {
     // the forkpty call site left the master macOS actually opens unmarked.
     expect(patched).toContain(
       '  if (pty_cloexec(master) == -1) {\n' +
+        '    pty_cleanup_failed_spawn(master, pid);\n' +
         '    throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");\n' +
         '  }\n#else\n'
     )
