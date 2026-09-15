@@ -124,6 +124,16 @@ function resolveCellShape(cellId) {
 }
 
 describe('same-cap roll scripts accept every same-cap cell', () => {
+  // Why the bounded continuation instead of [\s\S]*?: the lazy form matches the first
+  // `default: '3'` anywhere after the key, so it would pass on a later input's default once
+  // rollback also offers '3' — silently unpinning the value this test exists to protect.
+  it('defaults forward rolls to protocol 3 for the trusted image', () => {
+    assert.match(
+      readRelayWorkflow('deploy-relay-production-same-cap.yml'),
+      /target-rehome-protocol:\n(?: {8}[^\n]*\n)*? {8}default: '3'/
+    )
+  })
+
   it('parses every wave cell through the same-cap canary allowlist', () => {
     for (const cellId of SAME_CAP_CELLS) {
       for (const mode of ['isolate', 'drain', 'activate']) {
