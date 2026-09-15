@@ -14,6 +14,7 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
 import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
 import { createDebouncedBatch, type DebouncedBatch } from './filesystem-watcher-batch-control'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -244,7 +245,11 @@ export async function createWslWatcher(
   try {
     child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s', '--', linuxPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
+      windowsHide: true,
+      // Why explicit (#16463): the watched directory rides in argv, and an
+      // inherited cwd is a worktree that can be deleted -- after which every
+      // watcher start fails `spawn wsl.exe ENOENT`.
+      cwd: resolveWslInteropSpawnCwd()
     })
   } catch (error) {
     releaseChildReservation()

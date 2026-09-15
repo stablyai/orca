@@ -9,11 +9,13 @@ const {
   mockPtySpawn,
   mockPtyInstance,
   mockCreateShellPromptReadinessProbe,
-  mockGetStrictProcessTableSnapshot
+  mockGetStrictProcessTableSnapshot,
+  mockGetStrictProcessTableSnapshotWithAge
 } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
   mockCreateShellPromptReadinessProbe: vi.fn(),
   mockGetStrictProcessTableSnapshot: vi.fn(),
+  mockGetStrictProcessTableSnapshotWithAge: vi.fn(),
   mockPtyInstance: {
     pid: process.pid,
     process: 'zsh',
@@ -40,12 +42,16 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-vi.mock('../shared/process-table-snapshot', async (importOriginal) => {
+vi.mock('../shared/process-table-snapshot-reader', async (importOriginal) => {
   const actual = await importOriginal<ProcessTableSnapshotModule>()
-  return { ...actual, getStrictProcessTableSnapshot: mockGetStrictProcessTableSnapshot }
+  return {
+    ...actual,
+    getStrictProcessTableSnapshot: mockGetStrictProcessTableSnapshot,
+    getStrictProcessTableSnapshotWithAge: mockGetStrictProcessTableSnapshotWithAge
+  }
 })
 
-import type * as processTableSnapshotModule from '../shared/process-table-snapshot'
+import type * as processTableSnapshotModule from '../shared/process-table-snapshot-reader'
 import type { ProcessTableRow } from '../shared/process-table-snapshot'
 
 type ProcessTableSnapshotModule = typeof processTableSnapshotModule
@@ -130,6 +136,11 @@ describe('PtyHandler inventory foreground evidence', () => {
       mockCreateShellPromptReadinessProbe
     }))
     mockGetStrictProcessTableSnapshot.mockReset()
+    mockGetStrictProcessTableSnapshotWithAge.mockReset()
+    mockGetStrictProcessTableSnapshotWithAge.mockImplementation(async () => ({
+      rows: await mockGetStrictProcessTableSnapshot(),
+      capturedAgeMs: 0
+    }))
     vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
   })
 
@@ -157,22 +168,100 @@ describe('PtyHandler inventory foreground evidence', () => {
     expect((await listProcesses())[0].title).toBe('node')
   })
 
-  it.each([1, 8])('visits the host table exactly once for %s panes', async (paneCount) => {
-    const table = Array.from({ length: paneCount }, (_, index) =>
-      paneRows(10_000 + index * 10, ['node /opt/codex'])
-    ).flat()
-    const { rows, reads } = countingRows(table)
-    mockGetStrictProcessTableSnapshot.mockResolvedValue(rows)
-    for (let index = 0; index < paneCount; index += 1) {
-      await spawnPane(10_000 + index * 10, 'zsh')
+  // The cost that matters is per-CAPTURE, not per-pane: the defect this guards against is a
+  // full-table walk for every pane, which is what an O(PTY x rows) inventory looked like. Two
+  // linear passes build the two indexes the resolver reads — parent/child correlation, and which
+  // process groups occupy each controlling terminal — and neither grows with the pane count.
+  const CAPTURE_PASSES = 2
+
+  it.each([1, 8])(
+    'walks the host table a fixed number of times for %s panes',
+    async (paneCount) => {
+      const table = Array.from({ length: paneCount }, (_, index) =>
+        paneRows(10_000 + index * 10, ['node /opt/codex'])
+      ).flat()
+      const { rows, reads } = countingRows(table)
+      mockGetStrictProcessTableSnapshot.mockResolvedValue(rows)
+      for (let index = 0; index < paneCount; index += 1) {
+        await spawnPane(10_000 + index * 10, 'zsh')
+      }
+
+      const listed = await listProcesses()
+
+      expect(listed).toHaveLength(paneCount)
+      expect(listed.every((entry) => entry.title === 'codex')).toBe(true)
+      expect(mockGetStrictProcessTableSnapshot).toHaveBeenCalledTimes(1)
+      // Linear in the capture — NOT one full-table walk per pane, which would be
+      // `table.length * paneCount` here.
+      expect(reads()).toBe(table.length * CAPTURE_PASSES)
     }
+  )
 
-    const listed = await listProcesses()
+  it('returns fenced inspect evidence and echoes the PTY incarnation', async () => {
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      pid: 4000,
+      process: 'zsh',
+      onData: vi.fn(),
+      onExit: vi.fn(),
+      kill: vi.fn()
+    })
+    const spawned = await spawnPty({ cols: 80, rows: 24 })
+    mockGetStrictProcessTableSnapshot.mockResolvedValue([
+      {
+        pid: 4000,
+        ppid: 1,
+        pgid: 4000,
+        tpgid: 4001,
+        tty: '/dev/pts/9',
+        startTime: 'anchor-start',
+        stat: 'Ss',
+        command: '/bin/zsh'
+      },
+      {
+        pid: 4001,
+        ppid: 4000,
+        pgid: 4001,
+        tpgid: 4001,
+        tty: '/dev/pts/9',
+        startTime: 'candidate-start',
+        stat: 'S+',
+        command: 'node /opt/codex'
+      }
+    ])
+    const inspection = await dispatcher.callRequest('pty.inspectProcess', {
+      id: spawned.id,
+      expectedIncarnationId: spawned.incarnationId
+    })
 
-    expect(listed).toHaveLength(paneCount)
-    expect(listed.every((entry) => entry.title === 'codex')).toBe(true)
-    expect(mockGetStrictProcessTableSnapshot).toHaveBeenCalledTimes(1)
-    // One linear index pass — NOT one full-table walk per pane.
-    expect(reads()).toBe(table.length)
+    expect(inspection).toMatchObject({
+      foregroundProcess: 'codex',
+      foregroundProcessEvidence: {
+        verdict: 'live',
+        ptyId: spawned.id,
+        ptyIncarnationId: spawned.incarnationId,
+        fence: {
+          platform: 'posix',
+          shellPid: 4000,
+          shellStartTime: 'anchor-start',
+          tty: '/dev/pts/9',
+          foregroundPgid: 4001,
+          process: { pid: 4001, startTime: 'candidate-start' }
+        }
+      }
+    })
+    expect(mockGetStrictProcessTableSnapshot).toHaveBeenCalledOnce()
+  })
+
+  it('skips process capture for the no-evidence inventory projection', async () => {
+    await spawnPane(5000, 'zsh')
+    mockGetStrictProcessTableSnapshot.mockReset()
+
+    const result = await dispatcher.callRequest('pty.listProcesses', {
+      includeForegroundProcessEvidence: false
+    })
+
+    expect(result).toHaveLength(1)
+    expect(mockGetStrictProcessTableSnapshot).not.toHaveBeenCalled()
   })
 })

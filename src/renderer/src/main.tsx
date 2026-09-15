@@ -21,6 +21,7 @@ import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
 import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 
@@ -76,3 +77,9 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
   </StrictMode>
 )
 recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
+
+// Why here: the xterm WebGL addon is 243 KB, is only ever constructed once a
+// terminal attaches (many frames away), and is needed by nothing during boot.
+// Starting the load after the first render keeps it off the boot graph while
+// leaving it resolved long before any pane can attach.
+void primeTerminalWebglAddon()

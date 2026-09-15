@@ -52,10 +52,10 @@ Keep Orca running on a machine you control—an old laptop, Mac mini, home serve
 
 **Easiest setup:** install Orca and Tailscale on both computers. On the server, open **Settings → Remote Orca Servers → Advertise this app as a server → New Link**, choose its Tailscale address, and generate an access link. On the client, choose **Add Server** and paste that link.
 
-For a headless Linux server or service-managed VM, use `orca serve` as the alternative:
+For a headless Linux server or service-managed VM, use `orca serve` as the alternative. On Linux the CLI is named `orca-ide`, so the first launch is:
 
 ```bash
-orca serve --pairing-address <reachable-tailscale-ip-or-hostname>
+orca-ide serve --pairing-address <reachable-tailscale-ip-or-hostname>
 ```
 
 Full detail: [Remote Orca Servers](/docs/remote-servers).
@@ -80,6 +80,11 @@ Providers people wire today include Vercel Sandbox, Fly, Modal, plain SSH hosts,
 <ImagePlaceholder
   src="/docs/ways-to-run-per-workspace-env.png"
   caption="Settings → Experimental → Cloud VM — enable the skill, then have an agent set up a recipe for the repo."
+/>
+
+<ImagePlaceholder
+  src="/docs/ways-to-run-local-sidebar.png"
+  caption="Choose a local or remote run target from the workspace sidebar."
 />
 
 **Good fit when:** you want clean isolation per task, disposable compute, or a standard environment every agent boots into.

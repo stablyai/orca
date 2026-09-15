@@ -26,8 +26,8 @@ const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
 ])
 
 /** A pane whose `session_id` changed is running a different conversation, so claims the previous one
- *  owned are void — the hook-independent backstop for /clear, relaunch and resume, which emit no
- *  terminating hook (SessionEnd covers about a third of exit paths).
+ *  owned are void — the hook-independent backstop for /clear, relaunch and resume. Modern Claude
+ *  emits SessionEnd on /clear, but Orca previously did not install it and older binaries emit none.
  *
  *  Voids only what the replaced session provably owned. Deliberately NOT voided:
  *  - `claudeRunningNonAgentTaskPaneKeys`: a background shell is an OS process that survives /clear,
@@ -198,7 +198,8 @@ export function seedClaudeLeadTurnFromPersistedStatus(
     }
     if (status.payload.lastAssistantMessage) {
       state.lastToolByPaneKey.set(paneKey, {
-        lastAssistantMessage: status.payload.lastAssistantMessage
+        lastAssistantMessage: status.payload.lastAssistantMessage,
+        lastAssistantMessageIsToolOutput: status.payload.lastAssistantMessageIsToolOutput
       })
     }
   }
@@ -238,7 +239,10 @@ export function clearClaudePendingWaitForAgent(
   state.lastToolByPaneKey.set(
     paneKey,
     previousTool?.lastAssistantMessage
-      ? { lastAssistantMessage: previousTool.lastAssistantMessage }
+      ? {
+          lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
+        }
       : {}
   )
 }
@@ -260,7 +264,10 @@ export function clearClaudeAnsweredQuestionWait(
   state.lastToolByPaneKey.set(
     paneKey,
     previousTool?.lastAssistantMessage
-      ? { lastAssistantMessage: previousTool.lastAssistantMessage }
+      ? {
+          lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
+        }
       : {}
   )
   const resolved = resolveClaudePaneStatus(state, paneKey, restored)

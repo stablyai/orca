@@ -1,7 +1,95 @@
 import { describe, expect, it } from 'vitest'
-import { appendRetiredTerminalSurfaceProofs } from './mobile-session-terminal-retirement-proof'
+import {
+  appendRetiredTerminalSurfaceProofs,
+  preserveTerminalRetirementProofs
+} from './mobile-session-terminal-retirement-proof'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+
+const retired = {
+  parentTabId: 'tab',
+  leafId: 'leaf',
+  ptyId: 'pty',
+  terminal: 'term',
+  incarnationId: 'inc'
+}
+function snapshot(
+  overrides: Partial<RuntimeMobileSessionTabsSnapshot> = {}
+): RuntimeMobileSessionTabsSnapshot {
+  return {
+    worktree: 'worktree',
+    worktreeInstanceId: 'instance',
+    publicationEpoch: 'epoch',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: [],
+    ...overrides
+  }
+}
 
 describe('mobile session terminal retirement proofs', () => {
+  it.each([{ worktree: 'another-worktree' }, { worktreeInstanceId: 'successor-instance' }])(
+    'does not copy retirement proof into a different workspace: %j',
+    (identity) => {
+      const next = snapshot(identity)
+      expect(
+        preserveTerminalRetirementProofs(next, snapshot({ retiredTerminalSurfaces: [retired] }))
+      ).toBe(next)
+    }
+  )
+
+  // Why: host-authored writes never carry worktreeInstanceId. Without inheritance the stored
+  // entry forgets the occupant and renderer(A) -> host write -> renderer(B) launders A's proofs.
+  it('does not launder proofs across occupants through an identity-less host write', () => {
+    const occupantA = snapshot({
+      worktreeInstanceId: 'instance-a',
+      retiredTerminalSurfaces: [retired]
+    })
+    const hostWrite = preserveTerminalRetirementProofs(
+      snapshot({ worktreeInstanceId: undefined, snapshotVersion: 2 }),
+      occupantA
+    )
+    expect(hostWrite.worktreeInstanceId).toBe('instance-a')
+    expect(hostWrite.retiredTerminalSurfaces).toEqual([retired])
+
+    const occupantB = snapshot({ worktreeInstanceId: 'instance-b', snapshotVersion: 3 })
+    expect(preserveTerminalRetirementProofs(occupantB, hostWrite)).toBe(occupantB)
+  })
+
+  it('keeps proofs for a host write that never learned any identity', () => {
+    const existing = snapshot({ worktreeInstanceId: undefined, retiredTerminalSurfaces: [retired] })
+    const next = preserveTerminalRetirementProofs(
+      snapshot({ worktreeInstanceId: undefined, snapshotVersion: 2 }),
+      existing
+    )
+    expect(next.worktreeInstanceId).toBeUndefined()
+    expect(next.retiredTerminalSurfaces).toEqual([retired])
+  })
+
+  it('drops an old proof when its surface is published again', () => {
+    const existing = snapshot({ retiredTerminalSurfaces: [retired] })
+    const revived = preserveTerminalRetirementProofs(
+      snapshot({
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'tab::leaf',
+            parentTabId: 'tab',
+            leafId: 'leaf',
+            ptyId: 'successor-pty',
+            title: 'Successor',
+            isActive: false
+          }
+        ]
+      }),
+      existing
+    )
+    expect(revived.retiredTerminalSurfaces).toEqual([])
+    expect(
+      preserveTerminalRetirementProofs(snapshot(), revived).retiredTerminalSurfaces
+    ).toBeUndefined()
+  })
   it('keeps the newest 64 exact identities', () => {
     let proofs = appendRetiredTerminalSurfaceProofs(
       undefined,

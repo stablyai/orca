@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Image as ImageIcon, X } from 'lucide-react'
+import { Image as ImageIcon, Loader2, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
@@ -41,31 +41,55 @@ export function NativeChatImageAttachmentPreview({
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
-  const previewSrc = useLocalImageSrc(
-    isNearViewport || isOpen ? attachment.path : undefined,
+  const isPending = attachment.pending === true
+  const localSrc = useLocalImageSrc(
+    !isPending && (isNearViewport || isOpen) ? attachment.path : undefined,
     attachment.path,
     attachment.connectionId
   )
+  // The clipboard thumbnail is already in this process, so it renders with no
+  // round-trip; the on-disk file only wins for the full-size dialog.
+  const thumbnailSrc = attachment.previewUrl ?? localSrc
+  const fullSizeSrc = localSrc ?? attachment.previewUrl
   const filename = isNativeChatPastedImagePath(attachment.path)
     ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
     : basename(attachment.path)
+  const pendingLabel = translate(
+    'components.native-chat.composer.imageSaving',
+    'Saving pasted image…'
+  )
+  const label = isPending ? pendingLabel : filename
 
   return (
     <>
       <div ref={thumbnailRef} className="relative size-14 shrink-0">
         <button
           type="button"
-          aria-label={`${translate('components.native-chat.composer.viewAttachment', 'View image')}: ${filename}`}
-          title={filename}
+          aria-label={
+            isPending
+              ? pendingLabel
+              : `${translate('components.native-chat.composer.viewAttachment', 'View image')}: ${label}`
+          }
+          aria-busy={isPending}
+          title={label}
           onClick={() => setIsOpen(true)}
           className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {previewSrc ? (
-            <img src={previewSrc} alt={filename} className="size-full object-cover" />
+          {thumbnailSrc ? (
+            <img
+              src={thumbnailSrc}
+              alt={label}
+              className={`size-full object-cover${isPending ? ' opacity-50' : ''}`}
+            />
           ) : (
             <ImageIcon className="size-5 text-muted-foreground" />
           )}
         </button>
+        {isPending ? (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-background/50">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          </span>
+        ) : null}
         <button
           type="button"
           onClick={() => onRemove(attachment.id)}
@@ -80,23 +104,32 @@ export function NativeChatImageAttachmentPreview({
       </div>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="flex max-h-[90vh] max-w-[90vw] flex-col gap-3 border-border bg-background p-3 sm:max-w-4xl">
-          <DialogTitle className="truncate text-sm">{filename}</DialogTitle>
+          <DialogTitle className="truncate text-sm">{label}</DialogTitle>
           <DialogDescription className="sr-only">
             {translate('components.native-chat.composer.imagePreview', 'Full-size image preview')}
           </DialogDescription>
           <div className="scrollbar-sleek flex min-h-0 items-center justify-center overflow-auto rounded-md bg-muted/20 p-2">
-            {previewSrc ? (
+            {fullSizeSrc ? (
               <img
-                src={previewSrc}
-                alt={filename}
+                src={fullSizeSrc}
+                alt={label}
                 className="max-h-[75vh] max-w-full object-contain"
               />
             ) : (
               <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
-                <ImageIcon className="size-4" />
-                {translate(
-                  'components.native-chat.composer.imagePreviewUnavailable',
-                  'Preview unavailable'
+                {isPending ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    {pendingLabel}
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="size-4" />
+                    {translate(
+                      'components.native-chat.composer.imagePreviewUnavailable',
+                      'Preview unavailable'
+                    )}
+                  </>
                 )}
               </div>
             )}

@@ -114,8 +114,23 @@ describe('Orca cloud PKCE flow', () => {
     const response = await readHttp(callbackUrl(redirectUri, { error: 'access_denied', state }))
 
     expect(response.statusCode).toBe(400)
+    expect(response.body).toBe('Orca sign-in was cancelled.')
     await expect(observedFlow).resolves.toMatchObject({ message: 'orca_cloud_auth_denied' })
   })
+
+  it.each(['server_error', 'temporarily_unavailable', 'unknown-error', ''])(
+    'reports %s as a failed sign-in rather than user cancellation',
+    async (error) => {
+      const { flow, redirectUri, state } = await startedFlow()
+      const observedFlow = flow.catch((failure: unknown) => failure)
+      const response = await readHttp(callbackUrl(redirectUri, { error, state }))
+      expect(response.statusCode).toBe(400)
+      expect(response.body).toBe('Orca sign-in failed. Return to Orca and try again.')
+      await expect(observedFlow).resolves.toMatchObject({
+        message: 'orca_cloud_auth_callback_failed'
+      })
+    }
+  )
 
   it('adds desktop PKCE parameters to the authorize URL', async () => {
     const { authUrl, flow, nonce, redirectUri, state } = await startedFlow()

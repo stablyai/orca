@@ -81,89 +81,96 @@ function adoptInto(distPath, entry, identity) {
   return true
 }
 
-let reclaimed = 0
-let converted = 0
-let skipped = 0
+function main() {
+  let reclaimed = 0
+  let converted = 0
+  let skipped = 0
 
-for (const worktree of listWorktrees(repoRoot)) {
-  const electronPackageDir = path.join(worktree, 'node_modules', 'electron')
-  const distPath = path.join(electronPackageDir, 'dist')
-  if (!existsSync(path.join(electronPackageDir, 'package.json')) || !existsSync(distPath)) {
-    continue
-  }
-  if (statSync(distPath, { throwIfNoEntry: false })?.isDirectory() !== true) {
-    continue
-  }
-
-  let version
-  try {
-    version = JSON.parse(
-      readFileSync(path.join(electronPackageDir, 'package.json'), 'utf8')
-    ).version
-  } catch {
-    continue
-  }
-  const targetPlatform = process.platform
-  const targetArch = process.arch
-  let platformPath
-  try {
-    platformPath = getElectronPlatformPath(targetPlatform)
-  } catch {
-    continue
-  }
-  if (!isUsableElectronDist(distPath, version, platformPath)) {
-    console.log(`skip  ${worktree}  (dist is not a complete Electron ${version})`)
-    skipped += 1
-    continue
-  }
-
-  const entry = resolveSharedElectronDistEntry({
-    repoRoot: worktree,
-    electronPackageDir,
-    version,
-    targetPlatform,
-    targetArch
-  })
-  if (entry === null) {
-    continue
-  }
-  if (hasAdoptedSharedElectronDist(entry)) {
-    continue
-  }
-
-  const size = measure(distPath)
-  if (!apply) {
-    console.log(`would share  ${worktree}  ${(size / 1024 ** 3).toFixed(2)} GiB  (${version})`)
-    reclaimed += size
-    converted += 1
-    continue
-  }
-
-  try {
-    if (!existsSync(entry.entryPath)) {
-      if (publishSharedElectronDist(distPath, entry, { version, platformPath })) {
-        recordAdoptedSharedElectronDist(entry, writeFileSync)
-        console.log(`seeded  ${worktree}  -> ${entry.entryPath}`)
-        converted += 1
-      }
+  for (const worktree of listWorktrees(repoRoot)) {
+    const electronPackageDir = path.join(worktree, 'node_modules', 'electron')
+    const distPath = path.join(electronPackageDir, 'dist')
+    if (!existsSync(path.join(electronPackageDir, 'package.json')) || !existsSync(distPath)) {
       continue
     }
-    if (adoptInto(distPath, entry, { version, platformPath })) {
-      recordAdoptedSharedElectronDist(entry, writeFileSync)
+    if (statSync(distPath, { throwIfNoEntry: false })?.isDirectory() !== true) {
+      continue
+    }
+
+    let version
+    try {
+      version = JSON.parse(
+        readFileSync(path.join(electronPackageDir, 'package.json'), 'utf8')
+      ).version
+    } catch {
+      continue
+    }
+    const targetPlatform = process.platform
+    const targetArch = process.arch
+    let platformPath
+    try {
+      platformPath = getElectronPlatformPath(targetPlatform)
+    } catch {
+      continue
+    }
+    if (!isUsableElectronDist(distPath, version, platformPath)) {
+      console.log(`skip  ${worktree}  (dist is not a complete Electron ${version})`)
+      skipped += 1
+      continue
+    }
+
+    const entry = resolveSharedElectronDistEntry({
+      repoRoot: worktree,
+      electronPackageDir,
+      version,
+      targetPlatform,
+      targetArch
+    })
+    if (entry === null) {
+      continue
+    }
+    if (hasAdoptedSharedElectronDist(entry)) {
+      continue
+    }
+
+    const size = measure(distPath)
+    if (!apply) {
+      console.log(`would share  ${worktree}  ${(size / 1024 ** 3).toFixed(2)} GiB  (${version})`)
       reclaimed += size
       converted += 1
-      console.log(`shared  ${worktree}  reclaimed ${(size / 1024 ** 3).toFixed(2)} GiB`)
+      continue
     }
-  } catch (error) {
-    // A worktree that fails is left exactly as it was; it still has its own working dist.
-    console.warn(`skip  ${worktree}  (${error instanceof Error ? error.message : String(error)})`)
-    skipped += 1
+
+    try {
+      if (!existsSync(entry.entryPath)) {
+        if (publishSharedElectronDist(distPath, entry, { version, platformPath })) {
+          recordAdoptedSharedElectronDist(entry, writeFileSync)
+          console.log(`seeded  ${worktree}  -> ${entry.entryPath}`)
+          converted += 1
+        }
+        continue
+      }
+      if (adoptInto(distPath, entry, { version, platformPath })) {
+        recordAdoptedSharedElectronDist(entry, writeFileSync)
+        reclaimed += size
+        converted += 1
+        console.log(`shared  ${worktree}  reclaimed ${(size / 1024 ** 3).toFixed(2)} GiB`)
+      }
+    } catch (error) {
+      // A worktree that fails is left exactly as it was; it still has its own working dist.
+      console.warn(`skip  ${worktree}  (${error instanceof Error ? error.message : String(error)})`)
+      skipped += 1
+    }
   }
+
+  console.log(
+    `\n${apply ? 'Shared' : 'Would share'} ${converted} worktree(s); ` +
+      `${apply ? 'reclaimed' : 'reclaimable'} ~${(reclaimed / 1024 ** 3).toFixed(2)} GiB` +
+      `${skipped > 0 ? `; skipped ${skipped}` : ''}` +
+      `${apply ? '' : '\nRe-run with --apply to do it.'}`
+  )
 }
 
-console.log(
-  `\n${apply ? 'Shared' : 'Would share'} ${converted} worktree(s); ` +
-    `${apply ? 'reclaimed' : 'reclaimable'} ~${(reclaimed / 1024 ** 3).toFixed(2)} GiB` +
-    `${skipped > 0 ? `; skipped ${skipped}` : ''}` +
-    `${apply ? '' : '\nRe-run with --apply to do it.'}`
-)
+// Guarded so importing this module for tests does not sweep the whole repository.
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
+  main()
+}

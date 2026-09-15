@@ -30,9 +30,14 @@ export function useNetworkSafeTabEntrySelection({
   const rankedOption = pinnedOptionIndex < 0 ? activeOptions[0] : undefined
   const rankedClassification =
     rankedOption?.kind === 'entry' ? rankedOption.option.classification : null
+  // A history row navigates away too, so it waits on the same scan: while the
+  // index is still loading "readme" has no file rows yet, and Enter must not
+  // quietly leave for readme.io.
   const rankedNetworkAction =
     !forcedSearch &&
-    (rankedClassification?.kind === 'search' || rankedClassification?.kind === 'host-url')
+    (rankedOption?.kind === 'history' ||
+      rankedClassification?.kind === 'search' ||
+      rankedClassification?.kind === 'host-url')
   // Why: a still-scanning index can promote a file match later, so hold Enter
   // unless the scan can no longer change the ranking — it failed outright, or
   // the text is a phrase that would never rank as a file.

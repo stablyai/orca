@@ -26,8 +26,6 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: vi.fn(() => '') }
 }))
 
-vi.mock('@electron-toolkit/preload', () => ({ electronAPI: {} }))
-
 describe('native preload destructive app actions', () => {
   const originalContextIsolated = Object.getOwnPropertyDescriptor(process, 'contextIsolated')
   let eventTarget: EventTarget
@@ -91,6 +89,20 @@ describe('native preload destructive app actions', () => {
       expect(aborted).toHaveBeenCalledTimes(1)
     })
   }
+
+  it('exposes the durable checkpoint join the lazy-chunk recovery reload depends on', async () => {
+    const api = await loadApi()
+    invoke.mockResolvedValue({ ok: true })
+
+    await expect(api.app.awaitBeforeUnloadCheckpoint()).resolves.toBeUndefined()
+    expect(invoke).toHaveBeenCalledWith('app:await-before-unload-checkpoint')
+
+    invoke.mockResolvedValue({ ok: false })
+
+    await expect(api.app.awaitBeforeUnloadCheckpoint()).rejects.toThrow(
+      'Failed to persist renderer state before unload.'
+    )
+  })
 
   it('preserves both macOS keyboard preload adapters', async () => {
     const api = await loadApi()

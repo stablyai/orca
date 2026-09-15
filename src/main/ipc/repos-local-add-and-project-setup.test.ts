@@ -55,7 +55,7 @@ describe('repos:add + repos:clone', () => {
     resetLocalRepoMocks(reposMocks)
     mockWindow.webContents.send.mockReset()
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('defaults repos:add badgeColor to DEFAULT_REPO_BADGE_COLOR for folder repos', async () => {

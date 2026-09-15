@@ -47,7 +47,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       options.hostExitConfirmed !== true
     // Why: collect before retirePtyAgentLaunchAuthority, which deletes the restored-authority
     // receipt a receipt-only pane's key comes from.
-    const exitPaneKeys = this.collectPaneKeysForPty(ptyId)
+    const exitPaneKeys = this.collectAgentStatusPaneKeysForPty(ptyId)
     if (preservesAbnormalSshSurface) {
       const prior = this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict
       this.rememberPtyLivenessVerdict(ptyId, {
@@ -140,6 +140,11 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
+    // Safe against respawn: `getPtyLifecycleGeneration` lazily mints from the
+    // monotonic `nextPtyLifecycleGeneration`, so a re-read after this delete
+    // returns a strictly newer number — never a reused one. Every comparison a
+    // stale frame makes therefore still fails, exactly as the advance above intends.
+    this.ptyLifecycleGenerationById.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
@@ -148,7 +153,6 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     this.terminalCwdByPtyId.delete(ptyId)
     this.terminalFileUriHostnameByPtyId.delete(ptyId)
     this.wslDistroByPtyId.delete(ptyId)
-    this.clearAgentRowSnapshotsForPty(ptyId)
     // Why: a Claude agent-team leader whose PTY exits naturally (agent finished,
     // process died, renderer reload) must release its team + nested panes map.
     // Previously only explicit closeTerminal evicted it, so natural exits leaked
@@ -202,7 +206,10 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       pty.lastExitCode = exitCode
       pty.lastExitCause = exitCause
       if (exitCode >= 0 || options.hostExitConfirmed === true) {
-        this.forgetPtyLivenessVerdict(ptyId)
+        // Record the certificate rather than merely dropping the doubt: a reader that has to
+        // authorize a respawn cannot distinguish "the host reported this process gone" from "this
+        // runtime has never asked" if both are absence.
+        this.rememberPtyLivenessVerdict(ptyId, { status: 'exited' })
       }
       // Why: the exited process's live frames say nothing about a replacement.
       // A same-id respawn makes the leaf writable again before any new title,

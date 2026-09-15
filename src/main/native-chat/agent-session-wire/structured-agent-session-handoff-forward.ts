@@ -55,6 +55,7 @@ export async function handoffStructuredSessionToTui(
     operationId,
     now: deps.now()
   })
+  deps.acknowledgeNativeRelease?.(sessionId)
   context.publishStage(record, 'to-tui')
   if (nativeSuspend.state === 'stopped-cleanup-failed') {
     await markStructuredHandoffManualRecovery(context, sessionId, operationId)

@@ -1,4 +1,3 @@
-import type { RpcAnyMethod } from '../core'
 import { STATUS_METHODS } from './status'
 import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
@@ -38,6 +37,7 @@ import { PLUGIN_METHODS } from './plugins'
 import { SKILL_METHODS } from './skills'
 import { CLIPBOARD_METHODS } from './clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'
+import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './runtime-client-capabilities'
 import { EMULATOR_METHODS } from './emulator'
 import { PAIRING_METHODS } from './pairing'
 import { UPDATER_METHODS } from './updater'
@@ -49,7 +49,7 @@ import { AGENT_HOOK_METHODS } from './agent-hooks'
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
 // auditing the security boundary or wiring new CLI commands.
-export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
+export const ALL_RPC_METHODS = [
   ...STATUS_METHODS,
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,
@@ -91,6 +91,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...SKILL_METHODS,
   ...CLIPBOARD_METHODS,
   ...HOST_CAPABILITY_METHODS,
+  ...RUNTIME_CLIENT_CAPABILITY_METHODS,
   ...CLIENT_EVENT_METHODS,
   ...CLIENT_UI_METHODS,
   ...EMULATOR_METHODS,

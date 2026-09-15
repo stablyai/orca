@@ -4,11 +4,9 @@ import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS } from './terminal-keyboard-avoidance-metrics-injected'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
+import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
 
-const terminalHtmlSource = readFileSync(
-  new URL('./terminal-webview-html.ts', import.meta.url),
-  'utf8'
-)
+const terminalHtmlSource = readTerminalWebViewHtmlSource()
 const reflowSource = readFileSync(
   new URL('./terminal-webview-reflow-injected.ts', import.meta.url),
   'utf8'

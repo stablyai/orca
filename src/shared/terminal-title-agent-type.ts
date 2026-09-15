@@ -10,6 +10,8 @@ import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
 } from './pi-compatible-synthetic-title'
+import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import type { TuiAgent } from './tui-agent'
 
 export const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Code idle prefix)
@@ -84,7 +86,7 @@ export function isPiAgentTitle(title: string): boolean {
  * Used to scope prompt-cache-timer behavior to Claude sessions only — other
  * agents have different (or no) caching semantics.
  */
-export function isClaudeAgent(title: string): boolean {
+function computeIsClaudeAgent(title: string): boolean {
   if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
     return false
   }
@@ -121,11 +123,15 @@ export function isClaudeAgent(title: string): boolean {
   return false
 }
 
+/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+export const isClaudeAgent: (title: string) => boolean =
+  memoizeTitleClassification(computeIsClaudeAgent)
+
 export function isClaudeManagementTitle(title: string): boolean {
   return CLAUDE_MANAGEMENT_TITLE_RE.test(title)
 }
 
-export function getAgentLabel(title: string): string | null {
+function computeAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null
   }
@@ -212,10 +218,10 @@ export function getAgentLabel(title: string): string | null {
   return null
 }
 
-// Maps getAgentLabel()'s product labels to TuiAgent ids — the fallback for
-// agents whose foreground PROCESS name isn't self-identifying (Claude Code runs
-// as `node`, but its "✳ Claude Code" title resolves here). Agents whose process
-// name already matches (codex, etc.) never reach this path.
+/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+export const getAgentLabel: (title: string) => string | null =
+  memoizeTitleClassification(computeAgentLabel)
+
 const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
@@ -257,7 +263,13 @@ function isGenericClaudeStatusClaim(title: string, titleAgent: TuiAgent | null):
 
 export function resolveTerminalTitleAgentType(title: string): TuiAgent | null {
   const label = getAgentLabel(title)
-  return label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
+  const parsed = label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
+  return resolveCanonicalPaneAgentIdentity({
+    title,
+    // Preserve this public title-parser adapter's historical answer; pane identity
+    // consumers pass raw titles to the canonical resolver and enforce its fence.
+    uncoveredFallback: { agent: parsed, titleOnly: false }
+  }).agent
 }
 
 /**
@@ -266,10 +278,14 @@ export function resolveTerminalTitleAgentType(title: string): TuiAgent | null {
  * that something is running, not proof the agent is Claude — so a task or
  * worktree title cannot become Claude without an explicit "Claude Code" name.
  */
-export function resolveExplicitTerminalTitleAgentType(title: string): TuiAgent | null {
+function computeExplicitTerminalTitleAgentType(title: string): TuiAgent | null {
   const titleAgent = resolveTerminalTitleAgentType(title)
   if (isGenericClaudeStatusClaim(title, titleAgent)) {
     return null
   }
   return titleAgent
 }
+
+/** Pure in `title` — memoized so repeated selector reads skip the canonical/title parse. */
+export const resolveExplicitTerminalTitleAgentType: (title: string) => TuiAgent | null =
+  memoizeTitleClassification(computeExplicitTerminalTitleAgentType)

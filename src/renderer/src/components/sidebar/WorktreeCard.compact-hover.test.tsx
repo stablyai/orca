@@ -16,7 +16,7 @@ const openModal = vi.fn()
 const openTaskPage = vi.fn()
 const updateWorktreeMeta = vi.fn()
 const recordFeatureInteraction = vi.fn()
-const setWorkspacePortScan = vi.fn()
+const replaceWorkspacePortScans = vi.fn()
 const setWorkspacePortScanRefreshing = vi.fn()
 const cacheTimerMocks = vi.hoisted(() => ({
   usePromptCacheCountdownStartedAt: vi.fn()
@@ -52,7 +52,7 @@ vi.mock('@/store', () => ({
       recordFeatureInteraction,
       remoteBranchConflictByWorktreeId: {},
       setRemoteBrowserPageHandle: vi.fn(),
-      setWorkspacePortScan,
+      replaceWorkspacePortScans,
       setWorkspacePortScanRefreshing,
       settings,
       sshConnectionStates: new Map(),

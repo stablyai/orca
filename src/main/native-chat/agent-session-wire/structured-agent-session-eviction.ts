@@ -25,9 +25,19 @@ export type StructuredAgentSessionEvictionContext = {
   hasProviderChild?: boolean
   eventSink: DeferredStructuredAgentSessionEventSink
   adapter: StructuredAgentSessionAdapter
-  forget: () => void
+  /** Closes the session's journal handle and drops the map entry. Async and
+   *  awaited: `close()` is ordered behind queued writes, and a delete that
+   *  returns while the close is still queued leaves nothing to retry. */
+  forget: () => Promise<void>
   /** Drops the cached sink so a later attach mints a fresh one. */
   discardSink: () => void
+  /** Fires once the adapter has PROVEN the child gone, so host bookkeeping stops claiming one. */
+  onProviderChildStopped?: () => void
+  /** Whether this host still owes the child's wind-down. Distinct from `hasProviderChild`, which a
+   *  proven exit retires mid-run: the two disagree for exactly the steps a retry has to repeat. */
+  owesProviderChildWindDown?: boolean
+  /** Settles work owned by the child after its final callbacks have drained. */
+  settleWork?: () => Promise<void>
   /** Hands the lease back now that this host's child is proven gone. No-ops when the record is
    *  not this host's to release. */
   releaseLease: () => Promise<void>
@@ -54,6 +64,7 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
             throw new Error('provider child exit was not proven')
           }
         }
+        context.onProviderChildStopped?.()
       }
     },
     {
@@ -64,6 +75,11 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
           throw barrier.error
         }
       }
+    },
+    {
+      name: 'settle-dead-generation',
+      run: (context) =>
+        context.owesProviderChildWindDown === false ? undefined : context.settleWork?.()
     },
     { name: 'stop-publishing', run: (context) => context.eventSink.unbind() },
     { name: 'close-sink', run: (context) => context.eventSink.close() },

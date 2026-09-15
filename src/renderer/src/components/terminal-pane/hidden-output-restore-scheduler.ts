@@ -1,6 +1,7 @@
 type HiddenOutputRestorePriority = 'active' | 'inactive'
 
-type HiddenOutputRestoreRequest = () => void
+/** Returns whether the pane actually started a replay; a guard-only return is free. */
+type HiddenOutputRestoreRequest = () => boolean
 
 type HiddenOutputRestoreEntry = {
   requestRestore: HiddenOutputRestoreRequest
@@ -30,13 +31,22 @@ function scheduleInactiveRestoreDrain(): void {
 
 function drainInactiveRestoreQueue(): void {
   inactiveRestoreTimer = null
-  const next = inactiveRestoreQueue.entries().next()
-  if (next.done) {
-    return
+  // Why the loop: an entry whose pane went hidden, was disposed, or had its restore
+  // superseded replays nothing, so charging it a whole frame only delays the next
+  // on-screen pane. Still at most one real replay per frame; the skips are guard reads.
+  let remaining = inactiveRestoreQueue.size
+  while (remaining > 0) {
+    remaining -= 1
+    const next = inactiveRestoreQueue.entries().next()
+    if (next.done) {
+      break
+    }
+    const [target, entry] = next.value
+    inactiveRestoreQueue.delete(target)
+    if (entry.requestRestore()) {
+      break
+    }
   }
-  const [target, entry] = next.value
-  inactiveRestoreQueue.delete(target)
-  entry.requestRestore()
   scheduleInactiveRestoreDrain()
 }
 

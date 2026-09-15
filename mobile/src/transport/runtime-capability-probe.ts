@@ -10,7 +10,7 @@ const FAILURE_RETRY_BASE_DELAY_MS = 1_000
 const FAILURE_RETRY_MAX_DELAY_MS = 15_000
 
 export function startRuntimeCapabilityProbe(
-  client: RpcClient,
+  client: Pick<RpcClient, 'sendRequest'>,
   onCapabilities: (capabilities: readonly string[]) => void
 ): () => void {
   let cancelled = false

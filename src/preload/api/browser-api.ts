@@ -119,7 +119,7 @@ export type BrowserApi = {
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
   onOpenLinkInOrcaTab: (
-    callback: (event: { browserPageId: string; url: string }) => void
+    callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
   ) => () => void
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>
   setGrabMode: (args: BrowserSetGrabModeArgs) => Promise<BrowserSetGrabModeResult>

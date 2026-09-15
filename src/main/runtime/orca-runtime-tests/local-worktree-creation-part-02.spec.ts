@@ -50,7 +50,13 @@ describe('OrcaRuntimeService', () => {
         pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
       })
 
-      expect(getBranchConflictKind).toHaveBeenCalledWith(TEST_REPO_PATH, 'feature/fix', 'abc123')
+      expect(getBranchConflictKind).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        'feature/fix',
+        'abc123',
+        {},
+        undefined
+      )
       expect(getPRForBranchMock).toHaveBeenCalledWith(TEST_REPO_PATH, 'feature/fix')
       expect(addWorktree).toHaveBeenCalledWith(
         TEST_REPO_PATH,
@@ -165,7 +171,9 @@ describe('OrcaRuntimeService', () => {
       expect(getBranchConflictKind).toHaveBeenCalledWith(
         TEST_REPO_PATH,
         'feature/bitbucket',
-        'abc123'
+        'abc123',
+        {},
+        undefined
       )
       expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
         expect.objectContaining({

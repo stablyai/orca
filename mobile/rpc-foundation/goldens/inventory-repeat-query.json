@@ -1,0 +1,266 @@
+{
+  "operation": "workspace.file-inventory",
+  "family": "legacy-inventory",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "262eaad263a45aa13ec5b27c12b59946b12c202474229fff7a5727dba6d702ca",
+  "scenarioSha256": "73a468d5c7a51c2dbb7af2642f0050d05d861fce29295460c48d7c51f86bf57f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "003a57e2bf31": {
+      "files": ["alpha.ts"]
+    },
+    "07ed03809186": {
+      "name": "files.searchPaths#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "alpha",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "files": [
+              {
+                "relativePath": "alpha.ts"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "0a86b05a780d": {
+      "status": "fulfilled",
+      "startedAt": 360,
+      "settledAt": 360,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "1df364c141e7": {
+      "name": "files.searchPaths#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"beta\",\"limit\":16}}"
+    },
+    "3642acfe438f": {
+      "files": ["beta.ts"]
+    },
+    "3b6419fbab75": {
+      "status": "fulfilled",
+      "startedAt": 240,
+      "settledAt": 240,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "6908b2a7adc8": {
+      "name": "files.searchPaths#3",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "gamma",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 360
+      }
+    },
+    "702153114450": {
+      "name": "files.searchPaths#3",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"gamma\",\"limit\":16}}"
+    },
+    "7e0cf12e6220": {
+      "name": "files.searchPaths#3",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "gamma",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 360,
+        "settledAt": 360,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "files": [
+              {
+                "relativePath": "gamma.ts"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "a1e1a76515f9": {
+      "name": "files.searchPaths#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"alpha\",\"limit\":16}}"
+    },
+    "a7201fe6aca9": {
+      "name": "files.searchPaths#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "beta",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "files": [
+              {
+                "relativePath": "beta.ts"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "d2ad71e601c4": {
+      "status": "fulfilled",
+      "startedAt": 120,
+      "settledAt": 120,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "inventory-repeat-query",
+    "checkpoints": [
+      {
+        "id": "cached-alpha",
+        "observation": {
+          "sender": ["07ed03809186", "a7201fe6aca9", "6908b2a7adc8"],
+          "payloads": ["a1e1a76515f9", "1df364c141e7", "702153114450"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "alpha": "eb79a9b3682a",
+            "beta": "d2ad71e601c4",
+            "gamma": "3b6419fbab75",
+            "repeat-alpha": "0a86b05a780d"
+          },
+          "state": "003a57e2bf31",
+          "effects": []
+        }
+      },
+      {
+        "id": "stale-search-ignored",
+        "observation": {
+          "sender": ["07ed03809186", "a7201fe6aca9", "7e0cf12e6220"],
+          "payloads": ["a1e1a76515f9", "1df364c141e7", "702153114450"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "alpha": "eb79a9b3682a",
+            "beta": "d2ad71e601c4",
+            "gamma": "3b6419fbab75",
+            "repeat-alpha": "0a86b05a780d"
+          },
+          "state": "003a57e2bf31",
+          "effects": []
+        }
+      },
+      {
+        "id": "cached-beta-cancels-debounce",
+        "observation": {
+          "sender": ["07ed03809186", "a7201fe6aca9", "7e0cf12e6220"],
+          "payloads": ["a1e1a76515f9", "1df364c141e7", "702153114450"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "alpha": "eb79a9b3682a",
+            "beta": "d2ad71e601c4",
+            "gamma": "3b6419fbab75",
+            "repeat-alpha": "0a86b05a780d",
+            "delta": "0a86b05a780d",
+            "repeat-beta": "0a86b05a780d"
+          },
+          "state": "3642acfe438f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

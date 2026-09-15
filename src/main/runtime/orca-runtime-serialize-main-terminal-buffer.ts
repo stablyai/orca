@@ -47,6 +47,10 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     pendingEscapeTailAnsi?: string
     terminalOwner?: 'shell'
   } | null> {
+    const restoredSnapshot = await this.serializePreferredRestoredTerminalBuffer(ptyId, opts)
+    if (restoredSnapshot) {
+      return restoredSnapshot
+    }
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, {
       ...opts,
       includeEmpty: true

@@ -206,14 +206,18 @@ export async function getBrowserWorktreeSelector(
 export async function getTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
-  client: RuntimeClient
+  client: RuntimeClient,
+  options: { requireUnambiguous?: boolean } = {}
 ): Promise<string> {
   const explicit = getOptionalStringFlag(flags, 'terminal')
   if (explicit) {
     return explicit
   }
   const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
-  const response = await client.call<{ handle: string }>('terminal.resolveActive', { worktree })
+  const response = await client.call<{ handle: string }>('terminal.resolveActive', {
+    worktree,
+    ...(options.requireUnambiguous ? { requireUnambiguous: true } : {})
+  })
   return response.result.handle
 }
 

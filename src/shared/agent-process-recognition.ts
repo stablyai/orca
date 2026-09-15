@@ -289,7 +289,7 @@ export function recognizeAgentProcessFromCommandLine(
   const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  let direct = recognizeAgentProcess(tokens[0])
+  let direct = recognizedAgentForProcess(firstNormalized)
   // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
   if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
     direct = null

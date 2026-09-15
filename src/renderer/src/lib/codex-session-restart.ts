@@ -6,11 +6,16 @@ import {
   type RuntimeTerminalProcessInspection
 } from '@/runtime/runtime-terminal-inspection'
 import { translate } from '@/i18n/i18n'
+import {
+  getCodexAccountDisplayLabel,
+  normalizeCodexAccountEmail
+} from './codex-account-display-label'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import {
   isCodexForegroundProcess,
   isCodexRestartEligiblePane
 } from './codex-pane-restart-eligibility'
+import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
@@ -93,7 +98,7 @@ async function isConfirmedCodexForegroundDespiteShellReading(
 ): Promise<boolean> {
   if (
     launchAgent !== 'codex' ||
-    inspection.unavailable === true ||
+    isClientOnlyUnverifiableInspection(inspection) ||
     inspection.foregroundProcess === null ||
     !isShellProcess(inspection.foregroundProcess)
   ) {
@@ -170,7 +175,7 @@ async function scanCodexPanes(
       return {
         ptyId,
         eligible,
-        inconclusive: inspection === null || inspection.unavailable === true,
+        inconclusive: inspection === null || isClientOnlyUnverifiableInspection(inspection),
         launchedCodex: tab.launchAgent === 'codex',
         notified: false,
         laneKey: lane.laneKey,
@@ -325,13 +330,7 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
   return scans.map((scan) => (notifiedPtyIds.has(scan.ptyId) ? { ...scan, notified: true } : scan))
 }
 
-/**
- * Names an account for the restart prompt.
- *
- * Why the collision check: one OpenAI login added under two ChatGPT workspaces
- * gives both accounts the same email, and "switch from x@y to x@y" names
- * neither. The workspace is appended only when it is what tells them apart.
- */
+// Same-email accounts need the same workspace or ID distinction as the switcher.
 export function resolveCodexRestartPromptAccountLabel(
   accounts: readonly { id: string; email: string; workspaceLabel?: string | null }[],
   accountId: string | null | undefined
@@ -343,12 +342,11 @@ export function resolveCodexRestartPromptAccountLabel(
   if (!account) {
     return translate('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
   }
+  const email = normalizeCodexAccountEmail(account.email)
   const sharesEmail = accounts.some(
-    (entry) => entry.id !== account.id && entry.email === account.email
+    (entry) => entry.id !== account.id && normalizeCodexAccountEmail(entry.email) === email
   )
-  return sharesEmail && account.workspaceLabel
-    ? `${account.email} (${account.workspaceLabel})`
-    : account.email
+  return sharesEmail ? getCodexAccountDisplayLabel(account, accounts) : account.email
 }
 
 async function createCodexAccountLabelResolver(): Promise<(accountId: string | null) => string> {

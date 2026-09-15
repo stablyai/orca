@@ -1,12 +1,19 @@
 import type * as pty from 'node-pty'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
+  WRITE_ACCEPTED,
+  writeRefused,
+  type WriteSettlement
+} from '../../shared/pty-write-settlement'
+import {
   confirmLocalPtyForegroundProcess,
   confirmLocalPtyShellForeground,
   getLocalPtyForegroundProcess,
-  hasLocalPtyChildProcesses
+  hasLocalPtyChildProcesses,
+  inspectLocalPtyChildProcesses
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
+import type { PtyProcessInspection } from './pty-process-inspection'
 import {
   advanceLoadGeneration,
   clearPtyState,
@@ -73,6 +80,11 @@ export class LocalPtyProvider implements IPtyProvider {
   write(id: string, data: string): boolean {
     return writeLocalPty(id, data)
   }
+
+  // In-process node-pty is its own sole owner, so its synchronous answer is the settlement.
+  writeWithSettlement(id: string, data: string): WriteSettlement {
+    return writeLocalPty(id, data) ? WRITE_ACCEPTED : writeRefused('provider_refused_write')
+  }
   resize(id: string, cols: number, rows: number): void {
     resizeLocalPty(id, cols, rows)
   }
@@ -115,6 +127,16 @@ export class LocalPtyProvider implements IPtyProvider {
 
   hasChildProcesses(id: string): Promise<boolean> {
     return hasLocalPtyChildProcesses(id)
+  }
+
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    const foregroundProcess = await getLocalPtyForegroundProcess(id)
+    const childProcessEvidence = inspectLocalPtyChildProcesses(id)
+    return {
+      foregroundProcess,
+      hasChildProcesses: childProcessEvidence === 'children',
+      childProcessEvidence
+    }
   }
 
   getForegroundProcess(id: string): Promise<string | null> {

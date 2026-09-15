@@ -21,6 +21,7 @@ export type TerminalTabCloseRequestListener = (data: {
   requestId: string
   tabId: string
   localPtyTeardownOwnedExternally?: boolean
+  force?: boolean
 }) => void
 
 export async function useIpcEventsForCloseRouting({
@@ -52,6 +53,9 @@ export async function useIpcEventsForCloseRouting({
   respondTerminalTabClose?: ReturnType<typeof vi.fn>
   persistWorkspaceSession?: ReturnType<typeof vi.fn>
 }): Promise<void> {
+  if (typeof HTMLElement === 'undefined') {
+    vi.stubGlobal('HTMLElement', class {})
+  }
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
     return {
@@ -66,6 +70,9 @@ export async function useIpcEventsForCloseRouting({
     useAppStore: {
       subscribe: vi.fn(() => () => {}),
       getState: () => ({
+        getActiveTab: () => null,
+        closeUnifiedTab: vi.fn(),
+        reconcileWorktreeTabModel: () => ({ renderableTabCount: 1 }),
         setUpdateStatus: vi.fn(),
         fetchRepos: vi.fn(),
         fetchWorktrees: vi.fn(),

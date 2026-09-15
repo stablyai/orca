@@ -48,10 +48,13 @@ function retire(
   if (reason === 'host-reports-absent' || reason === 'stop-confirmed') {
     args.store.markSshRemotePtyLease(args.targetId, relayPtyId, 'terminated')
   } else if (reason === 'relay-id-recycled') {
-    // Why this must happen: the reattach one step later filters on lease state and fences only on
-    // paneKey/tabId, never on incarnation. Leaving this lease active hands the user's old pane to
-    // whatever process now holds the recycled id.
-    args.store.markSshRemotePtyLease(args.targetId, relayPtyId, 'expired')
+    // Why this must happen: the reattach one step later fences only on paneKey/tabId, never on
+    // incarnation. Leaving this lease reattachable hands the user's old pane to whatever process
+    // now holds the recycled id. `expired` alone no longer excludes it — that state also covers
+    // orphans the reattach is now meant to re-adopt — so the recycling is recorded explicitly.
+    args.store.markSshRemotePtyLease(args.targetId, relayPtyId, 'expired', {
+      relayIdRecycled: true
+    })
   }
   console.log(
     `[ssh-pending-kill] retired stop for ${args.targetId}/${relayPtyId} (${reason.replace(/-/g, ' ')})`

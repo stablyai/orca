@@ -73,7 +73,7 @@ export function createUpdateWorktreesMeta(
       }
       return nextWorktrees === s.worktreesByRepo &&
         nextDetectedWorktrees === s.detectedWorktreesByRepo
-        ? {}
+        ? s
         : {
             ...(nextWorktrees !== s.worktreesByRepo
               ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }

@@ -197,7 +197,7 @@ describe('browserManager', () => {
 
   // Why: popup child windows get attachGuestPolicies but are never entered into tabIdByWebContentsId,
   // so a direct lookup of the UA mode misses the native opt-out. That is worse than doing nothing —
-  // native sessions skip setupClientHintsOverride, so the popup would send the raw Electron UA on the
+  // native sessions skip setupGoogleAuthUserAgentOverride, so the popup would send the raw Electron UA on the
   // wire while navigator.userAgent claimed Firefox. Google sign-in popups are a first-class surface.
   it('leaves the UA untouched on auth hosts for a popup owned by a native-UA profile', () => {
     const ownerGuest = {

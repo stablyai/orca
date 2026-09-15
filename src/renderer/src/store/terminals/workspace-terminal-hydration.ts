@@ -172,6 +172,14 @@ export function createWorkspaceTerminalHydrationActions(
           activeTabIdByWorktree,
           restoredRuntimeHostIdByWorkspaceSessionKey:
             options?.runtimeHostIdByWorkspaceSessionKey ?? {},
+          // Why conditional: a mid-session re-hydration (the SSH pull merge) carries no shadow, and
+          // clearing it there would drop the co-claimant rows the next write has to put back.
+          ...(options?.contestedHostWorkspaceSessions
+            ? { contestedHostWorkspaceSessions: options.contestedHostWorkspaceSessions }
+            : {}),
+          ...(options?.contestedPrimaryHostBySessionKey
+            ? { contestedPrimaryHostBySessionKey: options.contestedPrimaryHostBySessionKey }
+            : {}),
           repos: runtimeSessionPlaceholders.repos,
           tabsByWorktree,
           worktreesByRepo,

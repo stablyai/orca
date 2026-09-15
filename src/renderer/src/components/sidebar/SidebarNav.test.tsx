@@ -89,8 +89,6 @@ vi.mock('@/components/ui/context-menu', () => ({
 
 import SidebarNav, {
   getSetupGuideSidebarEntryReady,
-  shouldShowAgentDashboardButton,
-  shouldShowAgentsButton,
   shouldShowAutomationsButton,
   shouldShowArtifactsButton,
   shouldShowMobileButton,
@@ -220,42 +218,14 @@ describe('SidebarNav', () => {
     setSidebarState()
   })
 
-  it('hides the Agents entry while settings are loading', () => {
-    expect(shouldShowAgentsButton(null)).toBe(false)
-  })
-
-  it('hides the Agents entry while the experimental Agents view is off', () => {
-    expect(
-      shouldShowAgentsButton({
-        ...getDefaultSettings('/tmp'),
-        experimentalActivity: false
-      })
-    ).toBe(false)
-  })
-
-  it('shows the Agents entry when the experimental Agents view is on', () => {
-    expect(
-      shouldShowAgentsButton({
-        ...getDefaultSettings('/tmp'),
-        experimentalActivity: true
-      })
-    ).toBe(true)
-  })
-
-  it('shows the Agent Dashboard entry only when its experiment is enabled', () => {
-    expect(shouldShowAgentDashboardButton(null)).toBe(false)
-    expect(shouldShowAgentDashboardButton({ experimentalAgentDashboardPopout: false })).toBe(false)
-    expect(shouldShowAgentDashboardButton({ experimentalAgentDashboardPopout: true })).toBe(true)
-  })
-
-  it('keeps the Agent Dashboard row unmounted by default', async () => {
+  it('keeps the Agent Dashboard row unmounted while its experiment is off', async () => {
     const container = await renderSidebarNav()
 
     expect(queryButtonByText(container, 'Agent Dashboard')).toBeNull()
     expect(mocks.getAgentBucketCounts).not.toHaveBeenCalled()
   })
 
-  it('mounts the Agent Dashboard row after opt-in', async () => {
+  it('mounts the Agent Dashboard row only when its experiment is enabled', async () => {
     setSidebarState({
       settings: {
         ...getDefaultSettings('/tmp'),

@@ -58,8 +58,15 @@ function createHost(
   return host
 }
 
+async function abandonHost(host: StructuredAgentSessionHost): Promise<void> {
+  host['runtimeState'].stopLeaseRenewal()
+  host['holds'].dispose()
+  await Promise.all([...host['sessions'].values()].map((session) => session.journal.close()))
+  host['sessions'].clear()
+}
+
 afterEach(async () => {
-  await Promise.all(hosts.splice(0).map((host) => host.flushAllStreamedEvents()))
+  await Promise.all(hosts.splice(0).map(abandonHost))
   await rm(root, { recursive: true, force: true })
   root = ''
 })

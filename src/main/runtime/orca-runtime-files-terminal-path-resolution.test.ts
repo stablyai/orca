@@ -103,6 +103,7 @@ describe('RuntimeFileCommands', () => {
       }
       const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
         worktree: sibling,
+        executionHostId: 'local',
         relativePath: 'docs/readme.md'
       }))
       const { commands } = createRuntimeFileCommands({
@@ -154,6 +155,7 @@ describe('RuntimeFileCommands', () => {
       }
       const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
         worktree: sibling,
+        executionHostId: 'local',
         relativePath: ''
       }))
       const hasRecentTerminalOutputPath = vi.fn(() => true)
@@ -195,7 +197,7 @@ describe('RuntimeFileCommands', () => {
       }
       const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
         worktree: sibling,
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         relativePath: 'docs/readme.md'
       }))
       const { commands, store } = createRuntimeFileCommands({
@@ -245,7 +247,7 @@ describe('RuntimeFileCommands', () => {
       }
       const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
         worktree: sibling,
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         relativePath: ''
       }))
       const hasRecentTerminalOutputPath = vi.fn(() => true)
@@ -274,11 +276,14 @@ describe('RuntimeFileCommands', () => {
       expect(hasRecentTerminalOutputPath).not.toHaveBeenCalled()
     })
 
+    // The host was `runtime:env-a` until this process stopped dispatching runtime hosts at all
+    // (see runtime-file-target-execution-host.test.ts); an SSH host proves the same scoping on a
+    // host this process actually serves.
     it('scopes sibling lookup to the selected worktree execution host', async () => {
       const resolveKnownWorkspaceFileTarget = vi.fn(async () => null)
       const { commands } = createRuntimeFileCommands({
         path: '/repo-a',
-        hostId: 'runtime:env-a',
+        hostId: 'ssh:openclaw',
         resolveKnownWorkspaceFileTarget
       })
 
@@ -293,7 +298,7 @@ describe('RuntimeFileCommands', () => {
 
       expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(
         '/repo-b/docs/readme.md',
-        'runtime:env-a'
+        'ssh:openclaw'
       )
     })
 

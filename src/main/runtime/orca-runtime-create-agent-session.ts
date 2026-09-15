@@ -16,7 +16,6 @@ import {
   AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT
 } from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import {
   resolveTuiAgentLaunchArgs,
@@ -24,6 +23,10 @@ import {
 } from '../../shared/tui-agent-launch-defaults'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
+import type {
+  AgentSessionCreateOperation,
+  AgentSessionCreateReclaimIdentity
+} from './runtime-terminal-contracts'
 import {
   deterministicAgentSessionUuid,
   isAgentSessionOperationOutcomeUnknown
@@ -72,7 +75,16 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       if (existing.fingerprint !== requestFingerprint) {
         throw new Error('agent_session_operation_conflict')
       }
-      const replayed = await existing.promise
+      let replayed: RuntimeCreateAgentSessionResult
+      try {
+        replayed = await existing.promise
+      } catch (error) {
+        const reclaimed = await this.reclaimFencedAgentSessionSpawn(existing.reclaim.identity)
+        if (!reclaimed) {
+          throw error
+        }
+        return { terminal: reclaimed, disposition: 'replayed' }
+      }
       return { ...replayed, disposition: 'replayed' }
     }
     if (now - operationTimestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
@@ -96,6 +108,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       throw new Error('agent_session_operation_capacity')
     }
     let retainReplayFence = false
+    const reclaim: AgentSessionCreateOperation['reclaim'] = {}
     const operation = (async (): Promise<RuntimeCreateAgentSessionResult> => {
       // Why: reserve the client operation before any async preflight so concurrent retries cannot
       // both observe an empty ledger and reach the execution owner independently.
@@ -138,9 +151,9 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
       }
       const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-      const isRemote = workspace.repo
-        ? repoIsRemote(workspace.repo)
-        : Boolean(workspace.connectionId)
+      // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
+      // shape must match the PTY route this scope already resolved.
+      const isRemote = Boolean(workspace.connectionId)
       const shell = resolveLocalWindowsAgentStartupShell({
         platform,
         isRemote,
@@ -187,6 +200,13 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       const operationLeafId =
         request.placement?.leafId ?? deterministicAgentSessionUuid(`${executionOperationId}:leaf`)
       const operationHandle = `term_${deterministicAgentSessionUuid(`${executionOperationId}:handle`)}`
+      // Why: recorded before dispatch — this handle is exported into the PTY as
+      // ORCA_TERMINAL_HANDLE, so it is the only name a lost spawn can be re-found by.
+      reclaim.identity = {
+        worktreeId: workspace.id,
+        connectionId: workspace.connectionId ?? null,
+        terminalHandle: operationHandle
+      }
       try {
         terminal = await this.createTerminal(`id:${workspace.id}`, {
           command: startup.launchCommand,
@@ -216,7 +236,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
     })()
     this.agentSessionCreateOperations.set(operationKey, {
       fingerprint: requestFingerprint,
-      promise: operation
+      promise: operation,
+      reclaim
     })
     const expireOperation = (): void => {
       const expiresAt = Math.max(now, operationTimestamp) + AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS
@@ -243,6 +264,27 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
         this.agentSessionCreateOperations.delete(operationKey)
       }
       throw error
+    }
+  }
+
+  // Why: the host may still hold the PTY this operation launched. Adoption-only —
+  // this never spawns and never kills, so an unreachable or silent host just replays
+  // the original failure instead of authorising anything.
+  private async reclaimFencedAgentSessionSpawn(
+    identity: AgentSessionCreateReclaimIdentity | undefined
+  ): Promise<RuntimeTerminalCreate | null> {
+    if (!identity) {
+      return null
+    }
+    try {
+      return await this.reconcileRemoteTerminalCreate(
+        identity.worktreeId,
+        identity.terminalHandle,
+        identity.connectionId
+      )
+    } catch {
+      // Unverifiable or ambiguous inventory is never evidence the PTY exited.
+      return null
     }
   }
 }

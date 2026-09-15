@@ -193,6 +193,17 @@ describe('git remote operations', () => {
       if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'pr-pynickle-orca') {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
       }
+      if (args[0] === 'remote' && args[1] === '-v') {
+        return {
+          stdout: [
+            'origin\thttps://github.com/stablyai/orca.git (fetch)',
+            'origin\thttps://github.com/stablyai/orca.git (push)',
+            'pr-pynickle-orca\thttps://github.com/pynickle/orca.git (fetch)',
+            'pr-pynickle-orca\thttps://github.com/pynickle/orca.git (push)'
+          ].join('\n'),
+          stderr: ''
+        }
+      }
       if (args[0] === 'remote') {
         return { stdout: 'origin\npr-pynickle-orca\n', stderr: '' }
       }
@@ -201,6 +212,54 @@ describe('git remote operations', () => {
 
     await gitPush('/repo', false)
 
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['push', '--set-upstream', 'pr-pynickle-orca', 'HEAD:imp/chinese-translation'],
+      { cwd: '/repo' }
+    )
+  })
+
+  // Regression: normalizing a URL-valued push remote used to run `git remote` and then a
+  // serial `git remote get-url` per remote -- 59 subprocesses on a 58-remote repo.
+  it('normalizes a URL-valued push remote from one remote table read at 58 remotes', async () => {
+    const remotes = [
+      { name: 'origin', url: 'https://github.com/stablyai/orca.git' },
+      ...Array.from({ length: 56 }, (_, index) => ({
+        name: `pr-user${index}-orca`,
+        url: `https://github.com/user${index}/orca.git`
+      })),
+      { name: 'pr-pynickle-orca', url: 'https://github.com/pynickle/orca.git' }
+    ]
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'imp/chinese-translation\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
+        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.merge')) {
+        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
+      }
+      if (args[0] === 'config') {
+        throw new Error(`config key is not set: ${args.join(' ')}`)
+      }
+      if (args[0] === 'remote' && args[1] === '-v') {
+        return {
+          stdout: remotes
+            .flatMap(({ name, url }) => [`${name}\t${url} (fetch)`, `${name}\t${url} (push)`])
+            .join('\n'),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'remote') {
+        throw new Error(`unexpected remote scan: ${args.join(' ')}`)
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await gitPush('/repo', false)
+
+    const remoteReads = gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'remote')
+    expect(remoteReads.map(([args]) => args)).toEqual([['remote', '-v']])
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
       ['push', '--set-upstream', 'pr-pynickle-orca', 'HEAD:imp/chinese-translation'],
       { cwd: '/repo' }
@@ -778,6 +837,60 @@ describe('git remote operations', () => {
       [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
       [['fetch', '--prune', 'foo/bar'], { cwd: '/repo' }]
     ])
+  })
+
+  it('drops a stale branch-specific refspec and retries when the fork branch was deleted upstream (#17828)', async () => {
+    let fetchAttempts = 0
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'check-ref-format') {
+        return { stdout: '', stderr: '' }
+      }
+      if (args[0] === 'fetch') {
+        fetchAttempts += 1
+        if (fetchAttempts === 1) {
+          throw Object.assign(new Error("fatal: couldn't find remote ref refs/heads/gone"), {
+            stderr: "fatal: couldn't find remote ref refs/heads/gone\n"
+          })
+        }
+        return { stdout: '', stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return {
+          stdout:
+            '+refs/heads/gone:refs/remotes/fork/gone\n+refs/heads/keep:refs/remotes/fork/keep\n',
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await gitFetch('/repo', { remoteName: 'fork', branchName: 'keep' })
+
+    expect(fetchAttempts).toBe(2)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['config', '--unset-all', 'remote.fork.fetch'],
+      { cwd: '/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['config', '--add', 'remote.fork.fetch', '+refs/heads/keep:refs/remotes/fork/keep'],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('surfaces the original fetch error when it is not a stale-refspec failure', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'check-ref-format') {
+        return { stdout: '', stderr: '' }
+      }
+      if (args[0] === 'fetch') {
+        throw new Error('network unreachable')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(gitFetch('/repo', { remoteName: 'fork', branchName: 'keep' })).rejects.toThrow(
+      'network unreachable'
+    )
   })
 
   it('normalizes fetch authentication errors to a friendly message', async () => {

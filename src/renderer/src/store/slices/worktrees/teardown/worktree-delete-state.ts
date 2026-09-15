@@ -78,7 +78,7 @@ export function createMarkWorktreesDeleting(
         }
         changed = true
       }
-      return changed ? { deleteStateByWorktreeId: nextDeleteState } : {}
+      return changed ? { deleteStateByWorktreeId: nextDeleteState } : s
     })
   }
 }
@@ -113,7 +113,7 @@ export function createMarkWorktreesQueuedForDeletion(
         }
         changed = true
       }
-      return changed ? { deleteStateByWorktreeId: nextDeleteState } : {}
+      return changed ? { deleteStateByWorktreeId: nextDeleteState } : s
     })
   }
 }
@@ -128,7 +128,7 @@ export function createClearWorktreeDeleteState(
       : worktreeId
     set((s) => {
       if (!s.deleteStateByWorktreeId[key]) {
-        return {}
+        return s
       }
       const next = { ...s.deleteStateByWorktreeId }
       delete next[key]

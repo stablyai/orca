@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RpcContext, RpcMethod } from '../core'
+import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../core'
 import type { PluginService } from '../../../plugins/plugin-service'
 import { PLUGIN_METHODS, setPluginServiceForRpc } from './plugins'
 
 const SESSION_TOKEN = 's'.repeat(43)
 
 function method(name: string): RpcMethod {
-  const found = PLUGIN_METHODS.find((entry) => entry.name === name)
+  const found = eraseRpcMethods(PLUGIN_METHODS).find((entry) => entry.name === name)
   if (!found) {
     throw new Error(`missing ${name}`)
   }

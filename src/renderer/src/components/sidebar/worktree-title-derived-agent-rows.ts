@@ -215,6 +215,12 @@ function buildTitleDerivedAgentRow(args: {
     agentType,
     rowSource: 'live',
     state: rowState,
+    // Load-bearing zero, not a placeholder: `dashboardRowBucketProjection` reads `startedAt === 0`
+    // as "title-derived" and short-circuits `unseen`. That is the ONLY reason the `args.now` stamps
+    // on `entry` above (updatedAt / stateStartedAt / observation) cannot move this row's bucket.
+    // Dashboard bucket caches key their invalidation on the freshness boundary in
+    // `isExplicitAgentStatusFresh` alone; give this a real timestamp and every one of them starts
+    // serving stale counts, with no test failing at the point of the change.
     startedAt: 0
   }
 }

@@ -1,0 +1,94 @@
+{
+  "operation": "tasks.smart-source-search",
+  "family": "tasks.smart-source-search",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "scenarioSha256": "34ab4edb621856980c8678629bd809c100d27dcd0747db5abbf4508c7231b7e5",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "4e3aac46030e": {
+      "name": "linear.listIssues#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.listIssues"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filter": "assigned",
+            "limit": 50,
+            "workspaceId": {
+              "$rpc": "undefined"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": [
+            {
+              "id": "issue-2"
+            }
+          ]
+        }
+      }
+    },
+    "a95bdb94e589": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "id": "issue-2"
+        }
+      ]
+    },
+    "b107467b4d7c": {
+      "name": "linear.listIssues#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"assigned\",\"limit\":50}}"
+    },
+    "f2b981b0b281": {
+      "linear": [
+        {
+          "id": "issue-2"
+        }
+      ]
+    }
+  },
+  "recording": {
+    "scenario": "tw-smart-search-linear-listed",
+    "checkpoints": [
+      {
+        "id": "linear-assigned",
+        "observation": {
+          "sender": ["4e3aac46030e"],
+          "payloads": ["b107467b4d7c"],
+          "settlements": {
+            "linear": "a95bdb94e589"
+          },
+          "state": "f2b981b0b281",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

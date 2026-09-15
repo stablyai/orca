@@ -15,6 +15,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { evaluateAgentSessionAcquisition } from '../../../shared/agent-session-lease-adjudication'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type {
   AgentSessionClaimStatus,
   AgentSessionHandoffStage,
@@ -25,6 +27,9 @@ import type {
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { AGENT_SESSION_STORE_FILE_NAME } from '../../runtime/agent-session-record-store-file'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
@@ -126,7 +131,8 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
       dispatch: vi.fn(),
       cancelTurn: vi.fn(),
       answerPrompt: vi.fn(),
-      setOption: vi.fn()
+      setOption: vi.fn(),
+      supportsCreate: () => true
     } as unknown as StructuredAgentSessionAdapter,
     journalRoot: root,
     claimKeyId: 'key-1',
@@ -174,7 +180,214 @@ function isAcquirable(lease: NonNullable<ReturnType<typeof store.getRecord>>['le
   )
 }
 
+async function seedRunningTurn(provider: 'codex' | 'claude' = 'codex'): Promise<void> {
+  const journal = await openAgentSessionJournal({
+    identity: {
+      sessionId: SESSION,
+      workspaceId: LOCATION.workspaceId,
+      hostId: LOCATION.executionHostId,
+      agent: provider,
+      providerHandle:
+        provider === 'codex'
+          ? { kind: 'codex', threadId: THREAD }
+          : { kind: 'claude', sessionId: 'provider-session-alpha-1', leafUuid: null }
+    },
+    journalDir: journalDirectoryFor(root, { workspaceId: LOCATION.workspaceId, sessionId: SESSION })
+  })
+  await journal.appendItem(
+    provider === 'codex'
+      ? { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
+      : { provider: 'claude', sessionId: 'provider-session-alpha-1', uuid: 'uuid-running' },
+    { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: NOW - 5_000 },
+    { fence: 13 }
+  )
+  await journal.close()
+}
+
+function turnLifecycle(turnId: string) {
+  const item = restoredJournal()
+    .snapshot()
+    .items.find((candidate) => readAgentJournalTurn(candidate.body)?.turnId === turnId)
+  return item ? { ...readAgentJournalTurn(item.body), recovered: item.recovered } : null
+}
+
+function restoredJournal(): AgentSessionJournal {
+  const restored = (
+    host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+  ).sessions.get(SESSION)
+  if (!restored) {
+    throw new Error('expected a restored session journal')
+  }
+  return restored.journal
+}
+
 describe('already-wedged profiles become usable on load', () => {
+  it.each(['codex', 'claude'] as const)(
+    'settles a wedged %s journal on boot without opening a provider child',
+    async (provider) => {
+      const record = wedgedRecord({
+        claimStatus: 'live',
+        handoffStage: null,
+        ownerProcess: DEAD_OWNER
+      })
+      const providerRecord: AgentSessionRecord =
+        provider === 'codex'
+          ? record
+          : {
+              ...record,
+              provider: 'claude',
+              accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
+              lease: { ...record.lease, provenHandleLinkId: 'claude-13-link' },
+              providerHandleChain: [
+                {
+                  linkId: 'claude-13-link',
+                  handle: {
+                    provider: 'claude',
+                    sessionId: 'provider-session-alpha-1',
+                    leafUuid: null
+                  },
+                  origin: 'created',
+                  mintedAtFence: 13,
+                  observedAt: NOW - 10_000
+                }
+              ]
+            }
+      await seedStore(providerRecord)
+      await seedRunningTurn(provider)
+      openHost()
+
+      await host.restoreReadableSessions()
+
+      expect(host.hasSession(SESSION)).toBe(true)
+      const firstCursor = restoredJournal().cursor()
+      expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
+      expect(store.getRecord(SESSION)?.lease).toMatchObject({
+        claimStatus: 'released',
+        handoffStage: null,
+        settlementRetryRequired: undefined,
+        settlementRetryId: undefined
+      })
+      expect(acquire).not.toHaveBeenCalled()
+
+      await host.flushAllStreamedEvents()
+      store = await AgentSessionRecordStore.open({
+        directory: join(root, 'store'),
+        hostId: 'local'
+      })
+      openHost()
+      await host.restoreReadableSessions()
+
+      expect(restoredJournal().cursor()).toEqual(firstCursor)
+      expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
+    }
+  )
+
+  it('settles restart eviction through attach when a hold arrives before the boot sweep', async () => {
+    await seedStore(
+      wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
+    )
+    await seedRunningTurn()
+    openHost()
+
+    await host.hold(SESSION, 'desktop-chat:restart')
+
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
+    // A pid probe proved the owner gone; nobody saw it exit, so the turn has no end.
+    expect(turnLifecycle('turn-1')).toEqual({
+      turnId: 'turn-1',
+      state: 'unverifiable',
+      startedAt: NOW - 5_000,
+      recovered: true
+    })
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'live',
+      handoffStage: null,
+      settlementRetryRequired: undefined,
+      settlementRetryId: undefined
+    })
+  })
+
+  it('settles an observed-exit latch through attach before the boot sweep', async () => {
+    const record = wedgedRecord({ claimStatus: 'released', handoffStage: 'recovering' })
+    record.lease.settlementRetryRequired = true
+    record.lease.settlementRetryId = `provider-exit:${SESSION}:12:generation-1`
+    record.lease.deathEvidence = {
+      kind: 'exit-observed',
+      detail: 'provider exited: transport closed',
+      observedAt: NOW - 1_000
+    }
+    await seedStore(record)
+    await seedRunningTurn()
+    openHost()
+
+    expect(await host.attach(CALLER, hostTestAttachParams(13))).toMatchObject({ ok: true })
+
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
+    // The exit was observed, so its receipt is the turn's end.
+    expect(turnLifecycle('turn-1')).toEqual({
+      turnId: 'turn-1',
+      state: 'interrupted',
+      startedAt: NOW - 5_000,
+      completedAt: NOW - 1_000,
+      recovered: true
+    })
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'live',
+      handoffStage: null,
+      settlementRetryRequired: undefined,
+      settlementRetryId: undefined
+    })
+  })
+
+  it('marks a running turn left behind by a released lease unverifiable on a cold acquire', async () => {
+    // No settlement latch: the record was released cleanly, but the journal still says a turn is
+    // running. The child that wrote it is gone and nothing observed its exit.
+    await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
+    await seedRunningTurn()
+    openHost()
+
+    expect(await host.attach(CALLER, hostTestAttachParams(13))).toMatchObject({ ok: true })
+
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(turnLifecycle('turn-1')).toEqual({
+      turnId: 'turn-1',
+      state: 'unverifiable',
+      startedAt: NOW - 5_000,
+      recovered: true
+    })
+    expect(
+      restoredJournal()
+        .snapshot()
+        .items.some(
+          (item) => item.body.kind === 'status' && item.body.text.startsWith('Provider exited')
+        )
+    ).toBe(false)
+  })
+
+  it("leaves the live generation's running turn alone on a re-attach", async () => {
+    await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
+    // The child this host spawns stays provably alive across the second attach.
+    openHost({
+      probeOwner: async () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] })
+    })
+    const params = hostTestAttachParams(13)
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+    const fence = store.getRecord(SESSION)!.lease.runtimeFence
+    await restoredJournal().appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-2', ordinal: 0 },
+      { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: NOW },
+      { fence }
+    )
+
+    // A reconnecting client replays its attach; the same operation admits the live owner.
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(turnLifecycle('turn-2')).toEqual({ turnId: 'turn-2', state: 'running', startedAt: NOW })
+  })
+
   it('re-adjudicates a conflicted manual-recovery record whose owner is provably gone', async () => {
     // A crash can leave a conflicted current-schema row in manual recovery; positive death proof
     // must make it acquirable again without discarding the provider handle.

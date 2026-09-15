@@ -2,28 +2,21 @@ import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import type { JournalCompactionPolicy } from './journal-compaction'
-import { quarantineUnreadableSchema } from './journal-corruption-quarantine'
+import type Database from '../../sqlite/sync-database'
 import { replaceJournalEpoch, type JournalReplacementItem } from './journal-epoch-replacement'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import type { JournalLoad } from './journal-open'
 import type { AgentJournalEpochReason } from './journal-row-schema'
-import {
-  assertJournalFence,
-  assertJournalWritable,
-  type JournalAppendBudget
-} from './journal-write-guards'
+import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
 
 export class JournalEpochController {
   constructor(
     private readonly deps: {
       identity: AgentSessionJournalIdentity
-      journalDir: string
-      budget: JournalAppendBudget
-      compaction: JournalCompactionPolicy
       now: () => number
       mintEpoch: () => string
       serialize: <T>(run: () => Promise<T>) => Promise<T>
+      database: () => { db: Database.Database }
       readOnly: () => boolean
       setReadOnly: (readOnly: boolean) => void
       highestFence: () => number
@@ -32,33 +25,33 @@ export class JournalEpochController {
     }
   ) {}
 
-  async start(reason: AgentJournalEpochReason, fence: number): Promise<void> {
-    this.deps.adopt(
-      await publishNewEpoch({
-        journalDir: this.deps.journalDir,
-        sessionId: this.deps.identity.sessionId,
-        providerHandle: this.deps.identity.providerHandle,
-        epoch: this.deps.mintEpoch(),
-        reason,
-        fence,
-        now: this.deps.now(),
-        maxSessionBytes: this.deps.budget.maxSessionBytes
-      })
-    )
+  start(reason: AgentJournalEpochReason, fence: number): void {
+    publishNewEpoch({
+      db: this.deps.database().db,
+      sessionId: this.deps.identity.sessionId,
+      providerHandle: this.deps.identity.providerHandle,
+      epoch: this.deps.mintEpoch(),
+      reason,
+      fence,
+      now: this.deps.now(),
+      onPublished: this.deps.adopt
+    })
   }
 
-  async roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
-    if (reason !== 'schema_unreadable') {
+  /**
+   * Every reason takes the same writable guard. A latched store refuses a roll
+   * like any other write, and `schema_unreadable` has no production caller.
+   *
+   * Serialized like every other write, so the discard cannot land between an
+   * admitted append's sequence assignment and its commit.
+   */
+  roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
+    return this.deps.serialize(async () => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
-    } else if (this.deps.readOnly()) {
-      await quarantineUnreadableSchema(this.deps.journalDir, {
-        sessionId: this.deps.identity.sessionId,
-        maxBytes: this.deps.budget.maxSessionBytes
-      })
-    }
-    await this.start(reason, fence)
-    this.deps.setReadOnly(false)
-    return this.deps.cursor()
+      this.start(reason, fence)
+      this.deps.setReadOnly(false)
+      return this.deps.cursor()
+    })
   }
 
   replace(
@@ -69,17 +62,15 @@ export class JournalEpochController {
     return this.deps.serialize(async () => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
       assertJournalFence(fence, this.deps.highestFence())
-      await replaceJournalEpoch({
-        journalDir: this.deps.journalDir,
+      replaceJournalEpoch({
+        db: this.deps.database().db,
         identity: this.deps.identity,
         reason,
         fence,
         items,
-        budget: this.deps.budget.fork(),
-        compaction: this.deps.compaction,
         now: this.deps.now,
         mintEpoch: this.deps.mintEpoch,
-        onSnapshotPublished: this.deps.adopt
+        onPublished: this.deps.adopt
       })
       return this.deps.cursor()
     })

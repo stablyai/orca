@@ -98,6 +98,17 @@ export class RelayWatcherTeardownTracker {
   rootPaths(): string[] {
     return [...this.pending.keys(), ...this.failed.keys()]
   }
+
+  /**
+   * The capacity-release event: resolves once every teardown in flight right now has settled.
+   *
+   * `undefined` when nothing is unsubscribing, which is the only honest answer to "could a slot
+   * still come back?" — a failed teardown keeps its handles and releases nothing.
+   */
+  settlePending(): Promise<void> | undefined {
+    const inFlight = [...this.pending.values()]
+    return inFlight.length === 0 ? undefined : Promise.allSettled(inFlight).then(() => undefined)
+  }
 }
 
 function callUnsubscribe(subscription: WatcherProcessSubscription): Promise<void> {

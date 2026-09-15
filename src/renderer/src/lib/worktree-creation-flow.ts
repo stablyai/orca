@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   findPendingLinkedWorkItemCreationId,
@@ -10,9 +11,33 @@ import {
   getInitialWorktreeCreationPhase,
   getWorktreeCreationIndeterminate
 } from '@/lib/worktree-creation-flow-startup'
+import { retryStructuredWorktreeLaunch } from '@/lib/worktree-creation-structured-recovery'
+import {
+  formatWorkspaceCreateError,
+  getWorkspaceCreateErrorToastMessage
+} from '@/lib/workspace-create-error-format'
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
+}
+
+// Why: nothing awaits these creations, so an escaped rejection would otherwise
+// strand the pending entry — and the creation surface — with no error shown.
+function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
+  executeWorktreeCreation(creationId, request).catch((error: unknown) => {
+    console.error('worktree create: unhandled failure', creationId, error)
+    const store = useAppStore.getState()
+    if (!store.pendingWorktreeCreations[creationId]) {
+      return
+    }
+    const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
+    store.updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
+    // Why: the panel renders this error inline while its surface is visible;
+    // only announce it separately after the user has navigated away.
+    if (!(store.activeView === 'terminal' && store.activePendingCreationId === creationId)) {
+      toast.error(message)
+    }
+  })
 }
 
 function revealPendingCreation(
@@ -61,7 +86,7 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
   // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
   const creationId = createBrowserUuid()
   revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
-  void executeWorktreeCreation(creationId, request)
+  startWorktreeCreation(creationId, request)
   return creationId
 }
 
@@ -100,7 +125,7 @@ export function continueBackgroundWorktreeCreation(
     store.setActiveView('terminal')
     store.setSidebarOpen(true)
   }
-  void executeWorktreeCreation(creationId, request)
+  startWorktreeCreation(creationId, request)
   return true
 }
 
@@ -124,5 +149,13 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
-  void executeWorktreeCreation(creationId, entry.request)
+  if (entry.structuredLaunchRecoveryWorktreeId) {
+    void retryStructuredWorktreeLaunch(
+      creationId,
+      entry.request,
+      entry.structuredLaunchRecoveryWorktreeId
+    )
+    return
+  }
+  startWorktreeCreation(creationId, entry.request)
 }

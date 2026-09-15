@@ -29,28 +29,51 @@ export function isTestFile(relativePath: string): boolean {
 
 export type ScannedFile = { path: string; relativePath: string; source: string }
 
+/** The three readdir type predicates the walk consults. */
+type DirentTypeProbe = {
+  isSymbolicLink(): boolean
+  isFile(): boolean
+  isDirectory(): boolean
+}
+
+/**
+ * Links need a stat to follow them, and so does DT_UNKNOWN (every predicate
+ * false) -- filesystems that do not report d_type would otherwise have a real
+ * directory silently dropped from the scan.
+ */
+export function directoryEntryNeedsStat(entry: DirentTypeProbe): boolean {
+  return entry.isSymbolicLink() || (!entry.isFile() && !entry.isDirectory())
+}
+
 /**
  * Every `.ts`/`.tsx` file under `root`, with its text.
  *
  * Dot-directories are skipped: they hold generated and vendored trees (the
  * cross-version e2e checkouts among them), which are not ours to fix.
+ *
+ * `extensions` widens or narrows which filenames are read -- a guard over CI
+ * config also has to see `.mjs`, and one that only wants test files pays for
+ * reading nothing else.
  */
 export function scanSourceTree(
   root: string,
-  options: { includeTests?: boolean } = {}
+  options: { includeTests?: boolean; extensions?: RegExp } = {}
 ): ScannedFile[] {
+  const extensions = options.extensions ?? /\.tsx?$/
   const found: ScannedFile[] = []
   const visit = (directory: string): void => {
-    for (const entry of readdirSync(directory)) {
-      if (IGNORED_DIRECTORIES.has(entry) || entry.startsWith('.') || entry === '__fixtures__') {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const name = entry.name
+      if (IGNORED_DIRECTORIES.has(name) || name.startsWith('.') || name === '__fixtures__') {
         continue
       }
-      const path = join(directory, entry)
-      if (statSync(path).isDirectory()) {
+      const path = join(directory, name)
+      // Ordinary entries carry their type from readdir.
+      if (directoryEntryNeedsStat(entry) ? statSync(path).isDirectory() : entry.isDirectory()) {
         visit(path)
         continue
       }
-      if (!/\.tsx?$/.test(entry)) {
+      if (!extensions.test(name)) {
         continue
       }
       const relativePath = relative(root, path).replace(/\\/g, '/')
@@ -174,8 +197,7 @@ export function blankStringContentsDesynced(source: string): boolean {
  * each also has a prefix reading: `!` (non-null assertion vs `!/re/.test(x)`),
  * `+` `-` `*` `%` `^` `~` (postfix `--`/`++`), and `>` `}` (JSX close).
  */
-function startsRegexLiteral(emitted: string): boolean {
-  const prev = emitted.replace(/\s+$/, '').at(-1)
+function startsRegexLiteral(prev: string | undefined): boolean {
   return prev === undefined || '(,=:[&|?;'.includes(prev)
 }
 
@@ -204,6 +226,7 @@ function findRegexLiteralEnd(source: string, start: number): number {
 
 export function blankStringContents(source: string, reportDesync = false): string {
   let out = ''
+  let lastSignificantChar: string | undefined
   let index = 0
   let quote: string | null = null
   // Brace depth per interpolation, so a `}` inside `${ { a: 1 } }` does not
@@ -215,6 +238,7 @@ export function blankStringContents(source: string, reportDesync = false): strin
       templates.push(0)
       quote = null
       out += '${'
+      lastSignificantChar = '{'
       index += 2
       continue
     }
@@ -227,6 +251,7 @@ export function blankStringContents(source: string, reportDesync = false): strin
           templates.pop()
           quote = '`'
           out += char
+          lastSignificantChar = char
           index += 1
           continue
         }
@@ -251,6 +276,7 @@ export function blankStringContents(source: string, reportDesync = false): strin
       if (char === quote) {
         quote = null
         out += char
+        lastSignificantChar = char
       } else {
         out += char === '\n' ? char : ' '
       }
@@ -265,10 +291,11 @@ export function blankStringContents(source: string, reportDesync = false): strin
     // comments first, but this runs standalone too, and at index 0 a file
     // starting with a banner comment read as one giant regex.
     const next = source[index + 1]
-    if (char === '/' && next !== '/' && next !== '*' && startsRegexLiteral(out)) {
+    if (char === '/' && next !== '/' && next !== '*' && startsRegexLiteral(lastSignificantChar)) {
       const end = findRegexLiteralEnd(source, index)
       if (end !== -1) {
         out += `/${' '.repeat(end - index - 1)}`
+        lastSignificantChar = '/'
         index = end
         continue
       }
@@ -277,6 +304,9 @@ export function blankStringContents(source: string, reportDesync = false): strin
       quote = char
     }
     out += char
+    if (/\S/.test(char)) {
+      lastSignificantChar = char
+    }
     index += 1
   }
   if (reportDesync) {

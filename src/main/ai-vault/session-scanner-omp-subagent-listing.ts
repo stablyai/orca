@@ -89,10 +89,7 @@ async function parseOmpSubagentTranscript(args: {
   const filePath = join(args.artifactDir, args.name)
   try {
     const fileStat = await wslGatedStat(filePath, OMP_SUBAGENT_FS_PRIORITY)
-    // The shared OMP parser decorates every parse with an artifact-dir count, so
-    // a child row carries its own grandchild count. It is accurate but has no
-    // renderer — subagent rows don't expand — and this lister is local-only, so
-    // the remote partition never reaches it.
+    // Each child carries its own count for on-demand nested expansion.
     const session = await parseMessageGraphSessionFile(
       'omp',
       { path: filePath, mtimeMs: fileStat.mtimeMs, modifiedAt: fileStat.mtime.toISOString() },

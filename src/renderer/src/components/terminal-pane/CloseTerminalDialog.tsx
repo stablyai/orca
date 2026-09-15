@@ -70,71 +70,104 @@ export default function CloseTerminalDialog({
       }}
     >
       <DialogContent className="max-w-sm" showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle className="text-sm">
-            {isAgent
-              ? translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title',
-                  'Stop this agent?'
-                )
-              : translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_command_title',
-                  'Stop running command?'
-                )}
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            {isAgent
-              ? translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description',
-                  "Closing this terminal will stop the agent's current work."
-                )
-              : translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_command_description',
-                  'Closing this terminal will stop the command running inside it.'
-                )}
-          </DialogDescription>
-        </DialogHeader>
-        {trimmedTabLabel ? (
-          <p className="truncate text-xs font-medium text-foreground" title={trimmedTabLabel}>
-            {trimmedTabLabel}
-          </p>
-        ) : null}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id={checkboxId}
-            checked={dontAskAgain}
-            onCheckedChange={(checked) => setDontAskAgain(checked === true)}
-          />
-          <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
-            {translate(
-              'auto.components.terminal.pane.CloseTerminalDialog.dont_ask_again',
-              "Don't ask again for running terminals"
-            )}
-          </Label>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-            {translate('auto.components.terminal.pane.CloseTerminalDialog.1d1a7a9c1f', 'Cancel')}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            autoFocus
-            onClick={() => onConfirm(dontAskAgain)}
-          >
-            {isAgent
-              ? translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_confirm',
-                  'Stop Agent'
-                )
-              : translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_command_confirm',
-                  'Stop and Close'
-                )}
-          </Button>
-        </DialogFooter>
+        <CloseTerminalDialogBody
+          isAgent={isAgent}
+          trimmedTabLabel={trimmedTabLabel}
+          checkboxId={checkboxId}
+          dontAskAgain={dontAskAgain}
+          setDontAskAgain={setDontAskAgain}
+          onCancel={onCancel}
+          onConfirm={onConfirm}
+        />
       </DialogContent>
     </Dialog>
+  )
+}
+
+// Keep translation and element construction behind the dialog portal's mount boundary.
+function CloseTerminalDialogBody({
+  isAgent,
+  trimmedTabLabel,
+  checkboxId,
+  dontAskAgain,
+  setDontAskAgain,
+  onCancel,
+  onConfirm
+}: {
+  isAgent: boolean
+  trimmedTabLabel: string | undefined
+  checkboxId: string
+  dontAskAgain: boolean
+  setDontAskAgain: (value: boolean) => void
+  onCancel: () => void
+  onConfirm: (dontAskAgain: boolean) => void
+}): React.JSX.Element {
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-sm">
+          {isAgent
+            ? translate(
+                'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title',
+                'Stop this agent?'
+              )
+            : translate(
+                'auto.components.terminal.pane.CloseTerminalDialog.stop_command_title',
+                'Stop running command?'
+              )}
+        </DialogTitle>
+        <DialogDescription className="text-xs">
+          {isAgent
+            ? translate(
+                'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description',
+                "Closing this terminal will stop the agent's current work."
+              )
+            : translate(
+                'auto.components.terminal.pane.CloseTerminalDialog.stop_command_description',
+                'Closing this terminal will stop the command running inside it.'
+              )}
+        </DialogDescription>
+      </DialogHeader>
+      {trimmedTabLabel ? (
+        <p className="truncate text-xs font-medium text-foreground" title={trimmedTabLabel}>
+          {trimmedTabLabel}
+        </p>
+      ) : null}
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={checkboxId}
+          checked={dontAskAgain}
+          onCheckedChange={(checked) => setDontAskAgain(checked === true)}
+        />
+        <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
+          {translate(
+            'auto.components.terminal.pane.CloseTerminalDialog.dont_ask_again',
+            "Don't ask again for running terminals"
+          )}
+        </Label>
+      </div>
+      <DialogFooter className="gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+          {translate('auto.components.terminal.pane.CloseTerminalDialog.1d1a7a9c1f', 'Cancel')}
+        </Button>
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          autoFocus
+          onClick={() => onConfirm(dontAskAgain)}
+        >
+          {isAgent
+            ? translate(
+                'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_confirm',
+                'Stop Agent'
+              )
+            : translate(
+                'auto.components.terminal.pane.CloseTerminalDialog.stop_command_confirm',
+                'Stop and Close'
+              )}
+        </Button>
+      </DialogFooter>
+    </>
   )
 }

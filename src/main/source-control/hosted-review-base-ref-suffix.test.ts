@@ -38,7 +38,7 @@ describe('baseRefExistsOnRemote suffix fallback', () => {
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
-    await expect(baseRefExistsOnRemote('main', '/repo')).resolves.toBe(false)
+    await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(false)
   })
 
   it('still resolves a stale single-segment remote through the suffix fallback', async () => {
@@ -55,7 +55,7 @@ describe('baseRefExistsOnRemote suffix fallback', () => {
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
-    await expect(baseRefExistsOnRemote('main', '/repo')).resolves.toBe(true)
+    await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(true)
   })
 
   it('treats a suffix lookup that never ran as inconclusive', async () => {
@@ -72,6 +72,6 @@ describe('baseRefExistsOnRemote suffix fallback', () => {
       })
     })
 
-    await expect(baseRefExistsOnRemote('main', '/repo')).resolves.toBe(true)
+    await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(true)
   })
 })

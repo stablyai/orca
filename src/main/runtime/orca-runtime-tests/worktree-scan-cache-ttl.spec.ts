@@ -5,6 +5,7 @@ import {
   resolveWorktreeScanCacheTtlMs
 } from '../orca-runtime-test-mocks.spec'
 import { store } from '../orca-runtime-test-fixtures.spec'
+import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 
 describe('resolveWorktreeScanCacheTtlMs', () => {
   const BASE_TTL_MS = 30_000
@@ -83,5 +84,35 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('scans a repo registered after the last snapshot instead of answering from it', async () => {
+    // Why: the fleet snapshot only covers the repos that existed when it ran, so for a full TTL it
+    // reported a just-connected SSH host as having no worktrees at all — and callers that resolve a
+    // workspace through it turned that gap into `skill-install-workspace-not-found`.
+    vi.mocked(listWorktrees).mockClear()
+    const addedPath = '/tmp/repo-registered-later'
+    const repos = [
+      { id: 'repo-1', path: '/tmp/repo', displayName: 'repo', badgeColor: 'blue', addedAt: 1 }
+    ]
+    const runtime = new OrcaRuntimeService({ ...store, getRepos: () => repos } as never)
+    const internals = runtime as unknown as { listResolvedWorktrees: () => Promise<unknown> }
+    const scanCallsFor = (path: string): number =>
+      vi.mocked(listWorktrees).mock.calls.filter((call) => call[0] === path).length
+
+    await internals.listResolvedWorktrees()
+    expect(scanCallsFor(addedPath)).toBe(0)
+
+    repos.push({
+      id: 'repo-added',
+      path: addedPath,
+      displayName: 'added',
+      badgeColor: 'blue',
+      addedAt: 2
+    })
+    bumpLocalWorktreeScanGeneration('repo-added')
+
+    await internals.listResolvedWorktrees()
+    expect(scanCallsFor(addedPath)).toBe(1)
   })
 })

@@ -74,6 +74,7 @@ import {
   isTransientReconnectError
 } from './ssh-reconnect-error-classification'
 import { SshReconnectLadder } from './ssh-reconnect-ladder'
+import { mayUserSshConfigClaimAlias } from './ssh-config-alias-claim'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import {
   requiresSystemSshForSecurityKey,
@@ -108,7 +109,9 @@ type SshRemoteFileOptions = {
 
 /** Bounds the trust-source reads that run before the handshake, which nothing else times out. */
 const HOST_KEY_SOURCE_READ_TIMEOUT_MS = 5_000
-const SSH_KEYBOARD_INTERACTIVE_MAX_ROUNDS = 4
+// Counts every INFO_REQUEST of the handshake, so it must cover each partial-success stage the auth
+// queue will answer (MAX_PARTIAL_SUCCESS_STAGES) times the rounds a PAM stack spends per stage.
+const SSH_KEYBOARD_INTERACTIVE_MAX_ROUNDS = 8
 const SSH_KEYBOARD_INTERACTIVE_READY_TIMEOUT_MS = SSH_CREDENTIAL_TIMEOUT_MS + 5_000
 const SSH_KEYBOARD_INTERACTIVE_MAX_PROMPTS = 8
 const SSH_KEYBOARD_INTERACTIVE_TEXT_MAX = 4_096
@@ -1298,6 +1301,11 @@ export class SshConnection {
     const options: SystemSshBuildArgsOptions = {}
     if (this.systemSshResolvedConfig) {
       options.resolvedConfig = this.systemSshResolvedConfig
+    }
+    // Why here and not inside buildSshArgs: the verdict reads ~/.ssh/config, and an arg builder
+    // that consults the filesystem answers differently on every machine, tests included.
+    if (this.target.configHost && !mayUserSshConfigClaimAlias(this.target.configHost)) {
+      options.aliasClaimedByConfig = false
     }
     if (this.systemSshControlMasterDisabledForSession) {
       options.disableControlMaster = true

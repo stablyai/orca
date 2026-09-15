@@ -1,7 +1,9 @@
 import { readFile, stat } from 'node:fs/promises'
 import { buildImageDataUri } from '../shared/image-data-uri'
 import { MAX_REPO_ICON_UPLOAD_BYTES, type RepoIcon } from '../shared/repo-icon'
+import type { ExecutionHostFilesystemRoute } from './providers/execution-host-provider-dispatch'
 import type { IFilesystemProvider } from './providers/types'
+import { extractIconHref } from './repo-icon-source-href'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
 
@@ -48,11 +50,6 @@ const REPO_ICON_SOURCE_FILE_CANDIDATES = [
 // not read large app entrypoints just to find a small favicon href.
 const MAX_REPO_ICON_SOURCE_BYTES = 256 * 1024
 
-const LINK_ICON_HTML_RE =
-  /<link\b(?=[^>]*\brel=["'](?:icon|shortcut icon)["'])(?=[^>]*\bhref=["']([^"'?]+))[^>]*>/i
-const LINK_ICON_OBJECT_RE =
-  /(?=[^}]*\brel\s*:\s*["'](?:icon|shortcut icon)["'])(?=[^}]*\bhref\s*:\s*["']([^"'?]+))[^}]*/i
-
 type DetectedImageFormat = {
   mimeType: 'image/png' | 'image/webp'
 }
@@ -95,10 +92,6 @@ function detectImageFormat(buffer: Buffer): DetectedImageFormat | null {
     return { mimeType: 'image/webp' }
   }
   return null
-}
-
-function extractIconHref(source: string): string | null {
-  return source.match(LINK_ICON_HTML_RE)?.[1] ?? source.match(LINK_ICON_OBJECT_RE)?.[1] ?? null
 }
 
 function repoIconFromImageBuffer(buffer: Buffer, relativePath: string): RepoIcon | null {
@@ -258,20 +251,26 @@ async function detectRemoteImageIcon(
   return null
 }
 
+/**
+ * Takes the resolved host route rather than a `connectionId`, because the incumbent shape spelled
+ * "this is local", "this host is unreachable" and "this is a runtime host" all as a falsy id — and
+ * only the first of those may read this machine's filesystem.
+ */
 export function detectRepoFileIcon(
   repoPath: string,
-  {
-    connectionId,
-    fsProvider
-  }: { connectionId?: string | null; fsProvider?: IFilesystemProvider } = {}
+  route: ExecutionHostFilesystemRoute
 ): Promise<RepoIcon | null> {
-  if (fsProvider) {
-    return detectRemoteImageIcon(repoPath, fsProvider)
+  switch (route.kind) {
+    case 'local':
+      return detectLocalImageIcon(repoPath)
+    case 'ssh':
+      // A dropped provider fails closed: repoPath lives on the SSH host, so a same-named local
+      // path would hand back another repository's icon.
+      return route.provider
+        ? detectRemoteImageIcon(repoPath, route.provider)
+        : Promise.resolve(null)
+    case 'runtime':
+      // That environment's server holds these files; this process has no route to them.
+      return Promise.resolve(null)
   }
-  if (connectionId) {
-    // Why: repoPath lives on the SSH host, so a dropped provider must fail closed —
-    // a same-named local path would hand back another repository's icon.
-    return Promise.resolve(null)
-  }
-  return detectLocalImageIcon(repoPath)
 }

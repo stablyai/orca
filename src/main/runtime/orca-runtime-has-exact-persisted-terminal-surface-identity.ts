@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithFenceAutomationOwner } from './orca-runtime-fence-automation-owner'
+import { OrcaRuntimeWithAutomationOperations } from './orca-runtime-automation-operations'
 import {
   resolveTerminalSessionWorktreeId,
   runtimeWorktreeIdsEqual
@@ -26,7 +26,7 @@ import type {
   ArtifactWriteRequest
 } from '../../shared/artifacts'
 
-export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends OrcaRuntimeWithFenceAutomationOwner {
+export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends OrcaRuntimeWithAutomationOperations {
   protected hasExactPersistedTerminalSurfaceIdentity(expected: {
     worktreeId: string
     tabId: string
@@ -65,7 +65,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
         exactOnly: true
       })
       if (retired) {
-        this.mobileSessionTabsByWorktree.set(candidate.worktreeId, retired.snapshot)
+        this.storeMobileSessionSnapshot(candidate.worktreeId, retired.snapshot)
         this.notifyMobileSessionTabsChanged(candidate.worktreeId)
       }
     }

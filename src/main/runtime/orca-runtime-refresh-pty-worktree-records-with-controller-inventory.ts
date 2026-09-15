@@ -36,7 +36,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     targetWorktreeId: string | null = null,
     deadline?: number,
     connectionId?: string | null,
-    retryStale = false
+    retryStale = false,
+    inventoryOptions?: { includeForegroundProcessEvidence?: boolean }
   ): Promise<PtyControllerInventory | null> {
     if (targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
       const targetedLiveness = this.refreshFloatingWorkspacePtyLiveness()
@@ -69,7 +70,10 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     // never answers still leaves the aggregate time to return the providers that did
     // — expiring at the same instant would discard the whole inventory instead.
     const providerListOpts = {
-      deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS)
+      deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS),
+      ...(inventoryOptions?.includeForegroundProcessEvidence === undefined
+        ? {}
+        : { includeForegroundProcessEvidence: inventoryOptions.includeForegroundProcessEvidence })
     }
     const processInventory =
       connectionId === undefined && this.ptyController.listProcessesWithHostScope
@@ -105,7 +109,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
           targetWorktreeId,
           deadline,
           connectionId,
-          true
+          true,
+          inventoryOptions
         )
       }
       return null
@@ -145,8 +150,9 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     const allLivePtyIds = new Set(sessions.map((session) => session.id))
     const selectedLivePtyIds = new Set<string>()
     for (const session of sessions) {
-      // The owning inventory positively observed this PTY again; prior lost-contact doubt is stale.
-      this.forgetPtyLivenessVerdict(session.id, livenessObservationAtStart)
+      // The owning inventory positively observed this PTY again, so this is host evidence of life,
+      // not merely the absence of doubt.
+      this.markPtyLivenessLive(session.id, livenessObservationAtStart)
       const sessionConnectionId =
         parseAppSshPtyId(session.id)?.connectionId ??
         (typeof connectionId === 'string' ? connectionId : null)
@@ -277,7 +283,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
           }
           pty.connected = true
           pty.disconnectedAt = null
-          this.forgetPtyLivenessVerdict(pty.ptyId)
+          this.markPtyLivenessLive(pty.ptyId, livenessObservationAtStart)
           continue
         }
         pty.connected = false
@@ -287,6 +293,10 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
         // clears `connected` for every one of its PTYs at once. Only `false` here
         // is an observed absence; `null` means no provider could be asked.
         if (observed === false) {
+          // Drops the doubt without asserting a death: `pty.listProcesses` returns the relay's
+          // CURRENT session map, so a restarted relay omits every id the previous one minted
+          // whether or not those shells died. That is the same union as pty.attach's not-found,
+          // and neither earns `exited` (docs/reference/ssh-execution-boundary.md).
           this.forgetPtyLivenessVerdict(pty.ptyId)
         } else if (observed === null && this.isSshOwnedPtyId(pty.ptyId)) {
           this.markPtyLivenessUnverifiable(pty.ptyId, NO_OBSERVING_PROVIDER_REASON)

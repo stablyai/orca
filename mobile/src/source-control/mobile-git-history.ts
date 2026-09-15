@@ -1,6 +1,7 @@
 import type { GitHistoryItem, GitHistoryResult } from '../../../src/shared/git-history-types'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { gitHistoryRead } from './mobile-git-read-operations'
+import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
 
 export type MobileCommitRow = {
   id: string
@@ -12,12 +13,13 @@ export type MobileCommitRow = {
 }
 
 // Short relative time for a commit list (just now / Xm / Xh / Xd / Xmo / Xy).
-export function formatCommitTime(timestampSeconds: number | undefined, nowMs: number): string {
+// `timestampMs` is epoch ms, the unit GitHistoryItem.timestamp already carries.
+export function formatCommitTime(timestampMs: number | undefined, nowMs: number): string {
   // Nullish — not falsy — so a real epoch-0 timestamp still formats.
-  if (timestampSeconds == null) {
+  if (timestampMs == null) {
     return ''
   }
-  const delta = nowMs - timestampSeconds * 1000
+  const delta = nowMs - timestampMs
   if (delta < 60_000) {
     return 'just now'
   }
@@ -56,16 +58,16 @@ export function mapMobileCommitRows(result: GitHistoryResult, nowMs: number): Mo
 }
 
 export async function fetchMobileGitHistory(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileSourceControlRpcSender,
   worktreeId: string,
   limit = 50
 ): Promise<GitHistoryResult> {
-  const response = await client.sendRequest('git.history', {
-    worktree: `id:${worktreeId}`,
-    limit
-  })
-  if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to load commit history')
+  // Not inside the try: a transport rejection must reach the caller as the original error object.
+  const reply = await gitHistoryRead.request(client, { worktree: `id:${worktreeId}`, limit })
+  try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    return gitHistoryRead.interpret(reply) as GitHistoryResult
+  } catch (error) {
+    throw new Error(refusedRpcMessageOrFallback(error, 'Failed to load commit history'))
   }
-  return (response as RpcSuccess).result as GitHistoryResult
 }

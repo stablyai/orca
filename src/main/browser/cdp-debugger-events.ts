@@ -32,9 +32,11 @@ export function createCdpDebuggerMessageListener(
         | undefined
       if (p?.sessionId && p.targetInfo?.type === 'iframe' && p.targetInfo.targetId) {
         state.iframeSessions.set(p.targetInfo.targetId, p.sessionId)
+        // Why: no Runtime.enable here. Cross-origin iframes include challenge widgets
+        // (Cloudflare Turnstile), and the Runtime domain's console/Error.stack serialization
+        // is the CDP tell they detect; nothing reads iframe Runtime events anyway.
         guest.debugger.sendCommand('DOM.enable', {}, p.sessionId).catch(() => {})
         guest.debugger.sendCommand('Accessibility.enable', {}, p.sessionId).catch(() => {})
-        guest.debugger.sendCommand('Runtime.enable', {}, p.sessionId).catch(() => {})
       }
     }
     if (method === 'Target.detachedFromTarget') {

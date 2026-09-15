@@ -374,7 +374,19 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
       afterTabId: toWebTerminalSurfaceTabId(`${predecessorHostTabId}::${predecessorHostLeafId}`)
     })
     const legacyWebTabId = toWebTerminalSurfaceTabId(legacy.terminal.tabId)
-    const mirroredLegacyGroup = legacy.mirror.tabGroups.find((group) => group.id === legacyGroup.id)
+    await expect
+      .poll(
+        async () => {
+          const order = await readRenderedTabOrder(client.page)
+          const anchorIndex = order.indexOf(predecessorWebTabId)
+          return anchorIndex === -1 ? [] : order.slice(anchorIndex, anchorIndex + 3)
+        },
+        { timeout: 15_000, message: 'Legacy placement did not reach the rendered tab order' }
+      )
+      .toEqual([predecessorWebTabId, legacyWebTabId, successorWebTabId])
+    const mirroredLegacyGroup = (
+      await readClientMirror(client.page, session.worktreeId)
+    ).tabGroups.find((group) => group.id === legacyGroup.id)
     if (!mirroredLegacyGroup) {
       throw new Error('Legacy placement mirrored group is missing')
     }

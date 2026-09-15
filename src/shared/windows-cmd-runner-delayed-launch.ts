@@ -34,7 +34,10 @@ export function buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath: stri
     'exit $process.ExitCode'
   ].join('; ')
 
-  return `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(script)}`
+  // Why: `-EncodedCommand` is not execution-policy gated (only `-File` is), so `-ExecutionPolicy
+  // Bypass` was a no-op — and it is one of the most heavily EDR-flagged PowerShell tokens. The
+  // base64 stays: this string is typed into a shell, which is the whole point of the guard above.
+  return `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(script)}`
 }
 
 function quotePowerShellString(value: string): string {

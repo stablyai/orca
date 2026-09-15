@@ -651,11 +651,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(tabIdLookupCount).toBe(paneCount)
     expect(getMigrationUnsupportedSnapshot).toHaveBeenCalledTimes(1)
 
+    // The routing index is memoized on the tab map, so a second snapshot against the same tabs
+    // reuses it instead of re-indexing every owner.
     tabIdLookupCount = 0
     resolveUnsupportedSnapshot(unsupportedSnapshot)
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().migrationUnsupportedByPtyId)).toHaveLength(paneCount)
     })
-    expect(tabIdLookupCount).toBe(paneCount)
+    expect(tabIdLookupCount).toBe(0)
   })
 })

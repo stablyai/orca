@@ -85,7 +85,14 @@ describe('GitHub IPC channel parity', () => {
   it('preserves the facade and fixed IPC channel contract', () => {
     github.registerGitHubHandlers(harness.store as never, harness.stats as never)
 
-    const preloadSource = readFileSync(new URL('../../preload/index.ts', import.meta.url), 'utf8')
+    // The preload facade now composes the two GitHub bridge owners; inspect
+    // both owners so the channel census remains tied to the actual invokes.
+    const preloadSource = [
+      '../../preload/api/gh-bridge-pull-requests-and-work-items.ts',
+      '../../preload/api/gh-bridge-mutations-and-projects.ts'
+    ]
+      .map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8'))
+      .join('\n')
     const exposedChannels = [...preloadSource.matchAll(/ipcRenderer\.invoke\('(gh:[^']+)'/g)].map(
       (match) => match[1]
     )

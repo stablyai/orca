@@ -5,6 +5,7 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 import { RESOLVED_WORKTREE_CACHE_TTL_MS } from './orca-runtime-postlude'
+import { getWorktreeScanMutationRevision } from '../local-worktree-scan-generation'
 import {
   resolveLocalProjectRuntimeForRepo,
   resolveLocalProjectRuntimesForRepos
@@ -19,7 +20,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
 import type { RuntimeWorktreeScanCache } from './orca-runtime-core'
 import { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
 
@@ -65,8 +66,7 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
 
   /** A warm fleet snapshot already answers any selector for free, so scoped scanning must yield to it. */
   protected hasFreshResolvedWorktreeCache(): boolean {
-    const cached = this.resolvedWorktrees.peek()
-    return Boolean(cached && cached.expiresAt > Date.now())
+    return this.resolvedWorktrees.isFresh(getWorktreeScanMutationRevision())
   }
 
   protected async listResolvedWorktrees(): Promise<ResolvedWorktree[]> {
@@ -79,7 +79,8 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     }
     return this.resolvedWorktrees.getSnapshot(
       () => this.computeResolvedWorktrees(),
-      RESOLVED_WORKTREE_CACHE_TTL_MS
+      RESOLVED_WORKTREE_CACHE_TTL_MS,
+      getWorktreeScanMutationRevision()
     )
   }
 
@@ -135,17 +136,21 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
+    // Resolve the execution host, not the raw field: an `executionHostId: 'ssh:*'` row with no
+    // `connectionId` would otherwise get a local project runtime and a `local:default` cache key,
+    // so its scan neither routes remotely nor re-runs when the SSH provider is replaced.
+    const sshConnectionId = getRepoSshConnectionId(repo)
     const projectRuntime = projectRuntimeByRepoId
       ? projectRuntimeByRepoId.get(repo.id)
-      : !repo.connectionId
+      : !sshConnectionId
         ? resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
         : undefined
     const runtimeKey = projectRuntime
       ? projectRuntime.status === 'resolved'
         ? projectRuntime.runtime.cacheKey
         : projectRuntime.repair.cacheKey
-      : repo.connectionId
-        ? `ssh:${repo.connectionId}:${getSshGitProviderGeneration(repo.connectionId)}`
+      : sshConnectionId
+        ? `ssh:${sshConnectionId}:${getSshGitProviderGeneration(sshConnectionId)}`
         : 'local:default'
     const now = Date.now()
     const scanScopeKey = `${repo.id}\0${getRepoExecutionHostId(repo)}`
@@ -176,7 +181,7 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
         return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
       }
       if (
-        (refresh.result.ok || !repo.connectionId) &&
+        (refresh.result.ok || !sshConnectionId) &&
         this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise
       ) {
         const entry: RuntimeWorktreeScanCache = {

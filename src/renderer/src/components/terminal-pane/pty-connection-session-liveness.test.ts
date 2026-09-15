@@ -132,6 +132,26 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
 }
 
+function seedUnverifiableRestoredPane() {
+  mockStoreState = {
+    ...mockStoreState,
+    tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'unverifiable-pty' }] },
+    ptyIdsByTabId: { 'tab-1': ['unverifiable-pty'] },
+    terminalLayoutsByTabId: {
+      'tab-1': {
+        root: { type: 'leaf', leafId: LEAF_2 },
+        activeLeafId: LEAF_2,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_2]: 'unverifiable-pty' }
+      }
+    }
+  } as StoreState
+  return createDeps({
+    restoredLeafId: LEAF_2,
+    restoredPtyIdByLeafId: { [LEAF_2]: 'unverifiable-pty' }
+  })
+}
+
 // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
 function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
   mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
@@ -546,6 +566,51 @@ describe('connectPanePty', () => {
       expect(manager.closePane).toHaveBeenCalledTimes(1)
       expect(manager.closePane).toHaveBeenCalledWith(2)
     })
+  })
+
+  it('preserves an owner-unverified restored pane after an empty reattach result', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
+      opts.callbacks?.onError?.('terminal_pane_owner_unverified')
+      return undefined
+    })
+    transportFactoryQueue.push(transport)
+    const deps = seedUnverifiableRestoredPane()
+
+    connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(2, 'terminal_pane_owner_unverified')
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(mockStoreState.tabsByWorktree['wt-1'][0]?.ptyId).toBe('unverifiable-pty')
+    expect(mockStoreState.ptyIdsByTabId?.['tab-1']).toEqual(['unverifiable-pty'])
+    expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+      [LEAF_2]: 'unverifiable-pty'
+    })
+    expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
+  })
+
+  it('preserves an owner-unverified restored pane after a rejected reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockRejectedValueOnce(new Error('terminal_pane_owner_unverified'))
+    transportFactoryQueue.push(transport)
+    const deps = seedUnverifiableRestoredPane()
+
+    connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(2, 'terminal_pane_owner_unverified')
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+      [LEAF_2]: 'unverifiable-pty'
+    })
+    expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
   })
 
   describe('terminal input liveness IPC gating (perf)', () => {

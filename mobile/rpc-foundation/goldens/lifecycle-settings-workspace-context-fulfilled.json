@@ -1,0 +1,1115 @@
+{
+  "operation": "settings.workspace-context",
+  "family": "settings.workspace-context",
+  "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
+  "scenarioSha256": "136fb1d8d5925ad12ba22f4dd6c72573a9ad03b6a6ec8308668f0d9cd71aa36d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "06425d8da2e6": {
+      "name": "linear.status#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "090c88478661": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "0fb6ff3590e2": {
+      "name": "preflight.check#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+    },
+    "13028e692551": {
+      "name": "preflight.check#2",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+    },
+    "234fabe27913": {
+      "name": "preflight.check#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "2a7485a88169": {
+      "providers": ["github"],
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      },
+      "trust": {}
+    },
+    "39bfd36b44ed": {
+      "name": "ui.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "3fc2a1b54e13": {
+      "name": "settings.get#2",
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "4335d4b6568f": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "4938921744c6": {
+      "name": "ui.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "ui": {}
+          }
+        }
+      }
+    },
+    "563e4c82b345": {
+      "name": "preflight.check#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "glab": {
+              "installed": false
+            }
+          }
+        }
+      }
+    },
+    "5fbdd64c75bc": {
+      "name": "ui.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "76de732c569f": {
+      "name": "linear.status#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
+    "789980530ae3": {
+      "name": "linear.status#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
+      }
+    },
+    "7ad8a0996352": {
+      "name": "settings.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "822040616fbb": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
+          }
+        }
+      }
+    },
+    "82ff8123c1fe": {
+      "name": "ui.get#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
+    },
+    "847430ffa968": {
+      "name": "linear.status#2",
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
+    "84b10f34b617": {
+      "name": "ui.get#2",
+      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
+    },
+    "8a63b85fee0c": {
+      "providers": [],
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      },
+      "trust": {}
+    },
+    "a4760ef5a9f4": {
+      "name": "linear.status#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "c114925e9c68": {
+      "name": "preflight.check#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f6a09f8c5b85": {
+      "providers": [],
+      "settings": {
+        "$rpc": "null"
+      },
+      "trust": {}
+    }
+  },
+  "recording": {
+    "scenario": "lifecycle-settings-workspace-context-fulfilled",
+    "checkpoints": [
+      {
+        "id": "settings-workspace-context-fulfilled.prelude:settings-pending",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "090c88478661", "5fbdd64c75bc"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "090c88478661", "5fbdd64c75bc"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-1:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-1:remounted",
+        "observation": {
+          "sender": [
+            "563e4c82b345",
+            "789980530ae3",
+            "822040616fbb",
+            "4938921744c6",
+            "c114925e9c68",
+            "06425d8da2e6",
+            "7ad8a0996352",
+            "39bfd36b44ed"
+          ],
+          "payloads": [
+            "0fb6ff3590e2",
+            "76de732c569f",
+            "4335d4b6568f",
+            "82ff8123c1fe",
+            "13028e692551",
+            "847430ffa968",
+            "3fc2a1b54e13",
+            "84b10f34b617"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "822040616fbb", "5fbdd64c75bc"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-1:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-1:remounted",
+        "observation": {
+          "sender": [
+            "563e4c82b345",
+            "789980530ae3",
+            "822040616fbb",
+            "4938921744c6",
+            "c114925e9c68",
+            "06425d8da2e6",
+            "7ad8a0996352",
+            "39bfd36b44ed"
+          ],
+          "payloads": [
+            "0fb6ff3590e2",
+            "76de732c569f",
+            "4335d4b6568f",
+            "82ff8123c1fe",
+            "13028e692551",
+            "847430ffa968",
+            "3fc2a1b54e13",
+            "84b10f34b617"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-2:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "822040616fbb", "5fbdd64c75bc"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-2:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-2:remounted",
+        "observation": {
+          "sender": [
+            "563e4c82b345",
+            "789980530ae3",
+            "822040616fbb",
+            "4938921744c6",
+            "c114925e9c68",
+            "06425d8da2e6",
+            "7ad8a0996352",
+            "39bfd36b44ed"
+          ],
+          "payloads": [
+            "0fb6ff3590e2",
+            "76de732c569f",
+            "4335d4b6568f",
+            "82ff8123c1fe",
+            "13028e692551",
+            "847430ffa968",
+            "3fc2a1b54e13",
+            "84b10f34b617"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-2:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-2:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-2:remounted",
+        "observation": {
+          "sender": [
+            "563e4c82b345",
+            "789980530ae3",
+            "822040616fbb",
+            "4938921744c6",
+            "c114925e9c68",
+            "06425d8da2e6",
+            "7ad8a0996352",
+            "39bfd36b44ed"
+          ],
+          "payloads": [
+            "0fb6ff3590e2",
+            "76de732c569f",
+            "4335d4b6568f",
+            "82ff8123c1fe",
+            "13028e692551",
+            "847430ffa968",
+            "3fc2a1b54e13",
+            "84b10f34b617"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-3:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-3:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-3:remounted",
+        "observation": {
+          "sender": [
+            "563e4c82b345",
+            "789980530ae3",
+            "822040616fbb",
+            "4938921744c6",
+            "c114925e9c68",
+            "06425d8da2e6",
+            "7ad8a0996352",
+            "39bfd36b44ed"
+          ],
+          "payloads": [
+            "0fb6ff3590e2",
+            "76de732c569f",
+            "4335d4b6568f",
+            "82ff8123c1fe",
+            "13028e692551",
+            "847430ffa968",
+            "3fc2a1b54e13",
+            "84b10f34b617"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-3:lifecycle-boundary",
+        "observation": {
+          "sender": ["563e4c82b345", "a4760ef5a9f4", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-3:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-3:remounted",
+        "observation": {
+          "sender": [
+            "563e4c82b345",
+            "789980530ae3",
+            "822040616fbb",
+            "4938921744c6",
+            "c114925e9c68",
+            "06425d8da2e6",
+            "7ad8a0996352",
+            "39bfd36b44ed"
+          ],
+          "payloads": [
+            "0fb6ff3590e2",
+            "76de732c569f",
+            "4335d4b6568f",
+            "82ff8123c1fe",
+            "13028e692551",
+            "847430ffa968",
+            "3fc2a1b54e13",
+            "84b10f34b617"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-4:lifecycle-boundary",
+        "observation": {
+          "sender": ["563e4c82b345", "a4760ef5a9f4", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-4:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-before-4:remounted",
+        "observation": {
+          "sender": [
+            "563e4c82b345",
+            "789980530ae3",
+            "822040616fbb",
+            "4938921744c6",
+            "c114925e9c68",
+            "06425d8da2e6",
+            "7ad8a0996352",
+            "39bfd36b44ed"
+          ],
+          "payloads": [
+            "0fb6ff3590e2",
+            "76de732c569f",
+            "4335d4b6568f",
+            "82ff8123c1fe",
+            "13028e692551",
+            "847430ffa968",
+            "3fc2a1b54e13",
+            "84b10f34b617"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-4:lifecycle-boundary",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "2a7485a88169",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-4:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a"
+          },
+          "state": "2a7485a88169",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.unmount-after-4:remounted",
+        "observation": {
+          "sender": [
+            "563e4c82b345",
+            "789980530ae3",
+            "822040616fbb",
+            "4938921744c6",
+            "c114925e9c68",
+            "06425d8da2e6",
+            "7ad8a0996352",
+            "39bfd36b44ed"
+          ],
+          "payloads": [
+            "0fb6ff3590e2",
+            "76de732c569f",
+            "4335d4b6568f",
+            "82ff8123c1fe",
+            "13028e692551",
+            "847430ffa968",
+            "3fc2a1b54e13",
+            "84b10f34b617"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-unmount": "eb79a9b3682a",
+            "remount": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-before-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "090c88478661", "5fbdd64c75bc"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-before-1:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-after-1:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "822040616fbb", "5fbdd64c75bc"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-after-1:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-before-2:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "822040616fbb", "5fbdd64c75bc"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-before-2:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "f6a09f8c5b85",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-after-2:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-after-2:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-before-3:lifecycle-boundary",
+        "observation": {
+          "sender": ["234fabe27913", "a4760ef5a9f4", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-before-3:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-after-3:lifecycle-boundary",
+        "observation": {
+          "sender": ["563e4c82b345", "a4760ef5a9f4", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-after-3:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-before-4:lifecycle-boundary",
+        "observation": {
+          "sender": ["563e4c82b345", "a4760ef5a9f4", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-before-4:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "8a63b85fee0c",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-after-4:lifecycle-boundary",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "2a7485a88169",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-workspace-context-fulfilled.blur-after-4:settled",
+        "observation": {
+          "sender": ["563e4c82b345", "789980530ae3", "822040616fbb", "4938921744c6"],
+          "payloads": ["0fb6ff3590e2", "76de732c569f", "4335d4b6568f", "82ff8123c1fe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "lifecycle-blur": "eb79a9b3682a"
+          },
+          "state": "2a7485a88169",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

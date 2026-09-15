@@ -56,7 +56,10 @@ function upsertTrustBlocks(
   hash: string,
   explicitEnabled?: boolean
 ): string {
-  const ranges = getUniqueTrustBlockRanges(content, keys)
+  const ranges = findHookTrustBlockRanges(
+    content,
+    new Set(keys.map(normalizeCodexHookTrustLookupKey))
+  )
   if (ranges.length === 0) {
     return appendTrustBlocks(content, keys, hash, explicitEnabled ?? true)
   }
@@ -72,21 +75,6 @@ function upsertTrustBlocks(
     cursor = range.end
   })
   return deduped + content.slice(cursor)
-}
-
-function getUniqueTrustBlockRanges(
-  content: string,
-  keys: readonly string[]
-): HookTrustBlockRange[] {
-  const normalizedKeys = new Set(keys.map(normalizeCodexHookTrustLookupKey))
-  return findHookTrustBlockRanges(content, normalizedKeys)
-    .filter(
-      (range, index, ranges) =>
-        ranges.findIndex(
-          (candidate) => candidate.start === range.start && candidate.end === range.end
-        ) === index
-    )
-    .sort((left, right) => left.start - right.start)
 }
 
 function isBlockDisabled(content: string, range: HookTrustBlockRange): boolean {

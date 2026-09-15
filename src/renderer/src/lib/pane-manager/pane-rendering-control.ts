@@ -1,4 +1,8 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
+import {
+  resumeTerminalCursorBlink,
+  suspendTerminalCursorBlink
+} from './pane-cursor-blink-suspension'
 import { safeFit } from './pane-tree-ops'
 import {
   attachWebgl,
@@ -66,6 +70,12 @@ export function suspendPaneRendering(
   for (const pane of suspended) {
     pane.webglAttachmentDeferred = true
     pane.terminal.blur()
+    // Why here, above the retention return: the retention branch keeps a live
+    // WebglRenderer, whose blink timer only stops on a real DOM blur event. blur()
+    // above is a no-op unless that pane's textarea held focus, so under a hide mode
+    // that keeps focus the pane would blink — redrawing its cursor row — until the
+    // 5-minute idle timeout. Parking the option makes it unconditional.
+    suspendTerminalCursorBlink(pane.terminal)
   }
   // Keep recent hidden worktrees on live WebGL so switch-back never presents
   // DOM-fallback frames; evicted/over-cap owners fall back to dispose.
@@ -86,6 +96,9 @@ export function resumePaneRendering(
   }
   for (const pane of panes) {
     clearTerminalWebglAttachBackoff(pane)
+    // Before the attach below so a freshly constructed WebglRenderer already samples
+    // the restored option and blinks on its first frame.
+    resumeTerminalCursorBlink(pane.terminal)
     const rebuildDeferred = pane.webglRebuildDeferred === true
     pane.webglAttachmentDeferred = false
     // Reveal can retry before the next resume, so both paths share the bounded loss policy.

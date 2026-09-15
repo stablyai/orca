@@ -234,6 +234,12 @@ function getFileExplorerGenerationRoute(
   }
 }
 
+export function getFileExplorerOperationExecutionHostId(
+  owner: FileExplorerOperationOwner | undefined
+): ExecutionHostId | null {
+  return getFileExplorerGenerationRoute(owner)?.executionHostId ?? null
+}
+
 export function getFileExplorerOwnerUnresolvedMessage(): string {
   return translate(
     'auto.components.right.sidebar.fileExplorerOperationOwner.unresolved',

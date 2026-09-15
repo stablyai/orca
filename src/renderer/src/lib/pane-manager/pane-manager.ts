@@ -1,13 +1,11 @@
+import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type {
   PaneManagerOptions,
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone,
-  PaneExternalDropHandler,
-  PaneExternalDropResolver,
-  PaneExternalDropTarget
+  DropZone
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
@@ -68,7 +66,7 @@ export type {
   PaneExternalDropTarget,
   PaneExternalDropResolver,
   PaneExternalDropHandler
-}
+} from './pane-manager-types'
 
 export class PaneManager {
   private root: HTMLElement
@@ -235,7 +233,7 @@ export class PaneManager {
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
 
     if (opts?.focus !== false) {
-      pane.terminal.focus()
+      focusPanePreservingOverlays(pane)
     }
 
     if (changed) {
@@ -313,10 +311,12 @@ export class PaneManager {
 
   suspendRendering(): void {
     this.renderingSuspended = true
-    suspendPaneRendering(this.panes.values(), {
-      owner: this,
-      livePanes: () => (this.destroyed ? [] : this.panes.values())
-    })
+    suspendPaneRendering(
+      this.panes.values(),
+      this.options.retainHiddenWebgl === false
+        ? undefined
+        : { owner: this, livePanes: () => (this.destroyed ? [] : this.panes.values()) }
+    )
   }
 
   resumeRendering(): void {

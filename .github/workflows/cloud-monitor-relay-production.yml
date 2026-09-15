@@ -1,0 +1,75 @@
+name: Monitor Relay Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run the required 15-minute pre-drain gate or a 90-minute incident watch
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - monitor
+      expected-selector-generation:
+        description: Exact durable admission-selector generation
+        required: true
+        type: string
+      expected-existing-only-cells:
+        description: Exact comma-separated existing-only cells, or none
+        required: true
+        type: string
+      expected-migration-only-cells:
+        description: Exact comma-separated migration-only cells, or none
+        required: true
+        type: string
+      expected-general-cells:
+        description: Exact comma-separated general cells, or none
+        required: true
+        type: string
+      migration-policy:
+        description: Migration checks matched to the intended mutation
+        required: true
+        default: strict
+        type: choice
+        options:
+          - strict
+          - recover-forward
+          - capacity-transition
+      recovery-source-cell-id:
+        description: Existing-only recovery source cell, or none for strict monitoring
+        required: true
+        default: none
+        type: string
+      capacity-cell-id:
+        description: General cell for a capacity-transition monitor, or none
+        required: true
+        default: none
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-cloud-sql-rollout
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  monitor:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    uses: ./.github/workflows/cloud-monitor-relay-production-job.yml
+    with:
+      mode: ${{ inputs.mode }}
+      expected-selector-generation: ${{ inputs.expected-selector-generation }}
+      expected-existing-only-cells: ${{ inputs.expected-existing-only-cells }}
+      expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
+      expected-general-cells: ${{ inputs.expected-general-cells }}
+      migration-policy: ${{ inputs.migration-policy }}
+      recovery-source-cell-id: ${{ inputs.recovery-source-cell-id }}
+      capacity-cell-id: ${{ inputs.capacity-cell-id }}

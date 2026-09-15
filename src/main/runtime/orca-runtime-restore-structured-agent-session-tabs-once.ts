@@ -1,6 +1,9 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
 import { OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript } from './orca-runtime-resolve-recovered-structured-tui-transcript'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
+import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
@@ -20,8 +23,29 @@ import { getAgentLaunchPlatformForRepo } from './runtime-agent-launch-resolution
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript {
+  async replaceStructuredAgentSessionTab(replacement: ConversationReplacement): Promise<void> {
+    const prior = this.mobileSessionTabsByWorktree.get(replacement.workspaceId)
+    const next = prior ? replaceConversationInSnapshot(prior, replacement) : null
+    if (next && next !== prior) {
+      const stored = this.storeMobileSessionSnapshot(replacement.workspaceId, next)
+      this.emitMobileSessionTabsSnapshot(stored)
+    } else if (
+      !prior?.tabs.some(
+        (tab) => tab.type === 'agent-session' && tab.sessionId === replacement.sessionId
+      )
+    ) {
+      await this.publishStructuredAgentSessionTab({
+        ...replacement,
+        replacesSessionId: replacement.sourceSessionId,
+        activate: false
+      })
+    }
+  }
+
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
     await this.prepareStructuredAgentSessionStartupRestoration()
     const host = getStructuredAgentSessionHost()
@@ -42,8 +66,11 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       })
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
+    for (const replacement of host?.conversationReplacements?.() ?? []) {
+      await this.replaceStructuredAgentSessionTab(replacement)
+    }
     for (const session of host?.listSessionTabs() ?? []) {
-      if (session.agent !== 'codex') {
+      if (session.agent !== 'codex' && session.agent !== 'claude') {
         continue
       }
       let sessionId = session.sessionId
@@ -52,7 +79,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       }
       await this.publishStructuredAgentSessionTab({
         ...session,
-        agent: 'codex',
+        agent: session.agent,
         sessionId,
         activate: false,
         notify: false
@@ -63,9 +90,10 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'codex'
+    agent: 'claude' | 'codex'
     activate: boolean
     notify?: boolean
+    replacesSessionId?: string
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
@@ -74,6 +102,8 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
+      // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
+      // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
       if (!input.activate) {
         return
       }
@@ -94,17 +124,18 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         ),
         tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
       }
-      this.mobileSessionTabsByWorktree.set(input.workspaceId, snapshot)
+      const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
       if (input.notify !== false) {
-        this.emitMobileSessionTabsSnapshot(snapshot)
+        this.emitMobileSessionTabsSnapshot(stored)
       }
       return
     }
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: 'Codex Chat',
+      title: defaultAgentChatLabel(input.agent),
       sessionId: input.sessionId,
+      ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {}),
       agent: input.agent,
       isActive: input.activate
     }
@@ -143,21 +174,37 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    this.mobileSessionTabsByWorktree.set(input.workspaceId, snapshot)
+    const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
     if (input.notify !== false) {
-      this.emitMobileSessionTabsSnapshot(snapshot)
+      this.emitMobileSessionTabsSnapshot(stored)
     }
   }
 
   async inspectTerminalProcess(
-    terminalSelector: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }> {
+    terminalSelector: string,
+    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
+  ): Promise<PtyProcessInspection> {
     const leaf = this.resolveLiveLeafForHandle(terminalSelector)
     if (!leaf?.ptyId || !this.ptyController) {
       throw new Error('terminal_gone')
     }
     if (this.ptyController.inspectProcess) {
-      return this.ptyController.inspectProcess(leaf.ptyId)
+      // Preserve the legacy one-argument call shape when no incarnation
+      // fence was requested; some providers use arity to distinguish the
+      // compatibility path from the fenced remote inspection.
+      const inspection =
+        options === undefined
+          ? await this.ptyController.inspectProcess(leaf.ptyId)
+          : await this.ptyController.inspectProcess(leaf.ptyId, options)
+      const evidence = inspection.foregroundProcessEvidence
+      // The runtime handle is the request identity on this wire; keep the
+      // host-owned leaf PTY id out of the client-facing comparison.
+      const relayPtyId = parseAppSshPtyId(leaf.ptyId)?.relayPtyId
+      const evidenceBelongsToLeaf =
+        evidence !== undefined && (evidence.ptyId === leaf.ptyId || evidence.ptyId === relayPtyId)
+      return evidenceBelongsToLeaf
+        ? { ...inspection, foregroundProcessEvidence: { ...evidence, ptyId: terminalSelector } }
+        : inspection
     }
     const foregroundProcess = await this.ptyController.getForegroundProcess(leaf.ptyId)
     const hasChildProcesses = (await this.ptyController.hasChildProcesses?.(leaf.ptyId)) ?? false

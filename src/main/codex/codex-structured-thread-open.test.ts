@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  CODEX_APP_SERVER_MAX_RECORD_BYTES,
   CodexAppServerFrameSizeError,
   CodexAppServerRequestError,
   type CodexAppServerConnection
@@ -14,6 +13,26 @@ function connectionFor(
 }
 
 describe('openCodexThread', () => {
+  it('preserves an explicitly reported service tier, including Standard', async () => {
+    const priority = vi.fn(async () => ({
+      thread: { id: 'thread-fast' },
+      serviceTier: 'priority-live'
+    }))
+    await expect(
+      openCodexThread(connectionFor(priority), { cwd: '/workspace', resumeThreadId: null }, 2_000)
+    ).resolves.toMatchObject({ threadId: 'thread-fast', serviceTier: 'priority-live' })
+
+    const standard = vi.fn(async () => ({ thread: { id: 'thread-standard' }, serviceTier: null }))
+    await expect(
+      openCodexThread(connectionFor(standard), { cwd: '/workspace', resumeThreadId: null }, 2_000)
+    ).resolves.toEqual({
+      threadId: 'thread-standard',
+      thread: { id: 'thread-standard' },
+      historyPath: null,
+      serviceTier: null
+    })
+  })
+
   it('requests metadata-only state when resuming an existing thread', async () => {
     const request = vi.fn(async () => ({
       thread: { id: 'thread-1', path: '/history/thread-1.jsonl' },
@@ -105,7 +124,7 @@ describe('openCodexThread', () => {
     expect(oversizedRequest).toHaveBeenCalledOnce()
   })
 
-  it('refuses an oversized fallback result returned by a connection double', async () => {
+  it('accepts a fallback result beyond the daemon wire limit', async () => {
     const request = vi.fn(async (_method: string, params?: Record<string, unknown>) => {
       if (params?.excludeTurns) {
         throw new CodexAppServerRequestError(
@@ -117,9 +136,7 @@ describe('openCodexThread', () => {
       return {
         thread: {
           id: 'thread-1',
-          turns: [
-            { id: 'turn-1', items: [{ output: 'x'.repeat(CODEX_APP_SERVER_MAX_RECORD_BYTES) }] }
-          ]
+          turns: [{ id: 'turn-1', items: [{ output: 'x'.repeat(16 * 1024 * 1024 + 1) }] }]
         }
       }
     })
@@ -130,7 +147,7 @@ describe('openCodexThread', () => {
         { cwd: '/workspace', resumeThreadId: 'thread-1' },
         2_000
       )
-    ).rejects.toBeInstanceOf(CodexAppServerFrameSizeError)
+    ).resolves.toMatchObject({ threadId: 'thread-1' })
     expect(request).toHaveBeenCalledTimes(2)
   })
 })

@@ -64,7 +64,7 @@ describe('browser artifact upload', () => {
     } satisfies Partial<ArtifactPublishPreparationError>)
   })
 
-  it('accepts a file whose stat is exactly at the 5 MiB boundary', async () => {
+  it('accepts a file whose stat is exactly at the 10 MiB boundary', async () => {
     stat.mockResolvedValueOnce({
       size: ARTIFACT_MAX_CONTENT_BYTES,
       isDirectory: false,

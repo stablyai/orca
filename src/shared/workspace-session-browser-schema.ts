@@ -117,6 +117,7 @@ const browserHistoryEntrySchema = z.object({
   url: z.string(),
   normalizedUrl: z.string(),
   title: z.string(),
+  faviconUrl: z.string().nullable().optional(),
   lastVisitedAt: z.number(),
   visitCount: z.number()
 })

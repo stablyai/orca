@@ -6,6 +6,9 @@ import type {
   TerminalTab
 } from '../../../../shared/terminal-tab-types'
 import {
+  EMPTY_LIVE_PTY_IDS,
+  EMPTY_RUNTIME_PANE_TITLES,
+  EMPTY_TERMINAL_LAYOUT_ROOTS,
   selectLivePtyIdsForWorktree,
   selectTerminalLayoutRootsForWorktree,
   selectTerminalLayoutRootsForWorktrees,
@@ -144,5 +147,76 @@ describe('worktree card status input selectors', () => {
         selectTerminalLayoutRootsForWorktrees(wakeBindingUpdate, [worktreeId])
       )
     ).toBe(true)
+  })
+
+  // Why: zustand re-runs every mounted card's selector on every store write, so
+  // a fresh record per call multiplies by (visible cards x writes/sec).
+  it('returns one identity per store generation instead of rebuilding per call', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const state: SelectorState & LayoutRootSelectorState = {
+      tabsByWorktree: {
+        [worktreeId]: [makeTab('tab-1', worktreeId)]
+      },
+      runtimePaneTitlesByTabId: { 'tab-1': { 0: 'codex [working]' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      terminalLayoutsByTabId: {
+        'tab-1': makeLayout(
+          { type: 'leaf', leafId: '11111111-1111-4111-8111-111111111111' },
+          'pty-1'
+        )
+      }
+    }
+
+    expect(selectRuntimePaneTitlesForWorktree(state, worktreeId)).toBe(
+      selectRuntimePaneTitlesForWorktree(state, worktreeId)
+    )
+    expect(selectLivePtyIdsForWorktree(state, worktreeId)).toBe(
+      selectLivePtyIdsForWorktree(state, worktreeId)
+    )
+    expect(selectTerminalLayoutRootsForWorktree(state, worktreeId)).toBe(
+      selectTerminalLayoutRootsForWorktree(state, worktreeId)
+    )
+  })
+
+  it('carries the same identity across unrelated pane-title and PTY churn', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const state: SelectorState = {
+      tabsByWorktree: {
+        [worktreeId]: [makeTab('tab-1', worktreeId)]
+      },
+      runtimePaneTitlesByTabId: { 'tab-1': { 0: 'codex [working]' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    }
+    const unrelatedUpdate: SelectorState = {
+      ...state,
+      runtimePaneTitlesByTabId: {
+        ...state.runtimePaneTitlesByTabId,
+        'other-tab': { 0: 'claude [permission]' }
+      },
+      ptyIdsByTabId: { ...state.ptyIdsByTabId, 'other-tab': ['pty-other'] }
+    }
+
+    expect(selectRuntimePaneTitlesForWorktree(state, worktreeId)).toBe(
+      selectRuntimePaneTitlesForWorktree(unrelatedUpdate, worktreeId)
+    )
+    expect(selectLivePtyIdsForWorktree(state, worktreeId)).toBe(
+      selectLivePtyIdsForWorktree(unrelatedUpdate, worktreeId)
+    )
+  })
+
+  it('returns the shared frozen empty for a worktree with no tabs', () => {
+    const state: SelectorState & LayoutRootSelectorState = {
+      tabsByWorktree: {},
+      runtimePaneTitlesByTabId: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    }
+
+    expect(selectRuntimePaneTitlesForWorktree(state, 'missing')).toBe(EMPTY_RUNTIME_PANE_TITLES)
+    expect(selectLivePtyIdsForWorktree(state, 'missing')).toBe(EMPTY_LIVE_PTY_IDS)
+    expect(selectTerminalLayoutRootsForWorktree(state, 'missing')).toBe(EMPTY_TERMINAL_LAYOUT_ROOTS)
+    expect(Object.isFrozen(EMPTY_RUNTIME_PANE_TITLES)).toBe(true)
+    expect(Object.isFrozen(EMPTY_LIVE_PTY_IDS)).toBe(true)
+    expect(Object.isFrozen(EMPTY_TERMINAL_LAYOUT_ROOTS)).toBe(true)
   })
 })

@@ -105,6 +105,9 @@ export function buildDefaultSettings(args: {
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
     terminalClipboardOnSelect: false,
+    // Why: only the run of spaces shared by every selected line is dropped, so
+    // relative indentation survives and the clipboard loses only the gutter.
+    terminalCopyTrimsGutter: true,
     // Why: default on so Zellij/tmux/nvim copy works out of the box. Query
     // replies stay disabled and payload size is capped in the OSC 52 handler.
     // This default only covers new profiles; existing ones persisted `false`
@@ -157,6 +160,7 @@ export function buildDefaultSettings(args: {
     notifications: args.notifications,
     diffDefaultView: 'inline',
     diffWordWrap: false,
+    diffShowWhitespace: false,
     combinedDiffFileTreeVisibleByDefault: false,
     prBotAuthorOverrides: [],
     promptCacheTimerEnabled: false,
@@ -198,6 +202,7 @@ export function buildDefaultSettings(args: {
     opencodeWorkspaceId: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
+    minimaxEndpoint: 'overseas',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },

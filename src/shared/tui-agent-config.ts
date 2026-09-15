@@ -233,7 +233,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     ctrlEnterEncoding: 'csi-u'
   },
   kimi: {
+    // Why: the `kimi` launcher runs as `kimi-code`, so foreground-process recognition never
+    // matches the agent without the alias — terminal reuse and `dispatch --inject` fail.
     detectCmd: 'kimi',
+    detectCmdAliases: ['kimi-code'],
     promptInjectionMode: 'stdin-after-start'
   },
   'mistral-vibe': {

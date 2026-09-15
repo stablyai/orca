@@ -54,20 +54,27 @@ function wedgedDaemonError(requestError: Error, cancelError: unknown): Error | n
 }
 
 export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
+  // A stalled event loop can deliver a daemon cancellation before its overdue timer runs.
   const { payload, type } = opts
+  const createTimeoutError = (): DaemonRequestTimeoutError =>
+    new DaemonRequestTimeoutError(`Request ${type} timed out after ${opts.timeoutMs}ms`)
   const createSessionId =
     type === 'createOrAttach' && payload !== null && typeof payload === 'object'
       ? Reflect.get(payload, 'sessionId')
       : null
   const requestPayload =
     type === 'createOrAttach' && payload !== null && typeof payload === 'object'
-      ? { ...payload, cancelAfterMs: Math.max(1, opts.timeoutMs - 100) }
+      ? {
+          ...payload,
+          cancelAfterMs: Math.max(1, opts.timeoutMs + opts.unmatchedCancelGraceMs)
+        }
       : payload
   const encoded = encodeNdjson({
     id: opts.id,
     type,
     ...(requestPayload !== undefined ? { payload: requestPayload } : {})
   })
+  const clientDeadlineMs = performance.now() + opts.timeoutMs
 
   return new Promise<T>((resolve, reject) => {
     let sent = false
@@ -146,9 +153,7 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
         })
     }
     const timer = setTimeout(() => {
-      const error = new DaemonRequestTimeoutError(
-        `Request ${type} timed out after ${opts.timeoutMs}ms`
-      )
+      const error = createTimeoutError()
       if (typeof createSessionId === 'string') {
         cancelCreate(error)
       } else {
@@ -172,8 +177,11 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
         removeAbortListener()
         clearTimers()
         reject(
-          cancellationError !== null && isTerminalAttachCanceledMessage(error.message)
-            ? cancellationError
+          isTerminalAttachCanceledMessage(error.message)
+            ? (cancellationError ??
+                (type === 'createOrAttach' && performance.now() >= clientDeadlineMs
+                  ? createTimeoutError()
+                  : error))
             : error
         )
       },
