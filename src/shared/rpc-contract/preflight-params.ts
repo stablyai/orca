@@ -11,3 +11,7 @@ export const PreflightDetectRemoteAgents = z.object({
 export const PreflightDetectRemoteWindowsTerminalCapabilities = z.object({
   connectionId: z.string().min(1)
 })
+
+export const PreflightAgentHealthProvider = z.object({
+  provider: z.enum(['claude', 'codex'])
+})
