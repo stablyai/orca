@@ -65,19 +65,19 @@ function makeEntry(index: number, overrides: Record<string, unknown> = {}): neve
 }
 
 describe('mobile agent-status projection equivalence', () => {
-  it('matches the whole-array serialization across shapes and cache reuse', () => {
+  it('matches the whole-array serialization across status maps and cache reuse', () => {
     resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const shapes: AppState['agentStatusByPaneKey'][] = []
-    shapes.push({})
-    shapes.push({ 'tab-0:leaf-0': makeEntry(0) })
-    shapes.push({ 'tab-0:leaf-0': makeEntry(0, { workingMode: 'monitoring' }) })
+    const statusMaps: AppState['agentStatusByPaneKey'][] = []
+    statusMaps.push({})
+    statusMaps.push({ 'tab-0:leaf-0': makeEntry(0) })
+    statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { workingMode: 'monitoring' }) })
     const many: AppState['agentStatusByPaneKey'] = {}
     for (let index = 0; index < 12; index += 1) {
       many[`tab-${index}:leaf-0`] = makeEntry(index)
     }
-    shapes.push(many)
+    statusMaps.push(many)
     // Optional fields absent entirely, which the ?? null fallbacks must cover.
-    shapes.push({
+    statusMaps.push({
       'tab-9:leaf-1': makeEntry(9, {
         agentType: undefined,
         terminalTitle: undefined,
@@ -89,17 +89,17 @@ describe('mobile agent-status projection equivalence', () => {
       })
     })
     // Keys deliberately out of insertion order to pin the sort.
-    shapes.push({
+    statusMaps.push({
       'tab-z:leaf-0': makeEntry(2),
       'tab-a:leaf-0': makeEntry(1),
       'tab-m:leaf-0': makeEntry(3)
     })
 
-    for (const [index, shape] of shapes.entries()) {
+    for (const [index, statusMap] of statusMaps.entries()) {
       expect({
         index,
-        projection: buildRuntimeMobileAgentStatusProjectionForTests(shape)
-      }).toEqual({ index, projection: referenceProjection(shape) })
+        projection: buildRuntimeMobileAgentStatusProjectionForTests(statusMap)
+      }).toEqual({ index, projection: referenceProjection(statusMap) })
     }
 
     // Now exercise the cache: replace one entry the way setAgentStatus does and

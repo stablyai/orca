@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+/* oxlint-disable anti-slop/no-shape-in-symbol-names -- In the screenshot annotator a "shape" is the drawn geometry (pen, arrow, rect, ellipse, highlight), a domain noun, not a description of a value's structure. */
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

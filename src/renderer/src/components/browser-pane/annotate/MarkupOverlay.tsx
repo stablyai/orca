@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-shape-in-symbol-names -- In the screenshot annotator a "shape" is the drawn geometry (pen, arrow, rect, ellipse, highlight), a domain noun, not a description of a value's structure. */
 import React, { useCallback, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'

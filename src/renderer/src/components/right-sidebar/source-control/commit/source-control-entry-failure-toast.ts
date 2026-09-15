@@ -26,7 +26,7 @@ export function dismissSourceControlEntryFailureToast(worktreeId: string | null)
 function entryFailureTitle(
   operation: SourceControlEntryOperation,
   filePath: string,
-  deleteShaped: boolean
+  deletesFile: boolean
 ): string {
   switch (operation) {
     case 'stage':
@@ -42,7 +42,7 @@ function entryFailureTitle(
         { value0: filePath }
       )
     case 'discard':
-      return deleteShaped
+      return deletesFile
         ? translate(
             'auto.components.right.sidebar.SourceControl.entryDeleteFailed',
             'Failed to delete “{{value0}}”',
@@ -67,7 +67,7 @@ function entryFailureTitle(
 export function showSourceControlEntryFailureToast({
   operation,
   filePath,
-  deleteShaped = false,
+  deletesFile = false,
   error,
   worktreeId,
   worktreeName,
@@ -76,7 +76,7 @@ export function showSourceControlEntryFailureToast({
   operation: SourceControlEntryOperation
   filePath: string
   /** True when this discard deletes the file rather than restoring it — see `discard-confirmation`. */
-  deleteShaped?: boolean
+  deletesFile?: boolean
   error: unknown
   /** The worktree the failed attempt ran against. */
   worktreeId: string | null
@@ -85,7 +85,7 @@ export function showSourceControlEntryFailureToast({
   onRetry?: () => void
 }): void {
   const isActiveWorktree = useAppStore.getState().activeWorktreeId === worktreeId
-  const title = entryFailureTitle(operation, filePath, deleteShaped)
+  const title = entryFailureTitle(operation, filePath, deletesFile)
   const offerRetry = Boolean(onRetry) && isActiveWorktree
   entryFailureSlotOwner = { worktreeId }
   toast.error(

@@ -226,7 +226,7 @@ function itemKind(kind: string): string | null {
   return kind.startsWith('item:') ? kind.slice('item:'.length) : null
 }
 
-export function isDeltaShapedProviderFrameKind(kind: string): boolean {
+export function isDeltaProviderFrameKind(kind: string): boolean {
   return notificationKind(kind).toLowerCase().endsWith('delta')
 }
 
@@ -260,7 +260,7 @@ export function classifyProviderFrame(
   if (hasProviderError(payload)) {
     return 'error-surface'
   }
-  if (isDeltaShapedProviderFrameKind(kind)) {
+  if (isDeltaProviderFrameKind(kind)) {
     return 'stream-into-item'
   }
   if (provider === 'claude' && kind === 'message:result') {

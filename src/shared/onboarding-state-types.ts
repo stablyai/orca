@@ -9,6 +9,7 @@ export type OnboardingChecklistState = {
   ranFirstAgent: boolean
   ranSecondAgentOnSameTask: boolean
   triedCmdJ: boolean
+  // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- Persisted onboarding-checklist field name, also a telemetry enum member in ./telemetry-onboarding-foundation-schemas; renaming it would orphan saved state.
   shapedSidebar: boolean
   reviewedDiff: boolean
   openedPr: boolean

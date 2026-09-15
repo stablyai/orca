@@ -48,7 +48,7 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
-import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
 import type {
   OrcaRuntimeService,
@@ -1277,7 +1277,7 @@ export async function prepareWorktreePushTargetSsh(
   store?: WorktreePushTargetStore,
   repoId?: string
 ): Promise<GitPushTarget> {
-  assertGitPushTargetShape(target)
+  assertValidGitPushTarget(target)
   const execGit: GitRemoteExec = (args, cwd) => provider.exec(args, cwd)
   const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
   await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)

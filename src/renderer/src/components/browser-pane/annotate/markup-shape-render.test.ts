@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-shape-in-symbol-names -- In the screenshot annotator a "shape" is the drawn geometry (pen, arrow, rect, ellipse, highlight), a domain noun, not a description of a value's structure. */
 import { describe, expect, it } from 'vitest'
 import { drawShape } from './markup-shape-render'
 import { HIGHLIGHT_ALPHA, type MarkupShape } from './markup-drawing-model'

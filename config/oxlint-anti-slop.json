@@ -35,7 +35,7 @@
     "anti-slop/no-reflect-apply": "off",
     "anti-slop/no-reflect-get": "off",
     "anti-slop/no-runtime-typeof": "off",
-    "anti-slop/no-shape-in-symbol-names": "off",
+    "anti-slop/no-shape-in-symbol-names": "error",
     "anti-slop/no-unknown-parameters": "off",
     "anti-slop/no-unknown-returns": "off",
     "anti-slop/no-unknown-type-aliases": "off",

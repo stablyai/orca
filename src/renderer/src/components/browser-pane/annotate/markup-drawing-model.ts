@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-shape-in-symbol-names -- In the screenshot annotator a "shape" is the drawn geometry (pen, arrow, rect, ellipse, highlight), a domain noun, not a description of a value's structure. */
 // Pure drawing model for browser screenshot markup. No DOM access — shapes are
 // vector objects in CSS-viewport coordinates so the same data drives both the
 // live canvas overlay and the final composited PNG. Keeping this canvas-free

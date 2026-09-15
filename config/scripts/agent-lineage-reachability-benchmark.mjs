@@ -58,15 +58,19 @@ for (let trial = 0; trial < 5000; trial += 1) {
 
 const results = []
 for (const count of [8, 32, 128, 512, 1024]) {
-  for (const shape of ['flat', 'fanout', 'balanced', 'chain']) {
+  for (const topology of ['flat', 'fanout', 'balanced', 'chain']) {
     const rows = Array.from({ length: count }, (_, index) => {
       const parent =
-        shape === 'fanout' ? 0 : shape === 'balanced' ? Math.floor((index - 1) / 4) : index - 1
+        topology === 'fanout'
+          ? 0
+          : topology === 'balanced'
+            ? Math.floor((index - 1) / 4)
+            : index - 1
       return {
         paneKey: `pane-${index}`,
         entry: {
           orchestration:
-            index > 0 && shape !== 'flat' ? { parentPaneKey: `pane-${parent}` } : undefined
+            index > 0 && topology !== 'flat' ? { parentPaneKey: `pane-${parent}` } : undefined
         }
       }
     })
@@ -92,7 +96,7 @@ for (const count of [8, 32, 128, 512, 1024]) {
     }
     results.push({
       count,
-      shape,
+      topology,
       iterations,
       meanMicrosecondsPerTree: Object.fromEntries(
         Object.entries(samples).map(([arm, values]) => [

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { Observation, Recording } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 
-type FieldShape = 'list' | 'map' | 'whole'
+type FieldEncoding = 'list' | 'map' | 'whole'
 
 /**
  * How each observation field is interned. `sender`, `payloads` and `effects` are append-only
@@ -14,13 +14,13 @@ type FieldShape = 'list' | 'map' | 'whole'
  * projection that changes a field's container fails loudly instead of silently switching encodings.
  * `Record<keyof Observation, …>` makes a new observation field declare how it interns.
  */
-const FIELD_SHAPES = {
+const FIELD_ENCODINGS = {
   sender: 'list',
   payloads: 'list',
   settlements: 'map',
   state: 'whole',
   effects: 'list'
-} as const satisfies Record<keyof Observation, FieldShape>
+} as const satisfies Record<keyof Observation, FieldEncoding>
 
 export const OBSERVATION_FIELDS = [
   'sender',
@@ -28,16 +28,16 @@ export const OBSERVATION_FIELDS = [
   'settlements',
   'state',
   'effects'
-] as const satisfies readonly (keyof typeof FIELD_SHAPES)[]
+] as const satisfies readonly (keyof typeof FIELD_ENCODINGS)[]
 
 export type ValuePool = Record<string, RecordedValue>
-type InternedField<Shape extends FieldShape> = Shape extends 'list'
+type InternedField<Encoding extends FieldEncoding> = Encoding extends 'list'
   ? string[]
-  : Shape extends 'map'
+  : Encoding extends 'map'
     ? Record<string, string>
     : string
 export type InternedObservation = {
-  [Field in keyof typeof FIELD_SHAPES]: InternedField<(typeof FIELD_SHAPES)[Field]>
+  [Field in keyof typeof FIELD_ENCODINGS]: InternedField<(typeof FIELD_ENCODINGS)[Field]>
 }
 export type InternedRecording = {
   scenario: string
@@ -103,15 +103,15 @@ export function internRecording(recording: Recording): {
       const value = checkpoint.observation[field]
       const at = `${checkpoint.id}.${field}`
       observation[field] =
-        FIELD_SHAPES[field] === 'list'
+        FIELD_ENCODINGS[field] === 'list'
           ? listEntries(at, value).map((entry, index) => intern(entry, `${at}[${index}]`))
-          : FIELD_SHAPES[field] === 'map'
+          : FIELD_ENCODINGS[field] === 'map'
             ? Object.fromEntries(
                 mapEntries(at, value).map(([key, entry]) => [key, intern(entry, `${at}.${key}`)])
               )
             : intern(value, at)
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each field was just encoded to the shape its declaration names.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each field was just encoded to the encoding its declaration names.
     return { id: checkpoint.id, observation: observation as InternedObservation }
   })
   // Hash-ordered so a value's position in the pool does not move when checkpoints are reordered.
@@ -149,12 +149,12 @@ export function resolveRecording(values: ValuePool, recording: InternedRecording
       for (const field of OBSERVATION_FIELDS) {
         const interned: unknown = checkpoint.observation[field]
         const at = `${checkpoint.id}.${field}`
-        if (FIELD_SHAPES[field] === 'list') {
+        if (FIELD_ENCODINGS[field] === 'list') {
           if (!Array.isArray(interned)) {
             throw new Error(`Golden field ${at} is not a list of pool hashes`)
           }
           observation[field] = interned.map((hash, index) => resolve(hash, `${at}[${index}]`))
-        } else if (FIELD_SHAPES[field] === 'map') {
+        } else if (FIELD_ENCODINGS[field] === 'map') {
           if (interned === null || typeof interned !== 'object' || Array.isArray(interned)) {
             throw new Error(`Golden field ${at} is not a map of pool hashes`)
           }

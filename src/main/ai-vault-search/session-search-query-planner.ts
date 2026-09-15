@@ -17,7 +17,7 @@ const MAX_TERMS = 64
 // A query that quotes something from a transcript: camelCase, SCREAMING_SNAKE,
 // a dotted or snake_case name, a path, a filename, a PR number, a ticket, code
 // punctuation, or an error word.
-const LITERAL_SHAPE =
+const LITERAL_PATTERN =
   /[A-Za-z0-9_]*[a-z][A-Z][A-Za-z0-9_]*|\b[A-Z][A-Z0-9]{2,}(_[A-Z0-9]+)+\b|\b\w{2,}[._]\w{2,}\b|\b[\w.-]+\/[\w/.-]+\b|\b\w+\.(ts|tsx|js|jsx|py|rs|go|json|md|sh|yml|yaml|toml|c|cc|h|java|sql)\b|#\d{3,}|\b[A-Z]{2,6}-\d{2,}\b|[(){};=]|::|->|--\w|\b(Error|Exception|Traceback|error:|warning:)\b/
 const QUOTED = /"[^"]{3,}"|'[^']{3,}'/
 
@@ -36,7 +36,7 @@ export type SessionSearchQueryPlan = {
 }
 
 export function isLiteralQuery(query: string): boolean {
-  return QUOTED.test(query) || LITERAL_SHAPE.test(query)
+  return QUOTED.test(query) || LITERAL_PATTERN.test(query)
 }
 
 /**

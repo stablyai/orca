@@ -7,13 +7,14 @@ import type { z } from 'zod'
  * dropped from the payload and the rest of the batch still lands. Unknown KEYS
  * stay a hard rejection — the parity assertions exist to catch those.
  */
-export function tolerateUnknownValues<TShape extends z.ZodRawShape>(shape: TShape): TShape {
+// oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- `z.ZodRawShape` is zod's own exported type name.
+export function tolerateUnknownValues<TFields extends z.ZodRawShape>(fields: TFields): TFields {
   return Object.fromEntries(
-    Object.entries(shape).map(([key, schema]) => [
+    Object.entries(fields).map(([key, schema]) => [
       key,
       (schema as z.ZodType).catch(() => undefined)
     ])
-  ) as unknown as TShape
+  ) as unknown as TFields
 }
 
 /** Drops the `undefined` entries `tolerateUnknownValues` leaves behind, so a

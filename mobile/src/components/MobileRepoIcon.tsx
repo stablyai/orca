@@ -16,6 +16,7 @@ import {
   Palette,
   Rocket,
   Server,
+  // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- lucide icon export name; it is the library's identifier, not ours.
   Shapes,
   Sparkles,
   SquareTerminal,
@@ -46,6 +47,7 @@ const REPO_LUCIDE_ICONS: Record<string, LucideIcon> = {
   Gauge,
   Palette,
   Rocket,
+  // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- key is the persisted lucide icon name shared with the desktop picker.
   Shapes,
   Sparkles,
   Wrench

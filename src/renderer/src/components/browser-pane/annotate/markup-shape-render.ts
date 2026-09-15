@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-shape-in-symbol-names -- In the screenshot annotator a "shape" is the drawn geometry (pen, arrow, rect, ellipse, highlight), a domain noun, not a description of a value's structure. */
 // Canvas rendering for markup shapes. Shared by the live overlay (draws into the
 // visible canvas) and the compositor (draws into the offscreen export canvas), so
 // on-screen preview and the delivered PNG are pixel-identical.

@@ -10,7 +10,7 @@ import {
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
-import { isDeleteShapedDiscardEntry } from './discard-confirmation'
+import { discardDeletesEntryFile } from './discard-confirmation'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 import {
   dismissSourceControlEntryFailureToast,
@@ -62,7 +62,7 @@ export function useSourceControlDiscardConfirmation({
         showSourceControlEntryFailureToast({
           operation: 'discard',
           filePath: entry.path,
-          deleteShaped: isDeleteShapedDiscardEntry(entry),
+          deletesFile: discardDeletesEntryFile(entry),
           error,
           worktreeId: activeWorktreeId,
           worktreeName: worktreePath ? basename(worktreePath) : null

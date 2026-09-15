@@ -6,6 +6,7 @@ import {
   FolderInput,
   FolderTree,
   Plus,
+  // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- lucide-react icon export name; not ours to rename.
   Shapes,
   SlidersHorizontal,
   Trash2
@@ -125,6 +126,7 @@ export function RepoHeaderProjectActionsMenu({
         <DropdownMenuItem
           onSelect={() => actions.onOpenRepoSettings(repo.id, getRepositoryIconSectionId(repo.id))}
         >
+          {/* oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- lucide-react icon export name; not ours to rename. */}
           <Shapes className="size-3.5" />
           {translate('auto.components.sidebar.WorktreeList.e82d3589a1', 'Change Project Icon')}
         </DropdownMenuItem>

@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-shape-in-symbol-names -- In the screenshot annotator a "shape" is the drawn geometry (pen, arrow, rect, ellipse, highlight), a domain noun, not a description of a value's structure. */
 // Composites the frozen base screenshot + markup shapes into a single PNG under
 // the delivery byte and pixel budgets (PNG only — see MarkupComposeResult).
 //

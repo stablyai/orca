@@ -17,7 +17,7 @@ import {
   classifyProjectError,
   driftError,
   rateLimitedError,
-  type GhGraphqlErrorShape
+  type GhGraphqlError
 } from './project-error-classification'
 
 export {
@@ -172,7 +172,7 @@ export async function runGraphql<T>(
       ...(exec?.host ? { host: exec.host } : {})
     })
     try {
-      const parsed = JSON.parse(stdout) as { data?: T; errors?: GhGraphqlErrorShape[] }
+      const parsed = JSON.parse(stdout) as { data?: T; errors?: GhGraphqlError[] }
       if (parsed.errors && parsed.errors.length > 0) {
         return {
           ok: false,

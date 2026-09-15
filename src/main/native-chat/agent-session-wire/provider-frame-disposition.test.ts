@@ -3,7 +3,7 @@ import { CODEX_APP_SERVER_NOTIFICATION_METHODS } from '../../codex/codex-app-ser
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from './claude-stream-json-frame-schema'
 import {
   classifyProviderFrame,
-  isDeltaShapedProviderFrameKind,
+  isDeltaProviderFrameKind,
   PROVIDER_FRAME_CLASSIFICATIONS
 } from './provider-frame-disposition'
 import { unhandledProviderFrameJournalItem } from './unhandled-provider-frame'
@@ -25,7 +25,7 @@ describe('provider frame classification catalog', () => {
     const deltaKinds = [
       ...Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.codex),
       ...Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.claude)
-    ].filter(isDeltaShapedProviderFrameKind)
+    ].filter(isDeltaProviderFrameKind)
 
     expect(deltaKinds.length).toBeGreaterThan(0)
     for (const kind of deltaKinds) {

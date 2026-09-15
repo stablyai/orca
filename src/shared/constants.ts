@@ -142,6 +142,7 @@ export function getDefaultOnboardingState(): OnboardingState {
       ranFirstAgent: false,
       ranSecondAgentOnSameTask: false,
       triedCmdJ: false,
+      // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- Persisted onboarding-checklist field name; see src/shared/onboarding-state-types.ts.
       shapedSidebar: false,
       reviewedDiff: false,
       openedPr: false,

@@ -16,6 +16,7 @@ import {
   Palette,
   Rocket,
   Server,
+  // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- lucide-react exports this icon component as `Shapes`; the name is theirs.
   Shapes,
   Sparkles,
   SquareTerminal,
@@ -121,6 +122,7 @@ export const getRepoLucideIconOptions = createLocalizedCatalog(() => [
   {
     name: 'Shapes',
     label: translate('auto.components.repo.repo.icon.857977b901', 'Shapes'),
+    // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- lucide-react icon component; see the import site.
     icon: Shapes
   },
   { name: 'Box', label: translate('auto.components.repo.repo.icon.0ad395d475', 'Box'), icon: Box }

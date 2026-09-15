@@ -242,7 +242,7 @@ export function isAdmissibleAgentJournalSubmission(
  *  never reject a row a writer in this build produced. The schemas are
  *  deliberately wider on open string fields, so only this direction holds. */
 type Admits<T extends true> = T
-export type CanonicalJournalShapesAreAdmissible = [
+export type CanonicalJournalTypesAreAdmissible = [
   Admits<AgentJournalItemBody extends z.input<typeof AgentJournalItemBodySchema> ? true : false>,
   Admits<AgentJournalMessageItem extends z.input<typeof MessageBody> ? true : false>,
   Admits<

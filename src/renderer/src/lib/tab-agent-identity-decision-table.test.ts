@@ -11,7 +11,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 
 const AGENTS: readonly TuiAgent[] = ['claude', 'codex']
 const SLOT_COUNT = 7
-const SHAPE_COUNT = 3 ** SLOT_COUNT * 4 * 2
+const COMBINATION_COUNT = 3 ** SLOT_COUNT * 4 * 2
 const TITLES: readonly string[] = ['', 'zsh', 'Task - claude', 'Task - codex']
 
 type Breakdown = Record<
@@ -124,7 +124,7 @@ describe('renderer ladder decision table', () => {
     const proofFree = runDecisionTable(false)
     const freshProof = runDecisionTable(true)
     const result = {
-      shapes: SHAPE_COUNT,
+      combinations: COMBINATION_COUNT,
       proofOmitted: proofFree,
       freshProof,
       flippedByAddingProof: proofFree.flipped

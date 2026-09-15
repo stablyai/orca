@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-shape-in-symbol-names -- In the screenshot annotator a "shape" is the drawn geometry (pen, arrow, rect, ellipse, highlight), a domain noun, not a description of a value's structure. */
 // Renders the live markup scene into the overlay canvas at device resolution.
 // Committed shapes are rasterized once into an offscreen layer; the per-frame
 // paint blits that layer and draws only the in-progress shape on top, so a fast
