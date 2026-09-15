@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import { LoaderCircle, GitMerge, ChevronDown, GitPullRequestClosed } from 'lucide-react'
+import { LoaderCircle, GitMerge, ChevronDown, GitPullRequestClosed, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -81,7 +81,11 @@ export default function HostedReviewActions({
       : stackMergeScope?.label
   const mergePresentation = useMemo(() => {
     if (isGitLab) {
-      return { ...presentGitLabMRMergeState(review), autoMergeAction: null }
+      return {
+        ...presentGitLabMRMergeState(review),
+        autoMergeAction: null,
+        updateBranchAvailable: false
+      }
     }
     const presentation = presentGitHubPRMergeState({
       ...githubPR,
@@ -125,10 +129,12 @@ export default function HostedReviewActions({
   const {
     merging,
     readying,
+    updatingBranch,
     stateUpdating,
     actionError,
     handleMerge,
     handleAutoMerge,
+    handleUpdateBranch,
     handleMarkReadyForReview,
     handleCloseReview,
     handleReopenReview
@@ -146,11 +152,13 @@ export default function HostedReviewActions({
   const isUpdatingReviewState = stateUpdating !== null
   const primaryMergeDisabled =
     merging ||
+    updatingBranch ||
     isUpdatingReviewState ||
     (!mergePresentation.directMergeAvailable && !mergePresentation.autoMergeAction)
   const directMergeDisabled =
-    merging || isUpdatingReviewState || !mergePresentation.directMergeAvailable
-  const menuDisabled = merging || isUpdatingReviewState
+    merging || updatingBranch || isUpdatingReviewState || !mergePresentation.directMergeAvailable
+  const menuDisabled = merging || updatingBranch || isUpdatingReviewState
+  const canUpdateBranch = !isGitLab && mergePresentation.updateBranchAvailable === true
 
   const handleDeleteWorktree = useCallback(() => {
     // Why: route every UI delete entry point through the shared funnel so
@@ -267,6 +275,21 @@ export default function HostedReviewActions({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
+                {canUpdateBranch && (
+                  <>
+                    <DropdownMenuItem
+                      disabled={menuDisabled}
+                      onSelect={() => void handleUpdateBranch()}
+                    >
+                      <RefreshCw className="size-3.5" />
+                      {translate(
+                        'auto.components.right.sidebar.HostedReviewActions.updateBranch',
+                        'Update branch'
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {mergePresentation.autoMergeAction && (
                   <>
                     <DropdownMenuItem

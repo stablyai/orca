@@ -30,6 +30,11 @@ export const SetPrAutoMerge = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
+export const UpdatePrBranch = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  prRepo: SlugRepo.nullable().optional()
+})
+
 export const UpdatePrState = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   prRepo: SlugRepo.nullable().optional(),

@@ -89,6 +89,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'github.listWorkItems',
   'github.mergePR',
   'github.setPRAutoMerge',
+  'github.updatePRBranch',
   'github.requestPRReviewers',
   'github.removePRReviewers',
   'github.project.listAccessible',

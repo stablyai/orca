@@ -12,6 +12,7 @@ import {
   setPRAutoMerge,
   setPRCommentReaction,
   setPRFileViewed,
+  updatePRBranch,
   updatePRDetails,
   updatePRState,
   updatePRTitle
@@ -160,6 +161,21 @@ export class RuntimeGitHubReviewMutationCommands {
       prNumber,
       enabled,
       method,
+      repo.connectionId ?? null,
+      prRepo ?? null,
+      ...this.deps.getLocalGitArgs(repo)
+    )
+  }
+
+  async updateRepoPRBranch(
+    repoSelector: string,
+    prNumber: number,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof updatePRBranch>>> {
+    const repo = await this.deps.resolveRepo(repoSelector)
+    return updatePRBranch(
+      repo.path,
+      prNumber,
       repo.connectionId ?? null,
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)

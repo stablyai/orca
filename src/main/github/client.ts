@@ -30,6 +30,7 @@ export { removePRReviewers, requestPRReviewers } from './client/update/pr-review
 export { rerunPRChecks } from './client/check/rerun-pr-checks'
 export { resolveReviewThread } from './client/update/resolve-review-thread'
 export { setPRAutoMerge } from './client/merge/pr-auto-merge'
+export { updatePRBranch } from './client/merge/pr-update-branch'
 export { setPRCommentReaction } from './client/update/pr-comment-reaction'
 export { setPRFileViewed } from './client/update/pr-file-viewed'
 export { updatePRDetails, updatePRTitle } from './client/update/pr-details'

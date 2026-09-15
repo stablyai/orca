@@ -3,7 +3,9 @@ import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
-  GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE
+  GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE,
+  GITHUB_UPDATE_PR_BRANCH_RUNTIME_CAPABILITY,
+  GITHUB_UPDATE_PR_BRANCH_UPDATE_REQUIRED_MESSAGE
 } from '../../../../shared/protocol-version'
 import {
   assertRuntimeEnvironmentCapability,
@@ -80,6 +82,38 @@ export async function setGitHubHostedReviewAutoMerge(args: {
     prNumber: args.prNumber,
     enabled: args.enabled,
     method: args.method,
+    prRepo: args.prRepo ?? null
+  })
+}
+
+/** Merge base into the PR head branch, routing through the repo's execution host. */
+export async function updateGitHubHostedReviewBranch(args: {
+  repo: Repo
+  prNumber: number
+  prRepo?: GitHubPRRepo | null
+}): Promise<Awaited<ReturnType<typeof window.api.gh.updatePRBranch>>> {
+  const target = getGitHubActionTarget(args.repo)
+  if (target.kind === 'environment') {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      GITHUB_UPDATE_PR_BRANCH_RUNTIME_CAPABILITY,
+      GITHUB_UPDATE_PR_BRANCH_UPDATE_REQUIRED_MESSAGE
+    )
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRBranch>>>(
+      target,
+      'github.updatePRBranch',
+      {
+        repo: args.repo.id,
+        prNumber: args.prNumber,
+        prRepo: args.prRepo ?? null
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.updatePRBranch({
+    repoPath: args.repo.path,
+    repoId: args.repo.id,
+    prNumber: args.prNumber,
     prRepo: args.prRepo ?? null
   })
 }
