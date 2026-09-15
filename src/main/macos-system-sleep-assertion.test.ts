@@ -21,7 +21,7 @@ function createLogger() {
 }
 
 describe('MacosSystemSleepAssertion', () => {
-  it('spawns caffeinate with the system and idle sleep assertions on macOS', () => {
+  it('spawns caffeinate with system and idle sleep assertions by default', () => {
     const child = new FakeCaffeinateProcess()
     const spawn = vi.fn(() => child)
     const assertion = new MacosSystemSleepAssertion({
@@ -33,6 +33,47 @@ describe('MacosSystemSleepAssertion', () => {
     assertion.start('status-change')
 
     expect(spawn).toHaveBeenCalledWith('/usr/bin/caffeinate', ['-i', '-s'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+  })
+
+  it('adds the display sleep assertion when keep-display-awake is enabled', () => {
+    const child = new FakeCaffeinateProcess()
+    const spawn = vi.fn(() => child)
+    const assertion = new MacosSystemSleepAssertion({
+      keepDisplayAwake: true,
+      logger: createLogger(),
+      platform: 'darwin',
+      spawn
+    })
+
+    assertion.start('status-change')
+
+    expect(spawn).toHaveBeenCalledWith('/usr/bin/caffeinate', ['-d', '-i', '-s'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+  })
+
+  it('uses the display sleep assertion for a restart after setKeepDisplayAwake', () => {
+    const spawn = vi.fn(() => new FakeCaffeinateProcess())
+    const assertion = new MacosSystemSleepAssertion({
+      logger: createLogger(),
+      platform: 'darwin',
+      spawn
+    })
+
+    assertion.start('status-change')
+    assertion.setKeepDisplayAwake(true)
+    assertion.stop('settings-change')
+    assertion.start('settings-change')
+
+    expect(spawn).toHaveBeenNthCalledWith(1, '/usr/bin/caffeinate', ['-i', '-s'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+    expect(spawn).toHaveBeenNthCalledWith(2, '/usr/bin/caffeinate', ['-d', '-i', '-s'], {
       stdio: 'ignore',
       windowsHide: true
     })

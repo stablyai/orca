@@ -2,7 +2,9 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   getAgentAwakeDescription,
   getAgentAwakeSearchKeywords,
-  getAgentAwakeTitle
+  getAgentAwakeTitle,
+  getKeepDisplayAwakeDescription,
+  getKeepDisplayAwakeTitle
 } from './agent-awake-copy'
 import {
   getAgentGeneratedTabTitlesDescription,
@@ -18,6 +20,7 @@ import { getAgentCacheTimerSearchEntries } from './agent-cache-timer-search'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 
 function buildAgentSettingsKeywords(): string[] {
   const keywords = searchKeywords([
@@ -62,9 +65,12 @@ function expandAgentSearchText(value: string): string[] {
 type AgentsPaneSearchOptions = {
   includeAgentAwake?: boolean
   includeAgentRuntime?: boolean
+  /** The display toggle renders on macOS only; defaults to the renderer platform. */
+  includeKeepDisplayAwake?: boolean
 }
 
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
+const KEEP_DISPLAY_AWAKE_SEARCH_ENTRY_ID = 'keep-display-awake'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 
 const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
@@ -120,6 +126,11 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentAwakeSearchKeywords()
   },
   {
+    title: getKeepDisplayAwakeTitle(),
+    id: KEEP_DISPLAY_AWAKE_SEARCH_ENTRY_ID,
+    description: getKeepDisplayAwakeDescription()
+  },
+  {
     title: translate(
       'auto.components.settings.agents.search.agentPermissions',
       'Agent Permissions'
@@ -145,12 +156,16 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
 
 export function getAgentsPaneSearchEntries({
   includeAgentAwake = true,
-  includeAgentRuntime = true
+  includeAgentRuntime = true,
+  includeKeepDisplayAwake = getRendererAppPlatform() === 'darwin'
 }: AgentsPaneSearchOptions = {}) {
   const entries = getAllAgentsPaneSearchEntries()
   return entries.filter(
     (entry) =>
       (!('id' in entry) || entry.id !== AGENT_RUNTIME_SEARCH_ENTRY_ID || includeAgentRuntime) &&
-      (!('id' in entry) || entry.id !== AGENT_AWAKE_SEARCH_ENTRY_ID || includeAgentAwake)
+      (!('id' in entry) || entry.id !== AGENT_AWAKE_SEARCH_ENTRY_ID || includeAgentAwake) &&
+      (!('id' in entry) ||
+        entry.id !== KEEP_DISPLAY_AWAKE_SEARCH_ENTRY_ID ||
+        (includeAgentAwake && includeKeepDisplayAwake))
   )
 }

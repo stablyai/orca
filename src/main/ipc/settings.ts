@@ -231,6 +231,9 @@ export function registerSettingsHandlers(
         normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
       )
     }
+    if ('keepDisplayAwake' in sanitizedArgs) {
+      agentAwakeService?.setKeepDisplayAwake(result.keepDisplayAwake === true)
+    }
     const hookSettingChanged =
       ('agentStatusHooksEnabled' in sanitizedArgs &&
         before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||

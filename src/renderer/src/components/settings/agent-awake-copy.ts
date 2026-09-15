@@ -7,6 +7,10 @@ const AGENT_AWAKE_DESCRIPTION_WINDOWS_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionWindows'
 const AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionDefault'
+const KEEP_DISPLAY_AWAKE_TITLE_KEY =
+  'auto.components.settings.agent-awake-copy.keepDisplayAwakeTitle'
+const KEEP_DISPLAY_AWAKE_DESCRIPTION_KEY =
+  'auto.components.settings.agent-awake-copy.keepDisplayAwakeDescription'
 
 export function getAgentAwakeTitle(): string {
   return translate(AGENT_AWAKE_TITLE_KEY, 'Keep computer awake')
@@ -35,6 +39,17 @@ export function getAgentAwakeDescription(
   return translate(
     AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY,
     'Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
+  )
+}
+
+export function getKeepDisplayAwakeTitle(): string {
+  return translate(KEEP_DISPLAY_AWAKE_TITLE_KEY, 'Keep the display awake')
+}
+
+export function getKeepDisplayAwakeDescription(): string {
+  return translate(
+    KEEP_DISPLAY_AWAKE_DESCRIPTION_KEY,
+    'Also blocks display sleep while keeping this Mac awake. Display sleep can trigger the screen lock, which can lock the SSH agent provided by 1Password and similar tools — git pushes from running agents can then fail.'
   )
 }
 

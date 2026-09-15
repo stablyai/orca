@@ -10155,6 +10155,8 @@
           "6f7a8b9cad": "Utilisez un chemin relatif (ex. .orca/worktrees) pour un emplacement par projet, ou un chemin absolu pour un dossier partagé unique."
         },
         "agent-awake-copy": {
+          "keepDisplayAwakeTitle": "Garder l’écran actif",
+          "keepDisplayAwakeDescription": "Bloque aussi la veille de l’écran tant que ce Mac reste actif. La veille de l’écran peut déclencher le verrouillage de la session, qui peut verrouiller l’agent SSH de 1Password et les outils similaires ; les git push des agents en cours peuvent alors échouer.",
           "e5995ce268": "Empêcher la mise en veille de l'ordinateur pendant que les agents travaillent",
           "95d3031db2": "Maintient cet ordinateur et cet écran éveillés pendant que les agents travaillent. Le comportement à la fermeture du capot suit les paramètres d'alimentation de cet appareil.",
           "a42f6fbdd8": "Maintient cet ordinateur et cet écran éveillés pendant que les agents travaillent. Orca demande également à cet appareil de rester éveillé lorsque le capot est fermé, sous réserve de sa politique d'alimentation.",

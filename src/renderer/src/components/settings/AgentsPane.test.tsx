@@ -4,11 +4,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { computerAwakeSettingsForMode } from '../../../../shared/computer-awake-mode'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-copy'
 import { getAgentStatusHooksTitle } from './agent-status-hooks-copy'
-import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy'
+import {
+  getAgentAwakeDescription,
+  getAgentAwakeTitle,
+  getKeepDisplayAwakeTitle
+} from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import type * as AgentRuntimeSettingModule from './AgentRuntimeSetting'
@@ -115,6 +120,37 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   }
   if (element.props?.control) {
     visit(element.props.control, cb)
+  }
+}
+
+function findSwitchRowByLabel(node: unknown, label: string): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.props.label === label && typeof entry.props.checked === 'boolean') {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error(`switch row "${label}" not found`)
+  }
+  return found
+}
+
+function invokeSwitchChange(row: ReactElementLike, checked: boolean): void {
+  const onChange = row.props.onChange
+  if (typeof onChange !== 'function') {
+    throw new Error('switch row has no onChange handler')
+  }
+  onChange(checked)
+}
+
+/** userAgent is a prototype getter, so the own-property override just gets deleted afterwards. */
+function withUserAgent<T>(userAgent: string, run: () => T): T {
+  Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true })
+  try {
+    return run()
+  } finally {
+    Reflect.deleteProperty(navigator, 'userAgent')
   }
 }
 
@@ -342,6 +378,52 @@ describe('AgentsPane', () => {
       computerAwakeMode: 'auto',
       keepComputerAwakeWhileAgentsRun: true
     })
+  })
+
+  it('renders the display toggle on macOS only and disables it while keep-awake is off', () => {
+    const updateSettings = vi.fn()
+    const displayTitle = getKeepDisplayAwakeTitle()
+    const macUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+
+    const offElement = withUserAgent(macUserAgent, () =>
+      AgentAwakeSetting({ settings: getDefaultSettings('/tmp'), updateSettings })
+    )
+    const offRow = findSwitchRowByLabel(offElement, displayTitle)
+    expect(offRow.props.disabled).toBe(true)
+    expect(offRow.props.checked).toBe(false)
+
+    const autoElement = withUserAgent(macUserAgent, () =>
+      AgentAwakeSetting({
+        settings: { ...getDefaultSettings('/tmp'), ...computerAwakeSettingsForMode('auto') },
+        updateSettings
+      })
+    )
+    const autoRow = findSwitchRowByLabel(autoElement, displayTitle)
+    expect(autoRow.props.disabled).toBe(false)
+    invokeSwitchChange(autoRow, true)
+    expect(updateSettings).toHaveBeenCalledWith({ keepDisplayAwake: true })
+
+    const windowsElement = withUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)', () =>
+      AgentAwakeSetting({ settings: getDefaultSettings('/tmp'), updateSettings })
+    )
+    expect(() => findSwitchRowByLabel(windowsElement, displayTitle)).toThrow('not found')
+  })
+
+  it('indexes the display toggle for settings search only where it renders', () => {
+    const macEntries = getAgentsPaneSearchEntries({ includeKeepDisplayAwake: true })
+    expect(matchesSettingsSearch('1password', macEntries)).toBe(true)
+    expect(matchesSettingsSearch('screen lock', macEntries)).toBe(true)
+    expect(matchesSettingsSearch(getKeepDisplayAwakeTitle(), macEntries)).toBe(true)
+
+    const otherPlatformEntries = getAgentsPaneSearchEntries({ includeKeepDisplayAwake: false })
+    expect(matchesSettingsSearch('1password', otherPlatformEntries)).toBe(false)
+
+    // Web clients hide the whole keep-awake block, so the display row goes with it.
+    const webEntries = getAgentsPaneSearchEntries({
+      includeAgentAwake: false,
+      includeKeepDisplayAwake: true
+    })
+    expect(matchesSettingsSearch('1password', webEntries)).toBe(false)
   })
 
   it('toggles the agent status hook setting with the next value', () => {
