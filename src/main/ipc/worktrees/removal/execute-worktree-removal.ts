@@ -11,6 +11,7 @@ import { resolveWorktreeRemovalMetadata } from '../../../worktree-removal-repo-o
 import { isPrunableGitFileWorktree } from '../../../worktree-prunable-git-file'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
 import { removeStaleLocalWorktreeRegistration } from '../../../local-worktree-removal-recovery'
+import { resolveWorktreeRemovalHomeForConnection } from '../../../worktree-removal-execution-host-route'
 import { runHook } from '../../../hooks'
 import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../worktree-archive-hook-gate'
@@ -59,7 +60,8 @@ export async function executeWorktreeRemoval(
   const registeredWorktree = findRegisteredDeletableWorktree(
     repo.path,
     worktreePath,
-    registeredWorktrees
+    registeredWorktrees,
+    resolveWorktreeRemovalHomeForConnection(repo.connectionId)
   )
   if (!registeredWorktree) {
     return removeUnregisteredWorktree(

@@ -29,6 +29,11 @@
 
 import type { ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import {
+  CLIENT_REMOVAL_HOME,
+  executionHostRemovalHome,
+  type WorktreeRemovalHomeAuthority
+} from './worktree-removal-home-guard'
+import {
   ExecutionHostNotDispatchableError,
   resolveFilesystemRouteForHost,
   resolveGitRouteForHost
@@ -73,6 +78,43 @@ export function resolveWorktreeRemovalRoute(hostId: ExecutionHostId): WorktreeRe
       }
     }
   }
+}
+
+/**
+ * Reads the `$HOME` an active SSH session resolved on its host.
+ *
+ * Injected the same way `setSshActiveMultiplexerResolver` is, because importing
+ * the session table here would run its registration inside every suite that
+ * partially mocks the SSH registry. Unresolved stays `null` — "unknown", never
+ * "this client's home".
+ */
+let sshHostHomeResolver: (connectionId: string) => string | null = () => null
+
+export function setWorktreeRemovalSshHostHomeResolver(
+  resolver: (connectionId: string) => string | null
+): void {
+  sshHostHomeResolver = resolver
+}
+
+/**
+ * Whose home directory the removal's safety guards may consult — one answer for
+ * the whole removal, taken from the same route that owns the filesystem.
+ */
+export function resolveWorktreeRemovalHome(
+  route: WorktreeRemovalRoute
+): WorktreeRemovalHomeAuthority {
+  return resolveWorktreeRemovalHomeForConnection(
+    route.kind === 'ssh' ? route.connectionId : undefined
+  )
+}
+
+/** The same answer for the callers that still carry `repo.connectionId` instead of a route. */
+export function resolveWorktreeRemovalHomeForConnection(
+  connectionId: string | null | undefined
+): WorktreeRemovalHomeAuthority {
+  return connectionId
+    ? executionHostRemovalHome(sshHostHomeResolver(connectionId))
+    : CLIENT_REMOVAL_HOME
 }
 
 /** The connection to teardown PTYs, watchers and history against — `undefined` on a local host. */
