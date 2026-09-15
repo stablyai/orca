@@ -80,7 +80,7 @@ async function reopenAfterCrash(
     fence: 1
   })
   const restarted = await open()
-  await restarted.markPendingSubmissionsUnknown(2)
+  await restarted.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' })
   return restarted
 }
 
@@ -210,7 +210,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
       fence: 1
     })
     const restarted = await open()
-    await restarted.markPendingSubmissionsUnknown(2)
+    await restarted.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' })
 
     await reconcileJournalSubmissionsAgainstHistory({
       journal: restarted,
@@ -242,7 +242,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
       fence: 1
     })
     const restarted = await open()
-    await restarted.markPendingSubmissionsUnknown(2)
+    await restarted.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' })
 
     await reconcileJournalSubmissionsAgainstHistory({
       journal: restarted,
@@ -268,7 +268,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
       })
     }
     const restarted = await open()
-    await restarted.markPendingSubmissionsUnknown(2)
+    await restarted.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' })
 
     await reconcileJournalSubmissionsAgainstHistory({
       journal: restarted,

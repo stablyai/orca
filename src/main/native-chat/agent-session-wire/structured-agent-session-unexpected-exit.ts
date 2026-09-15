@@ -77,7 +77,11 @@ export async function settleUnexpectedStructuredAgentSessionExit<
 
     let settlementFailed = false
     const stableSettlementId = providerExitSettlementId(unexpectedEvent)
-    const unfinishedWork = captureUnfinishedStructuredAgentSessionWork(session.journal)
+    const unfinishedWork = captureUnfinishedStructuredAgentSessionWork(
+      session.journal,
+      session.fence,
+      session.fence
+    )
     let released: Awaited<
       ReturnType<typeof releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit>
     > | null = null
@@ -99,7 +103,9 @@ export async function settleUnexpectedStructuredAgentSessionExit<
         showUnexpectedExitOutcome: unfinishedStructuredAgentSessionWorkWasInterrupted(
           unfinishedWork,
           session.journal,
-          observedAt
+          observedAt,
+          session.fence,
+          session.fence
         )
       }))
     } finally {
@@ -135,7 +141,7 @@ export async function settleUnexpectedStructuredAgentSessionExit<
         }
       }
     }
-    if (settlementFailed || !released) {
+    if (!released) {
       return null
     }
     if (!context.hasResumeCapableHolder(unexpectedEvent.sessionId)) {
@@ -189,12 +195,16 @@ async function retryUnexpectedExitSettlement(input: {
     journal: input.session.journal,
     sessionId: input.event.sessionId,
     fence: input.session.fence,
+    fromFence: input.session.fence,
     settlementId: input.stableSettlementId,
     verdict: input.verdict,
     pendingSubmissionReason: 'provider_exited_before_acknowledgement',
     showUnexpectedExitOutcome: input.showUnexpectedExitOutcome,
     unexpectedExitReason: input.event.reason,
-    onError: input.context.onBarrierError
+    onError: (id, error) => {
+      input.context.onBarrierError?.(id, error)
+      console.error('agent-session provider-exit settlement deferred', id, error)
+    }
   })
 }
 

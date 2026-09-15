@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session-wire'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
@@ -66,5 +70,57 @@ describe('conversationCommandBlocked background tasks', () => {
     expect(conversationCommandBlocked(ctx, RECORD)).toBe(
       'Wait for the current turn to finish before using this command.'
     )
+  })
+
+  it('does not let an earlier owner block a conversation command', () => {
+    const ctx = contextWith(null)
+    ctx.journal.snapshot = () => ({
+      sessionId: 'session-1',
+      cursor: { epoch: 'epoch', sequence: 1 },
+      submissions: [],
+      items: [
+        {
+          itemId: 'old-turn',
+          revision: 1,
+          sequence: 1,
+          observedAt: 1,
+          ownerFence: 7,
+          body: { kind: 'turn', turnId: 'old', state: 'running' }
+        },
+        {
+          itemId: 'old-prompt',
+          revision: 1,
+          sequence: 2,
+          observedAt: 2,
+          ownerFence: 7,
+          body: {
+            kind: 'approval',
+            title: 'Old',
+            detail: null,
+            options: [],
+            resolution: {
+              state: 'pending',
+              selectedOptionId: null,
+              resolvedBy: null,
+              resolvedAt: null
+            }
+          }
+        }
+      ]
+    })
+    ctx.journal.submissions = () => [
+      {
+        clientMessageId: 'old',
+        fence: 7,
+        payloadFingerprint: 'fp',
+        dispatchState: 'pending',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null
+      }
+    ]
+    const record = agentSessionRecordFixture(agentSessionLeaseFixture({ runtimeFence: 9 }))
+    expect(conversationCommandBlocked(ctx, record)).toBeNull()
   })
 })

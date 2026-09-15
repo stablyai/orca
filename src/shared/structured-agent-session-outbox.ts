@@ -95,7 +95,8 @@ export function requeueStructuredAgentSessionSendRefusal(
 
 export function reconcileStructuredAgentSessionOutbox(
   entries: readonly StructuredAgentSessionOutboxEntry[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmission[],
+  currentFence?: number | null
 ): StructuredAgentSessionOutboxEntry[] {
   const settled = new Map(submissions.map((entry) => [entry.clientMessageId, entry]))
   return entries.flatMap((entry) => {
@@ -109,6 +110,13 @@ export function reconcileStructuredAgentSessionOutbox(
     ) {
       return []
     }
+    if (submission && currentFence != null && submission.fence < currentFence) {
+      return [
+        entry.state === 'unconfirmed' && entry.retryAfterUnknownSubmittedAt === -1
+          ? entry
+          : { ...entry, state: 'unconfirmed' as const, retryAfterUnknownSubmittedAt: -1 }
+      ]
+    }
     if (submission?.dispatchState === 'pending') {
       return entry.state === 'dispatching' ? [entry] : [{ ...entry, state: 'dispatching' as const }]
     }
@@ -120,6 +128,23 @@ export function reconcileStructuredAgentSessionOutbox(
       return [{ ...entry, state: 'unconfirmed' as const }]
     }
     return [entry]
+  })
+}
+
+/** A dead owner's unresolved send remains visible but cannot own the new writer's FIFO. */
+export function structuredAgentSessionDispatchHead(
+  entries: readonly StructuredAgentSessionOutboxEntry[],
+  submissions: readonly AgentJournalSubmission[],
+  currentFence: number
+): StructuredAgentSessionOutboxEntry | undefined {
+  const byId = new Map(submissions.map((submission) => [submission.clientMessageId, submission]))
+  return entries.find((entry) => {
+    const submission = byId.get(entry.clientMessageId)
+    return (
+      !submission ||
+      (submission.fence >= currentFence &&
+        !(submission.dispatchState === 'unknown' && submission.recovered === true))
+    )
   })
 }
 

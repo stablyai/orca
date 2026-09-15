@@ -165,6 +165,37 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
   })
 
+  it('makes Retry on an old-fence head dispatchable under a new identity', async () => {
+    mocks.call.mockReturnValue(new Promise(() => {}))
+    const emptySubmissions: readonly AgentJournalSubmission[] = []
+    const { result, rerender } = renderHook(
+      ({ fence, submissions }: { fence: number; submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence,
+          submissions
+        }),
+      { initialProps: { fence: 1, submissions: emptySubmissions } }
+    )
+    act(() => expect(result.current.send('retry me')).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    const oldId = result.current.outbox[0]!.clientMessageId
+    rerender({ fence: 2, submissions: [pendingResultFor(oldId, 10).value.submission] })
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
+    expect(mocks.call).toHaveBeenCalledOnce()
+
+    act(() => result.current.retry(oldId))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    expect(mocks.call.mock.calls[1]?.[2]).toMatchObject({
+      envelope: {
+        expectedRuntimeFence: 2,
+        clientOperationId: result.current.outbox[0]?.clientMessageId
+      }
+    })
+    expect(result.current.outbox[0]?.clientMessageId).not.toBe(oldId)
+  })
+
   it.each(['agent_session_operation_conflict', 'agent_session_operation_expired'] as const)(
     'rotates a send operation after %s',
     async (code) => {
@@ -236,6 +267,40 @@ describe('useStructuredAgentSessionOutbox', () => {
     })
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
     expect(result.current.error).toBeNull()
+  })
+
+  it('keeps an old pending send visible while dispatching a new owner send', async () => {
+    const initialSubmissions: readonly AgentJournalSubmission[] = []
+    mocks.call.mockImplementation(async (_target, _method, params) => {
+      return params.body.blocks[0]?.text === 'old'
+        ? pendingResultFor(params.envelope.clientOperationId, 10)
+        : acceptedResultFor(params.envelope.clientOperationId, 3)
+    })
+    const { result, rerender } = renderHook(
+      ({ fence, submissions }: { fence: number; submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence,
+          submissions
+        }),
+      { initialProps: { fence: 1, submissions: initialSubmissions } }
+    )
+
+    act(() => expect(result.current.send('old')).toBe(true))
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('dispatching'))
+    const oldId = result.current.outbox[0]!.clientMessageId
+    rerender({ fence: 3, submissions: [pendingResultFor(oldId, 10).value.submission] })
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
+
+    act(() => expect(result.current.send('new')).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    expect(mocks.call.mock.calls[1]?.[2]).toMatchObject({
+      envelope: { expectedRuntimeFence: 3 },
+      body: { blocks: [{ text: 'new' }] }
+    })
+    await waitFor(() => expect(result.current.outbox).toHaveLength(1))
+    expect(result.current.outbox[0]).toMatchObject({ clientMessageId: oldId, state: 'unconfirmed' })
   })
 
   it('lets no transport error reopen a send the journal already settled', async () => {

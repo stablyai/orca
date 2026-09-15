@@ -96,9 +96,11 @@ export async function handoffStructuredSessionToNative(
     })
   }
   if (record.lease.settlementRetryRequired) {
-    const settled = await deps.retryPendingSettlement(sessionId)
-    if (!settled) {
-      throw new Error('The provider-exit terminal journal settlement is still pending.')
+    // Bookkeeping is a hint, never a condition on the next owner's admission.
+    try {
+      await deps.retryPendingSettlement(sessionId)
+    } catch (error) {
+      console.error('agent-session handoff settlement deferred', sessionId, error)
     }
     record = context.requireRecord(sessionId)
   }

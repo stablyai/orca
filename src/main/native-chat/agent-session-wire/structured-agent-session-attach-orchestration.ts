@@ -21,8 +21,15 @@ import {
   pinnedAgentSessionLaunchEnv
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
-import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
-import { settleStaleSessionStateOnAcquire } from './structured-agent-session-stale-turn-verdict'
+import {
+  turnVerdictFromDeathEvidence,
+  UNVERIFIABLE_TURN_VERDICT
+} from './structured-agent-session-stale-turn-verdict'
+import {
+  captureUnfinishedStructuredAgentSessionWork,
+  settleStructuredAgentSessionDeadGeneration,
+  unfinishedStructuredAgentSessionWorkWasInterrupted
+} from './structured-agent-session-dead-generation-settlement'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { forgetStructuredAgentSession } from './structured-agent-session-host-lifetime'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -49,21 +56,8 @@ export function attachStructuredAgentSession(
       return refuseAgentSessionMutation(unreconciled)
     }
     await context.runtimeState.resolveRecovery(sessionId)
-    // Retries a durable provider-exit journal settlement before a new owner is reserved. Answers
-    // settled when the record has none pending, so every attach can ask unconditionally.
-    const settled = await retryPendingStructuredAgentSessionSettlement({
-      deps: context.deps,
-      sessions: context.sessions,
-      sessionId,
-      params,
-      now: () => context.now()
-    })
-    if (!settled) {
-      return refuseAgentSessionMutation({
-        code: 'agent_session_ownership_unknown',
-        message: 'The provider-exit terminal journal settlement is still pending; retry attach.'
-      })
-    }
+    // A death hint is read before reservation clears it. Bookkeeping never gates attach or send.
+    const previousLease = context.deps.store.getRecord(sessionId)?.lease
     const eventSink = context.runtimeState.eventSinkFor(sessionId)
     const attached = await performAttach({
       rewind,
@@ -100,18 +94,118 @@ export function attachStructuredAgentSession(
         const fence = context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
         const previous = context.sessions.get(sessionId)
         const previousFence = previous?.fence
+        let settleAcquiredGeneration: (() => Promise<void>) | undefined
+        if (acquiredOwner) {
+          const verdict = turnVerdictFromDeathEvidence(previousLease?.deathEvidence)
+          const throughFence = previousLease?.settlementRetryFence ?? fence - 1
+          const settlementId =
+            previousLease?.settlementRetryId ??
+            `stale-generation:${sessionId}:${fence}:${acquisitionGeneration ?? 'unknown'}`
+          const pendingSettlementWork = captureUnfinishedStructuredAgentSessionWork(
+            attached.journal,
+            throughFence,
+            throughFence
+          )
+          if (
+            previousLease?.settlementRetryRequired ||
+            pendingSettlementWork.hadUnsettledSubmissions ||
+            pendingSettlementWork.items.length > 0
+          ) {
+            settleAcquiredGeneration = async () => {
+              // Record the obligation before doing any best-effort writes. The latch keeps a
+              // failed settlement recoverable even if this owner exits before the retry finishes.
+              try {
+                await context.deps.store.transitionHandoff(sessionId, (latest) => {
+                  if (
+                    latest.lease.runtimeFence !== fence ||
+                    latest.lease.claimStatus !== 'live' ||
+                    latest.lease.settlementRetryRequired
+                  ) {
+                    return latest
+                  }
+                  return {
+                    ...latest,
+                    lease: {
+                      ...latest.lease,
+                      settlementRetryRequired: true,
+                      settlementRetryId: settlementId,
+                      settlementRetryFence: throughFence,
+                      deathEvidence: previousLease?.deathEvidence ?? latest.lease.deathEvidence
+                    }
+                  }
+                })
+              } catch (error) {
+                context.deps.onEventSinkError?.({ sessionId, error })
+              }
+              const priorSettled = await settleStructuredAgentSessionDeadGeneration({
+                journal: attached.journal,
+                sessionId,
+                fence,
+                throughFence: throughFence - 1,
+                settlementId: `${settlementId}:prior`,
+                verdict: UNVERIFIABLE_TURN_VERDICT,
+                pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+                showUnexpectedExitOutcome: false,
+                onError: (id, error) => context.deps.onEventSinkError?.({ sessionId: id, error })
+              })
+              const work = pendingSettlementWork
+              const settled = await settleStructuredAgentSessionDeadGeneration({
+                journal: attached.journal,
+                sessionId,
+                fence,
+                throughFence,
+                fromFence: throughFence,
+                settlementId,
+                verdict,
+                pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+                submissionRecoveryMode: 'new-owner-not-publishing',
+                showUnexpectedExitOutcome:
+                  verdict.state === 'interrupted' &&
+                  (attached.unconfirmedClientMessageIds.length > 0 ||
+                    unfinishedStructuredAgentSessionWorkWasInterrupted(
+                      work,
+                      attached.journal,
+                      verdict.completedAt,
+                      throughFence,
+                      throughFence
+                    )),
+                // A later generation has cleared the old exit detail; use generic copy then.
+                ...(previousLease?.settlementRetryRequired && previousLease.deathEvidence?.detail
+                  ? { unexpectedExitReason: previousLease.deathEvidence.detail }
+                  : {}),
+                onError: (id, error) => {
+                  context.deps.onEventSinkError?.({ sessionId: id, error })
+                  console.error('agent-session dead-generation settlement deferred', id, error)
+                }
+              })
+              if (settled && priorSettled) {
+                try {
+                  await context.deps.store.transitionHandoff(sessionId, (latest) => ({
+                    ...latest,
+                    lease:
+                      latest.lease.settlementRetryRequired === true &&
+                      latest.lease.settlementRetryId === settlementId
+                        ? {
+                            ...latest.lease,
+                            settlementRetryRequired: undefined,
+                            settlementRetryId: undefined,
+                            settlementRetryFence: undefined
+                          }
+                        : latest.lease
+                  }))
+                } catch (error) {
+                  context.deps.onEventSinkError?.({ sessionId, error })
+                }
+              }
+              // Detached writes still need a publication edge so live clients and the status feed
+              // observe the durable terminal rows without waiting for another provider event.
+              context.subscribers.publish(sessionId, attached.journal)
+            }
+          }
+        }
         // Site 8: the provisional journal has no owner until the map takes it,
         // and the barrier below throws by design.
         try {
-          if (acquiredOwner) {
-            // Before the drain: the buffered events are the new child's, never a stale row's.
-            await settleStaleSessionStateOnAcquire({
-              journal: attached.journal,
-              sessionId,
-              fence,
-              acquisitionGeneration
-            })
-          }
           await bindAndDrain(eventSink, attached.journal, fence, (activity) =>
             context.subscribers.publish(sessionId, attached.journal, activity)
           )
@@ -155,6 +249,15 @@ export function attachStructuredAgentSession(
           context.subscribers.snapshot(sessionId, attached.journal, fence)
         } else {
           context.subscribers.publish(sessionId, attached.journal)
+        }
+        // Settlement is recovery bookkeeping. It may append rows after the new owner starts
+        // publishing, but it must never hold the attach/send path on a storage operation that
+        // does not settle.
+        if (settleAcquiredGeneration) {
+          void settleAcquiredGeneration().catch((error) => {
+            context.deps.onEventSinkError?.({ sessionId, error })
+            console.error('agent-session dead-generation settlement deferred', sessionId, error)
+          })
         }
       }
     })

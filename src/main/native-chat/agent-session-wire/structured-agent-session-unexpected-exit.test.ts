@@ -246,7 +246,10 @@ describe('provider-exit recovery tickets', () => {
     expect(result).toMatchObject({ releasedFence: 8 })
     expect(session.journal.markPendingSubmissionsUnknown).toHaveBeenCalledWith(
       7,
-      'provider_exited_before_acknowledgement'
+      { mode: 'death-confirmed' },
+      'provider_exited_before_acknowledgement',
+      7,
+      7
     )
     expect(session.hasProviderChild).toBe(false)
     // The running row is revised to interrupted at exit receipt, never tombstoned.
@@ -368,7 +371,7 @@ describe('provider-exit recovery tickets', () => {
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
         markPendingSubmissionsUnknown,
-        submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending' }]
+        submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending', fence: 7 }]
       }
     }
 
@@ -393,7 +396,10 @@ describe('provider-exit recovery tickets', () => {
 
     expect(markPendingSubmissionsUnknown).toHaveBeenCalledWith(
       7,
-      'provider_exited_before_acknowledgement'
+      { mode: 'death-confirmed' },
+      'provider_exited_before_acknowledgement',
+      7,
+      7
     )
     expect(session.journal.appendLifecycleBatch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -406,7 +412,7 @@ describe('provider-exit recovery tickets', () => {
     )
   })
 
-  it('does not release or reacquire while terminal settlement retry is still failing', async () => {
+  it('releases for reacquisition while terminal settlement retry is still failing', async () => {
     const session: StructuredAgentSessionUnexpectedExitSession = {
       hasProviderChild: true,
       fence: 7,
@@ -444,7 +450,7 @@ describe('provider-exit recovery tickets', () => {
     }
     const result = await settleUnexpectedStructuredAgentSessionExit(context, event)
 
-    expect(result).toBeNull()
+    expect(result).toMatchObject({ releasedFence: 8 })
     expect(session.hasProviderChild).toBe(false)
     expect(session.fence).toBe(8)
     expect(publishFence).toHaveBeenCalledTimes(1)

@@ -4,6 +4,7 @@ import type {
   AgentSessionHandoffStatus
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { liveStructuredAgentSessionItems } from '../../../shared/structured-agent-session-projection'
 import type {
   StructuredAgentSessionHandoffTransport,
   StructuredTuiOwner
@@ -89,14 +90,15 @@ function persistedFailedStructuredHandoffStatus(
   }
 }
 
-export function structuredSessionHasPendingPrompt(journal: AgentSessionJournal): boolean {
-  return journal
-    .snapshot()
-    .items.some(
-      (item) =>
-        (item.body.kind === 'approval' || item.body.kind === 'question') &&
-        item.body.resolution.state === 'pending'
-    )
+export function structuredSessionHasPendingPrompt(
+  journal: AgentSessionJournal,
+  fence: number
+): boolean {
+  return liveStructuredAgentSessionItems(journal.snapshot().items, fence).some(
+    (item) =>
+      (item.body.kind === 'approval' || item.body.kind === 'question') &&
+      item.body.resolution.state === 'pending'
+  )
 }
 
 export function switchingStructuredHandoffStatus(

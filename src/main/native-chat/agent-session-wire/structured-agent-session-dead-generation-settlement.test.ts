@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -79,6 +79,148 @@ async function seedUnfinishedWork(): Promise<void> {
 }
 
 describe('dead structured-session generation settlement', () => {
+  it('re-derives uncommitted chunks after an earlier lifecycle chunk committed', async () => {
+    for (let ordinal = 1; ordinal <= 205; ordinal += 1) {
+      await journal.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'bulk', ordinal },
+        { kind: 'tool-call', name: 'shell', input: {}, state: 'running' },
+        { fence: 7 }
+      )
+    }
+    const append = journal.appendLifecycleBatch.bind(journal)
+    let calls = 0
+    vi.spyOn(journal, 'appendLifecycleBatch').mockImplementation(async (input) => {
+      calls += 1
+      if (calls === 2) {
+        throw new Error('second chunk unavailable')
+      }
+      return append(input)
+    })
+    const settle = () =>
+      settleStructuredAgentSessionDeadGeneration({
+        journal,
+        sessionId: SESSION,
+        fence: 8,
+        throughFence: 7,
+        settlementId: 'bulk-old-owner',
+        pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+        verdict: { state: 'unverifiable' },
+        showUnexpectedExitOutcome: false
+      })
+
+    expect(await settle()).toBe(false)
+    expect(
+      journal
+        .snapshot()
+        .items.some((item) => item.body.kind === 'tool-call' && item.body.state === 'running')
+    ).toBe(true)
+    expect(await settle()).toBe(true)
+    expect(
+      journal
+        .snapshot()
+        .items.filter((item) => item.body.kind === 'tool-call' && item.body.state === 'failed')
+    ).toHaveLength(205)
+  })
+
+  it('re-derives only the dead owner after a replacement has published new work', async () => {
+    await seedUnfinishedWork()
+    await journal.appendSubmission({
+      clientMessageId: 'client-new',
+      payloadFingerprint: 'new-fingerprint',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'new turn' }] },
+      fence: 8
+    })
+    await journal.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-new', ordinal: 1 },
+      { kind: 'turn', turnId: 'turn-new', state: 'running' },
+      { fence: 8 }
+    )
+    await journal.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-new', ordinal: 2 },
+      {
+        kind: 'question',
+        question: 'New owner?',
+        options: [{ id: 'yes', label: 'Yes' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      { fence: 8 }
+    )
+
+    expect(
+      await settleStructuredAgentSessionDeadGeneration({
+        journal,
+        sessionId: SESSION,
+        fence: 8,
+        throughFence: 7,
+        settlementId: 'old-owner',
+        pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+        verdict: { state: 'interrupted', completedAt: 1_001 }
+      })
+    ).toBe(true)
+    expect(journal.submissions()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ clientMessageId: 'client-1', dispatchState: 'unknown' }),
+        expect.objectContaining({ clientMessageId: 'client-new', dispatchState: 'pending' })
+      ])
+    )
+    expect(journal.snapshot().items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ownerFence: 7,
+          body: expect.objectContaining({ state: 'interrupted' })
+        }),
+        expect.objectContaining({
+          ownerFence: 8,
+          body: expect.objectContaining({ state: 'running' })
+        }),
+        expect.objectContaining({
+          ownerFence: 8,
+          body: expect.objectContaining({
+            resolution: expect.objectContaining({ state: 'pending' })
+          })
+        })
+      ])
+    )
+  })
+
+  it('leaves a replacement prompt pending when it is published after settlement', async () => {
+    await seedUnfinishedWork()
+    await settleStructuredAgentSessionDeadGeneration({
+      journal,
+      sessionId: SESSION,
+      fence: 8,
+      settlementId: 'acquire-before-bind',
+      pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+      verdict: { state: 'unverifiable' },
+      showUnexpectedExitOutcome: false
+    })
+    await journal.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'replacement', ordinal: 1 },
+      {
+        kind: 'approval',
+        title: 'Replacement approval',
+        detail: null,
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      { fence: 8 }
+    )
+    expect(journal.snapshot().items.map((item) => item.body)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'approval',
+          title: 'Run command?',
+          resolution: expect.objectContaining({ state: 'cancelled' })
+        }),
+        expect.objectContaining({
+          kind: 'approval',
+          title: 'Replacement approval',
+          resolution: expect.objectContaining({ state: 'pending' })
+        })
+      ])
+    )
+  })
+
   it('settles probe-proven work as unverifiable without a technical chat row or fake end time', async () => {
     await seedUnfinishedWork()
 

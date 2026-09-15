@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
@@ -37,7 +38,7 @@ export function unexpectedProviderExitOutcome(reason?: string): string {
 
 type DeadGenerationSubmission = Pick<
   ReturnType<AgentSessionJournal['submissions']>[number],
-  'clientMessageId' | 'dispatchState' | 'recovered'
+  'clientMessageId' | 'dispatchState' | 'recovered' | 'fence'
 >
 
 export type DeadGenerationJournal = {
@@ -54,30 +55,48 @@ export type StructuredAgentSessionUnfinishedWork = {
 }
 
 export function captureUnfinishedStructuredAgentSessionWork(
-  journal: DeadGenerationJournal
+  journal: DeadGenerationJournal,
+  throughFence = Number.MAX_SAFE_INTEGER,
+  fromFence = 0
 ): StructuredAgentSessionUnfinishedWork {
   return {
-    items: journal.snapshot().items.filter(isUnfinishedItem),
-    hadUnsettledSubmissions: hasUnsettledSubmission(journal)
+    items: journal
+      .snapshot()
+      .items.filter(
+        (item) =>
+          belongsToSettledGeneration(item, fromFence, throughFence) && isUnfinishedItem(item)
+      ),
+    hadUnsettledSubmissions: hasUnsettledSubmission(journal, fromFence, throughFence)
   }
 }
 
-function hasUnfinishedStructuredAgentSessionWork(journal: DeadGenerationJournal): boolean {
-  const work = captureUnfinishedStructuredAgentSessionWork(journal)
+function hasUnfinishedStructuredAgentSessionWork(
+  journal: DeadGenerationJournal,
+  throughFence: number,
+  fromFence: number
+): boolean {
+  const work = captureUnfinishedStructuredAgentSessionWork(journal, throughFence, fromFence)
   return work.hadUnsettledSubmissions || work.items.length > 0
 }
 
 export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   before: StructuredAgentSessionUnfinishedWork,
   journal: DeadGenerationJournal,
-  observedExitAt: number
+  observedExitAt: number,
+  throughFence = Number.MAX_SAFE_INTEGER,
+  fromFence = 0
 ): boolean {
-  const currentSnapshot = journal.snapshot()
-  if (hasUnsettledSubmission(journal) || currentSnapshot.items.some(isInProgressItem)) {
+  const currentSnapshot = journal
+    .snapshot()
+    .items.filter((item) => belongsToSettledGeneration(item, fromFence, throughFence))
+  if (
+    hasUnsettledSubmission(journal, fromFence, throughFence) ||
+    currentSnapshot.some(isInProgressItem)
+  ) {
     return true
   }
   if (
-    currentSnapshot.items.some((item) => {
+    currentSnapshot.some((item) => {
       const turn = readAgentJournalTurn(item.body)
       return turn?.state === 'interrupted' && turn.completedAt === observedExitAt
     })
@@ -88,7 +107,7 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   if (inProgressBefore.length === 0) {
     return false
   }
-  const currentItems = new Map(currentSnapshot.items.map((item) => [item.itemId, item]))
+  const currentItems = new Map(currentSnapshot.map((item) => [item.itemId, item]))
   const runningTurns = inProgressBefore.filter(
     (item) => readAgentJournalTurn(item.body)?.state === 'running'
   )
@@ -100,22 +119,40 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
   journal: DeadGenerationJournal
   sessionId: string
   fence: number
+  /** The dead owner's last fence; later owners' rows are never settlement targets. */
+  throughFence?: number
+  fromFence?: number
   settlementId: string
   verdict: StructuredAgentSessionTurnVerdict
   pendingSubmissionReason: string
+  submissionRecoveryMode?: 'death-confirmed' | 'new-owner-not-publishing'
   showUnexpectedExitOutcome?: boolean
   /** Why the provider stopped, when the host has it. Rendered with the outcome copy. */
   unexpectedExitReason?: string
   onError?: (sessionId: string, error: unknown) => void
 }): Promise<boolean> {
   try {
-    const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal)
+    const throughFence = input.throughFence ?? input.fence
+    const fromFence = input.fromFence ?? 0
+    const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(
+      input.journal,
+      throughFence,
+      fromFence
+    )
     const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? hasUnfinishedWork
     if (!showUnexpectedExitOutcome && !hasUnfinishedWork) {
       return true
     }
-    await input.journal.markPendingSubmissionsUnknown(input.fence, input.pendingSubmissionReason)
-    const items = input.journal.snapshot().items
+    await input.journal.markPendingSubmissionsUnknown(
+      input.fence,
+      { mode: input.submissionRecoveryMode ?? 'death-confirmed' },
+      input.pendingSubmissionReason,
+      throughFence,
+      fromFence
+    )
+    const items = input.journal
+      .snapshot()
+      .items.filter((item) => belongsToSettledGeneration(item, fromFence, throughFence))
     const mutations: JournalLifecycleMutationInput[] = []
     if (showUnexpectedExitOutcome) {
       mutations.push({
@@ -136,9 +173,15 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     }
     mutations.push(...runningTurnLifecycleRevisions(items, input.verdict))
     const batchId = `dead-generation:${input.settlementId}`
-    for (const chunk of partitionJournalLifecycleMutations(batchId, mutations)) {
+    const chunks = partitionJournalLifecycleMutations(batchId, mutations)
+    for (const chunk of chunks) {
       await input.journal.appendLifecycleBatch({
-        settlementId: chunk.settlementId,
+        // A partial commit changes the next partition; content identity prevents a reused
+        // chunk index from suppressing still-unsettled rows.
+        settlementId:
+          chunks.length === 1
+            ? chunk.settlementId
+            : `${chunk.settlementId}:${createHash('sha256').update(JSON.stringify(chunk.mutations)).digest('hex').slice(0, 16)}`,
         fence: input.fence,
         recovered: true,
         mutations: chunk.mutations
@@ -192,13 +235,33 @@ function isCleanlySettled(item: AgentJournalRenderItem | undefined): boolean {
   return false
 }
 
-function hasUnsettledSubmission(journal: DeadGenerationJournal): boolean {
+function belongsToSettledGeneration(
+  item: AgentJournalRenderItem,
+  fromFence: number,
+  throughFence: number
+): boolean {
+  return (
+    item.ownerFence === undefined ||
+    (item.ownerFence >= fromFence && item.ownerFence <= throughFence)
+  )
+}
+
+function hasUnsettledSubmission(
+  journal: DeadGenerationJournal,
+  fromFence: number,
+  throughFence: number
+): boolean {
   const submissions = journal.submissions?.()
   return submissions
     ? submissions.some(
         (submission) =>
-          submission.dispatchState === 'pending' ||
-          (submission.dispatchState === 'unknown' && submission.recovered !== true)
+          submission.fence >= fromFence &&
+          submission.fence <= throughFence &&
+          (submission.dispatchState === 'pending' ||
+            (submission.dispatchState === 'unknown' && submission.recovered !== true))
       )
-    : (journal.pendingSubmissions?.().length ?? 0) > 0
+    : (journal
+        .pendingSubmissions?.()
+        .some((submission) => submission.fence >= fromFence && submission.fence <= throughFence) ??
+        false)
 }

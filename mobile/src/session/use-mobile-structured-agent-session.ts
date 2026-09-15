@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
-import {
-  structuredAgentSessionSendBody,
-  type StructuredAgentSessionAttachment
-} from '../../../src/shared/structured-agent-session-outbox'
+import { structuredAgentSessionSendBody } from '../../../src/shared/structured-agent-session-outbox'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { hasUnansweredStructuredAgentSessionDispatch } from '../../../src/shared/structured-agent-session-projection'
+import {
+  hasUnansweredStructuredAgentSessionDispatch,
+  liveStructuredAgentSessionItems
+} from '../../../src/shared/structured-agent-session-projection'
 import {
   activeStructuredAgentSessionTurnId,
   isStructuredAgentSessionThinking
@@ -26,10 +26,6 @@ import {
   type StructuredAgentSessionMutationResult
 } from './mobile-structured-agent-session-rpc'
 import type { RpcClient } from '../transport/rpc-client'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
-import type { MobileChatQuestion } from './mobile-native-chat-question'
-import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
-import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat-turn-status'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
@@ -40,32 +36,10 @@ import {
   pendingStructuredPromptIdentity,
   requestMobileStructuredAgentSessionCancel
 } from './mobile-structured-agent-session-cancel'
-
-type StructuredMobileAttachment = StructuredAgentSessionAttachment & {
-  id?: string
-  contentFingerprint?: string
-}
-
-type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
-  ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
-    session: MobileNativeChatSession
-    isWorking: boolean
-    turnId: string | null
-    /** What labels the live turn's one indicator row. */
-    turnIndicator: NativeChatLiveTurnIndicator
-    sendWithOutcome: (
-      text: string,
-      images?: string[],
-      deadline?: number,
-      attachments?: readonly StructuredMobileAttachment[]
-    ) => Promise<MobileNativeChatSendOutcome>
-    cancel: () => void
-    permission: MobileChatPermission | null
-    question: MobileChatQuestion | null
-    respondPermission: (optionId: string) => Promise<boolean>
-    respondQuestion: (answer: string) => Promise<boolean>
-    cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
-  }
+import type {
+  StructuredMobileAttachment,
+  StructuredMobileSession
+} from './mobile-structured-agent-session-types'
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -195,11 +169,18 @@ export function useMobileStructuredAgentSession(args: {
           invokeAction: invokeStructuredOption,
           conversationCommands
         },
-        canRun: () =>
-          !activeStructuredAgentSessionTurnId(stateRef.current.items) &&
-          !stateRef.current.items.some(
-            (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
-          ),
+        canRun: () => {
+          const ownerItems = liveStructuredAgentSessionItems(
+            stateRef.current.items,
+            stateRef.current.fence
+          )
+          return (
+            !activeStructuredAgentSessionTurnId(ownerItems) &&
+            !ownerItems.some(
+              (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
+            )
+          )
+        },
         onError: onSendError,
         timeoutMs
       })
@@ -263,20 +244,26 @@ export function useMobileStructuredAgentSession(args: {
     () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
     [state.items, state.submissions]
   )
-  const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const ownerItems = useMemo(
+    () => liveStructuredAgentSessionItems(state.items, state.fence),
+    [state.items, state.fence]
+  )
+  const turnId = activeStructuredAgentSessionTurnId(ownerItems)
   const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
   const activityText =
-    selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
-  const thinking = isStructuredAgentSessionThinking(state.items)
+    selectStructuredAgentTurnActivity(ownerItems, turnId, state.activity)?.text ?? null
+  const thinking = isStructuredAgentSessionThinking(ownerItems)
+  // Stable while the readings hold, so a streaming turn does not re-render the
+  // whole chat surface on every journal batch.
   const turnIndicator = useMemo(() => ({ thinking, activityText }), [thinking, activityText])
   const status = state.status === 'idle' ? 'idle' : state.status
   const approvalPrompt = useMemo(
-    () => state.items.find(pendingStructuredApproval) ?? null,
-    [state.items]
+    () => ownerItems.find(pendingStructuredApproval) ?? null,
+    [ownerItems]
   )
   const questionPrompt = useMemo(
-    () => state.items.find(pendingStructuredQuestion) ?? null,
-    [state.items]
+    () => ownerItems.find(pendingStructuredQuestion) ?? null,
+    [ownerItems]
   )
   return {
     ...options,
@@ -300,7 +287,9 @@ export function useMobileStructuredAgentSession(args: {
       void requestCancel()
     },
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
-      requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current.items)),
+      requestCancel(
+        prompt ?? pendingStructuredPromptIdentity(stateRef.current.items, stateRef.current.fence)
+      ),
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt, groupedDraft),
     respondPermission,

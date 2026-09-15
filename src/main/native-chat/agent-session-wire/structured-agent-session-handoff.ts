@@ -6,7 +6,10 @@ import type {
   AgentSessionMutationResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  liveStructuredAgentSessionItems
+} from '../../../shared/structured-agent-session-projection'
 import {
   admitStructuredHandoffRequest,
   refuseAdmittedStructuredHandoff,
@@ -161,7 +164,12 @@ export class StructuredAgentSessionHandoffCoordinator {
         `The ${expectedOwner} runtime does not own this session.`
       )
     }
-    if (structuredSessionHasPendingPrompt(this.deps.session(record.sessionId).journal)) {
+    if (
+      structuredSessionHasPendingPrompt(
+        this.deps.session(record.sessionId).journal,
+        record.lease.runtimeFence
+      )
+    ) {
       return this.refuseAdmitted(
         callerKey,
         params,
@@ -170,7 +178,10 @@ export class StructuredAgentSessionHandoffCoordinator {
       )
     }
     const turnId = activeStructuredAgentSessionTurnId(
-      this.deps.session(record.sessionId).journal.snapshot().items
+      liveStructuredAgentSessionItems(
+        this.deps.session(record.sessionId).journal.snapshot().items,
+        record.lease.runtimeFence
+      )
     )
     const tuiOwner = this.state.owner(record.sessionId)
     const busy =

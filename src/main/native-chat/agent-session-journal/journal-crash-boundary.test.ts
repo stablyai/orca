@@ -112,7 +112,7 @@ describe('crash between provider accept and journal commit', () => {
 
     const restarted = await open()
     expect(restarted.pendingSubmissions().map((entry) => entry.clientMessageId)).toEqual(['cm_1'])
-    await restarted.markPendingSubmissionsUnknown(2)
+    await restarted.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' })
     expect(restarted.submissions()[0]?.dispatchState).toBe('unknown')
     // Marks the send as outlived by its writer, so no reader reports it as still working.
     expect(restarted.submissions()[0]?.recovered).toBe(true)
@@ -161,11 +161,11 @@ describe('crash between provider accept and journal commit', () => {
     })
     expect(hasUnansweredStructuredAgentSessionDispatch(journal.submissions())).toBe(true)
     const restarted = await open()
-    await restarted.markPendingSubmissionsUnknown(2)
+    await restarted.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' })
     expect(restarted.submissions()[0]?.dispatchState).toBe('unknown')
     expect(hasUnansweredStructuredAgentSessionDispatch(restarted.submissions())).toBe(false)
     const cursor = restarted.cursor()
-    await restarted.markPendingSubmissionsUnknown(2)
+    await restarted.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' })
     expect(restarted.cursor()).toEqual(cursor)
   })
 
@@ -185,7 +185,7 @@ describe('crash between provider accept and journal commit', () => {
     })
 
     const restarted = await open()
-    await restarted.markPendingSubmissionsUnknown(2)
+    await restarted.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' })
 
     // A restart re-opens what it could not answer. This one is already answered,
     // so recovery must not reopen it as doubt.
@@ -215,7 +215,11 @@ describe('crash between provider accept and journal commit', () => {
     })
 
     const restarted = await open()
-    await restarted.markPendingSubmissionsUnknown(2, 'provider_exited_before_acknowledgement')
+    await restarted.markPendingSubmissionsUnknown(
+      2,
+      { mode: 'death-confirmed' },
+      'provider_exited_before_acknowledgement'
+    )
 
     // The turn IS started; recovery may not overwrite that with a weaker guess,
     // and it may never become a rejection, which would license a re-delivery.
@@ -236,7 +240,7 @@ describe('crash between provider accept and journal commit', () => {
     })
 
     const restarted = await open()
-    await restarted.markPendingSubmissionsUnknown(2)
+    await restarted.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' })
     const [outcome] = reconcileSubmissions({
       submissions: restarted.submissions(),
       history: window([])

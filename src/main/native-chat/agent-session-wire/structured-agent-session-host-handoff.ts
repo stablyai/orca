@@ -16,6 +16,7 @@ import type { AgentSessionSubscribers } from './structured-agent-session-subscri
 import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catchup'
 import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
+import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
 
 type HostHandoffAccess = {
   session: (sessionId: string) => StructuredAgentSessionHostSession
@@ -89,6 +90,7 @@ export function createStructuredAgentSessionHostHandoff(
         const session = host.session(sessionId)
         await session.journal.markPendingSubmissionsUnknown(
           session.fence,
+          { mode: 'death-confirmed' },
           'provider_exited_before_acknowledgement'
         )
         host.subscribers.publish(sessionId, session.journal)
@@ -256,6 +258,21 @@ export async function acquireNativeHandoffOwner(
   host.publishStatus?.(input.sessionId)
   session.fence = proved.lease.runtimeFence
   session.acquisitionGeneration = acquired.acquisitionGeneration ?? null
+  // Handoff bypasses performAttach; the new child is buffered until bind just below.
+  await settleStructuredAgentSessionDeadGeneration({
+    journal: session.journal,
+    sessionId: input.sessionId,
+    fence: proved.lease.runtimeFence,
+    settlementId: `handoff-acquire:${input.sessionId}:${proved.lease.runtimeFence}`,
+    verdict: { state: 'unverifiable' },
+    pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+    submissionRecoveryMode: 'new-owner-not-publishing',
+    showUnexpectedExitOutcome: false,
+    onError: (id, error) => {
+      deps.onEventSinkError?.({ sessionId: id, error })
+      console.error('agent-session handoff settlement deferred', id, error)
+    }
+  })
   eventSink.bind({
     journal: session.journal,
     fence: proved.lease.runtimeFence,

@@ -2,6 +2,7 @@ import type { AgentSessionCancelResult } from '../../../src/shared/agent-session
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import { liveStructuredAgentSessionItems } from '../../../src/shared/structured-agent-session-projection'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,
@@ -12,9 +13,10 @@ import {
 type PromptIdentity = { itemId: string; expectedRevision: number }
 
 export function pendingStructuredPromptIdentity(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  currentFence?: number | null
 ): PromptIdentity | undefined {
-  const prompt = items.find((item) =>
+  const prompt = liveStructuredAgentSessionItems(items, currentFence).find((item) =>
     item.body.kind === 'approval' || item.body.kind === 'question'
       ? item.body.resolution.state === 'pending'
       : false
@@ -35,7 +37,8 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
 }): Promise<boolean> {
   const { client, enabled, onSendError, operationIds, sessionId, sessionKey, stateRef } = args
   const current = stateRef.current
-  const turnId = activeStructuredAgentSessionTurnId(current.items)
+  const ownerItems = liveStructuredAgentSessionItems(current.items, current.fence)
+  const turnId = activeStructuredAgentSessionTurnId(ownerItems)
   if (!client || !sessionId || !enabled || current.fence === null || !turnId) {
     onSendError('Stop not sent')
     return false

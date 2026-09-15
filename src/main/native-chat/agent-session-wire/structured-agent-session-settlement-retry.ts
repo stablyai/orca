@@ -5,7 +5,10 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLeaseStore } from './structured-agent-session-lease-release'
-import { turnVerdictFromDeathEvidence } from './structured-agent-session-stale-turn-verdict'
+import {
+  turnVerdictFromDeathEvidence,
+  UNVERIFIABLE_TURN_VERDICT
+} from './structured-agent-session-stale-turn-verdict'
 import {
   captureUnfinishedStructuredAgentSessionWork,
   settleStructuredAgentSessionDeadGeneration,
@@ -31,7 +34,8 @@ export async function retryPendingStructuredAgentSessionSettlement(input: {
           record,
           params: input.params,
           journalRoot: input.deps.journalRoot,
-          adapter: input.deps.adapter
+          adapter: input.deps.adapter,
+          recoverPending: false
         })
       ).journal
     } catch (error) {
@@ -72,15 +76,43 @@ export async function retryLoadedStructuredAgentSessionSettlement(input: {
   }
   const retrySession = input.session
   retrySession.fence = record.lease.runtimeFence
-  const onError = (id: string, error: unknown): void =>
+  const onError = (id: string, error: unknown): void => {
     input.deps.onEventSinkError?.({ sessionId: id, error })
+    console.error('agent-session restore settlement deferred', id, error)
+  }
   // Only an observed exit earns an end time; a probe-proven death never saw one.
   const verdict = turnVerdictFromDeathEvidence(record.lease.deathEvidence)
+  const throughFence =
+    record.lease.settlementRetryFence ??
+    (record.lease.claimStatus === 'released'
+      ? record.lease.runtimeFence - 1
+      : record.lease.runtimeFence)
+  // Transcript catch-up after a stopped TUI can be stamped at the released fence.
+  // This fence has no child; a subsequent live owner's fence must stay untouched.
+  const lastDeadFence =
+    record.lease.claimStatus === 'released' &&
+    record.lease.handoffStage === 'old-owner-stopped' &&
+    record.lease.runtimeFence === throughFence + 1
+      ? record.lease.runtimeFence
+      : throughFence
+  const priorSettled = await settleStructuredAgentSessionDeadGeneration({
+    journal: retrySession.journal,
+    sessionId: input.sessionId,
+    fence: retrySession.fence,
+    throughFence: throughFence - 1,
+    settlementId: `${record.lease.settlementRetryId}:prior`,
+    pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+    verdict: UNVERIFIABLE_TURN_VERDICT,
+    showUnexpectedExitOutcome: false,
+    onError
+  })
   const ok = await settleStructuredAgentSessionDeadGeneration({
     journal: retrySession.journal,
     sessionId: input.sessionId,
     fence: retrySession.fence,
     settlementId: record.lease.settlementRetryId,
+    throughFence: lastDeadFence,
+    fromFence: throughFence,
     pendingSubmissionReason: 'provider_exited_before_acknowledgement',
     verdict,
     // The same evidence decides the copy: only a witnessed death is worth telling the user
@@ -90,16 +122,22 @@ export async function retryLoadedStructuredAgentSessionSettlement(input: {
     showUnexpectedExitOutcome:
       verdict.state === 'interrupted' &&
       unfinishedStructuredAgentSessionWorkWasInterrupted(
-        captureUnfinishedStructuredAgentSessionWork(retrySession.journal),
+        captureUnfinishedStructuredAgentSessionWork(
+          retrySession.journal,
+          lastDeadFence,
+          throughFence
+        ),
         retrySession.journal,
-        verdict.completedAt
+        verdict.completedAt,
+        lastDeadFence,
+        throughFence
       ),
     ...(record.lease.deathEvidence?.detail
       ? { unexpectedExitReason: record.lease.deathEvidence.detail }
       : {}),
     onError
   })
-  if (!ok) {
+  if (!ok || !priorSettled) {
     return false
   }
   try {
@@ -120,6 +158,7 @@ export async function retryLoadedStructuredAgentSessionSettlement(input: {
           handoffOperationId: preserveHandoff ? latest.lease.handoffOperationId : null,
           settlementRetryRequired: undefined,
           settlementRetryId: undefined,
+          settlementRetryFence: undefined,
           lastRenewedAt: input.now()
         }
       }

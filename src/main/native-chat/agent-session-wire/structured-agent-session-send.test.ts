@@ -210,7 +210,7 @@ describe('send', () => {
 
     // Every later signal that could assert doubt: the attach sweep, and a
     // direct unknown resolution. Neither may unsettle an accepted answer.
-    await journal.markPendingSubmissionsUnknown(fence)
+    await journal.markPendingSubmissionsUnknown(fence, { mode: 'death-confirmed' })
     await journal.resolveDispatch({
       clientMessageId: params.envelope.clientOperationId,
       state: 'unknown',
@@ -249,7 +249,9 @@ describe('send', () => {
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
 
-    await journal.markPendingSubmissionsUnknown(store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
+    await journal.markPendingSubmissionsUnknown(store.getRecord(SESSION)?.lease.runtimeFence ?? 1, {
+      mode: 'death-confirmed'
+    })
     expect(journal.submissions()).toMatchObject([
       { dispatchState: 'unknown', reason: 'host_restarted_before_acknowledgement' }
     ])
@@ -399,6 +401,7 @@ describe('send', () => {
 
     await journal.markPendingSubmissionsUnknown(
       store.getRecord(SESSION)?.lease.runtimeFence ?? 1,
+      { mode: 'death-confirmed' },
       'provider_exited_before_acknowledgement'
     )
 
@@ -428,7 +431,9 @@ describe('send', () => {
     ).toEqual({ status: 'unknown' })
     expect(dispatch).toHaveBeenCalledTimes(1)
 
-    await journal.markPendingSubmissionsUnknown(store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
+    await journal.markPendingSubmissionsUnknown(store.getRecord(SESSION)?.lease.runtimeFence ?? 1, {
+      mode: 'death-confirmed'
+    })
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: true,
       replayed: true,

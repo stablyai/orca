@@ -16,7 +16,7 @@ function invalid(message: string): PendingPromptValidation {
 }
 
 export function validatePendingPrompt(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'sessionId'>,
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'sessionId' | 'fence'>,
   input: {
     itemId: string
     expectedRevision: number
@@ -26,6 +26,9 @@ export function validatePendingPrompt(
   const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === input.itemId)
   if (!item) {
     return invalid(`No item ${input.itemId} in session ${ctx.sessionId}.`)
+  }
+  if (item.ownerFence !== undefined && item.ownerFence !== ctx.fence) {
+    return invalid(`Item ${input.itemId} belongs to a previous owner.`)
   }
   const prompt = item.body.kind === 'approval' || item.body.kind === 'question' ? item.body : null
   if (!prompt || (input.kind !== undefined && prompt.kind !== input.kind)) {

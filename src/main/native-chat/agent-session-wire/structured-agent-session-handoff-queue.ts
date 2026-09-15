@@ -3,7 +3,10 @@ import type {
   AgentSessionHandoffStatus
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  liveStructuredAgentSessionItems
+} from '../../../shared/structured-agent-session-projection'
 import type {
   StructuredAgentSessionHandoffDeps,
   StructuredTuiOwner
@@ -102,7 +105,12 @@ export function enqueueStructuredHandoffAfterTurn(input: {
     sessionId,
     async (signal) => {
       if (params.direction === 'to-tui') {
-        return !activeStructuredAgentSessionTurnId(deps.session(sessionId).journal.snapshot().items)
+        return !activeStructuredAgentSessionTurnId(
+          liveStructuredAgentSessionItems(
+            deps.session(sessionId).journal.snapshot().items,
+            params.envelope.expectedRuntimeFence
+          )
+        )
       }
       if (!observedTuiQueue) {
         observedTuiQueue = true
@@ -114,7 +122,14 @@ export function enqueueStructuredHandoffAfterTurn(input: {
       if (tuiReadiness === 'exited') {
         return true
       }
-      if (!activeStructuredAgentSessionTurnId(deps.session(sessionId).journal.snapshot().items)) {
+      if (
+        !activeStructuredAgentSessionTurnId(
+          liveStructuredAgentSessionItems(
+            deps.session(sessionId).journal.snapshot().items,
+            params.envelope.expectedRuntimeFence
+          )
+        )
+      ) {
         tuiReadiness = 'idle'
         return true
       }

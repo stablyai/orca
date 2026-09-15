@@ -50,7 +50,7 @@ describe('structured send idempotency', () => {
     }
     const input = { clientMessageId: 'retry-id', payloadFingerprint: 'fingerprint', body }
     await journal.appendSubmission({ ...input, fence: 1 })
-    await journal.markPendingSubmissionsUnknown(2, reason)
+    await journal.markPendingSubmissionsUnknown(2, { mode: 'death-confirmed' }, reason)
     const before = journal.snapshot()
     const dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
 

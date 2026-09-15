@@ -207,6 +207,17 @@ export function hasUnansweredStructuredAgentSessionDispatch(
 
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
+/** Historical items remain visible, but only the execution owner can ask or work now. */
+export function liveStructuredAgentSessionItems(
+  items: readonly AgentJournalRenderItem[],
+  currentFence: number | null | undefined
+): AgentJournalRenderItem[] {
+  return items.filter(
+    (item) =>
+      currentFence == null || item.ownerFence === undefined || item.ownerFence === currentFence
+  )
+}
+
 export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
@@ -216,8 +227,9 @@ export function projectStructuredAgentSessionStatus(
   submissions: readonly AgentJournalSubmission[] = [],
   currentFence?: number | null
 ): StructuredAgentSessionProjectedStatus {
+  const ownerItems = liveStructuredAgentSessionItems(items, currentFence)
   if (
-    items.some(
+    ownerItems.some(
       (item) =>
         (item.body.kind === 'approval' || item.body.kind === 'question') &&
         item.body.resolution.state === 'pending'
@@ -225,7 +237,7 @@ export function projectStructuredAgentSessionStatus(
   ) {
     return 'attention'
   }
-  return activeStructuredAgentSessionTurnId(items) ||
+  return activeStructuredAgentSessionTurnId(ownerItems) ||
     hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
     ? 'working'
     : 'idle'
@@ -300,7 +312,10 @@ export function projectStructuredAgentSessionStatusSummary(
     return { status: null, latestPrompt: '' }
   }
   const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
-  const activeToolCall = status === 'working' ? activeStructuredAgentSessionToolCall(items) : null
+  const activeToolCall =
+    status === 'working'
+      ? activeStructuredAgentSessionToolCall(liveStructuredAgentSessionItems(items, currentFence))
+      : null
   const toolName = activeToolCall
     ? normalizeOptionalField(activeToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
     : undefined

@@ -98,6 +98,33 @@ describe('what a rejection shows the user', () => {
 })
 
 describe('ambiguous operation refusals', () => {
+  it('lets an explicit same-id Retry retire an old unknown outbox head without settling it', () => {
+    const result = rejectedWith(null)
+    if (!result.ok) {
+      throw new Error('expected send result')
+    }
+    result.value.submission = {
+      ...result.value.submission,
+      dispatchState: 'unknown',
+      reason: 'provider_exited_before_acknowledgement',
+      recovered: true
+    }
+    const retried = { ...entry, state: 'queued' as const, retryAfterUnknownSubmittedAt: 10 }
+    const next = { ...entry, clientMessageId: 'client-2' }
+
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [retried, next],
+      entry: retried,
+      blockedClientMessageId: null,
+      result,
+      createOperationId: () => 'unused'
+    })
+
+    expect(disposition.entries).toEqual([next])
+    expect(disposition.blockedClientMessageId).toBeNull()
+    expect(result.value.submission.dispatchState).toBe('unknown')
+  })
+
   it.each([
     { ...entry, state: 'unconfirmed' as const, lastAttemptAt: 10 },
     { ...entry, state: 'queued' as const, lastAttemptAt: 10, retryAfterUnknownSubmittedAt: 10 }

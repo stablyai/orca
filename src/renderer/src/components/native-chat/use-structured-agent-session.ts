@@ -25,7 +25,8 @@ import {
 } from '../../../../shared/structured-agent-session-options'
 import {
   activeStructuredAgentSessionTurnId,
-  hasUnansweredStructuredAgentSessionDispatch
+  hasUnansweredStructuredAgentSessionDispatch,
+  liveStructuredAgentSessionItems
 } from '../../../../shared/structured-agent-session-projection'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import {
@@ -104,7 +105,9 @@ export function useStructuredAgentSession(args: {
   }, [agent, sessionId, state.fence])
 
   // Refresh options each turn to confirm which model the provider actually selected.
-  const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const turnId = activeStructuredAgentSessionTurnId(
+    liveStructuredAgentSessionItems(state.items, state.fence)
+  )
   // A dispatch the provider has not answered is already work; Claude's running row trails the
   // send by seconds, and only a provider-minted turn is cancellable, so the two stay separate.
   const isWorking =
@@ -239,7 +242,7 @@ export function useStructuredAgentSession(args: {
     [optionSnapshot, setOption]
   )
 
-  const prompts = pendingStructuredSessionPrompts(state.items)
+  const prompts = pendingStructuredSessionPrompts(state.items, state.fence)
   const { outbox } = outboxController
   const messages = useStructuredAgentSessionMessages(state.items, outbox, state.submissions)
   return {

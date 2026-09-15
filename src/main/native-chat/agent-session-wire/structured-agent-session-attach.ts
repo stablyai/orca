@@ -189,6 +189,8 @@ export async function attachJournal(input: {
   /** Provider history sampled before a new child is acquired. `null` means the
    *  adapter had no usable history; omit to read lazily for direct callers. */
   providerHistoryWindow?: ProviderHistoryWindow | null
+  /** Existing writers have live sends; a new child remains unbound until settlement. */
+  recoverPending?: false | 'death-confirmed' | 'new-owner-not-publishing'
 }): Promise<AttachedJournal> {
   const identity = journalIdentityFor(input.record, input.params)
   const fence = input.record.lease.runtimeFence
@@ -207,17 +209,34 @@ export async function attachJournal(input: {
   try {
     // That await is a WRITE. A failure in it leaves the journal with no caller
     // holding a reference to close it.
-    const unconfirmed = await opened.journal.markPendingSubmissionsUnknown(fence)
-    const settled = await reconcileAgainstProviderHistory({
-      adapter: input.adapter,
-      identity,
-      journal: opened.journal,
-      fence,
-      accountHome: input.record.accountHome,
-      ...(Object.hasOwn(input, 'providerHistoryWindow')
-        ? { history: input.providerHistoryWindow }
-        : {})
-    })
+    if (input.recoverPending === false) {
+      return { ...opened, unconfirmedClientMessageIds: [] }
+    }
+    let unconfirmed: string[] = []
+    try {
+      unconfirmed = await opened.journal.markPendingSubmissionsUnknown(fence, {
+        mode: input.recoverPending ?? 'death-confirmed'
+      })
+    } catch (error) {
+      // No write means delivery is still unknown, never permission to replay the send.
+      unconfirmed = opened.journal.pendingSubmissions().map((entry) => entry.clientMessageId)
+      console.error('agent-session pending submission recovery deferred', error)
+    }
+    let settled: string[] = []
+    try {
+      settled = await reconcileAgainstProviderHistory({
+        adapter: input.adapter,
+        identity,
+        journal: opened.journal,
+        fence,
+        accountHome: input.record.accountHome,
+        ...(Object.hasOwn(input, 'providerHistoryWindow')
+          ? { history: input.providerHistoryWindow }
+          : {})
+      })
+    } catch (error) {
+      console.error('agent-session provider history recovery deferred', error)
+    }
     return {
       ...opened,
       unconfirmedClientMessageIds: unconfirmed.filter((id) => !settled.includes(id))

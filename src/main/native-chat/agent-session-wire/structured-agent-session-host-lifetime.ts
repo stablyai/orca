@@ -5,7 +5,10 @@
 // bookkeeping that decides when to run it than buried among the twenty other things a session can
 // do.
 
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  liveStructuredAgentSessionItems
+} from '../../../shared/structured-agent-session-projection'
 import {
   evictStructuredAgentSession,
   STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
@@ -72,7 +75,7 @@ export async function evictHeldStructuredAgentSession(
   // reading "no child here" and skipping the settlement and the lease release it still owes.
   const owesWindDown = owesProviderChildWindDown(session)
   session.owesProviderChildWindDown = owesWindDown
-  let settlementError: unknown
+  let settlementFailed = false
   const eviction: StructuredAgentSessionEvictionContext = {
     sessionId,
     // The retry must not re-stop a child the adapter already proved gone, so this stays honest.
@@ -94,19 +97,17 @@ export async function evictHeldStructuredAgentSession(
         journal: session.journal,
         sessionId,
         fence: session.fence,
+        fromFence: session.fence,
         settlementId: `expected-close:${sessionId}:${session.fence}:${session.acquisitionGeneration ?? 'unknown'}`,
         pendingSubmissionReason: 'provider_closed_before_acknowledgement',
         verdict: { state: 'interrupted', completedAt: context.now() },
         showUnexpectedExitOutcome: false,
         onError: (id, error) => {
-          settlementError = error
           context.deps.onEventSinkError?.({ sessionId: id, error })
+          console.error('agent-session close settlement deferred', id, error)
         }
       })
-      if (!settled) {
-        // Without the cause the quit log names the step and nothing else.
-        throw new Error('dead generation work settlement failed', { cause: settlementError })
-      }
+      settlementFailed = !settled
     },
     releaseLease: async () => {
       await releaseStoredStructuredAgentSessionOwner({
@@ -114,7 +115,15 @@ export async function evictHeldStructuredAgentSession(
         sessionId,
         hasProviderChild: owesWindDown,
         expectedFence: session.fence,
-        now: context.now()
+        now: context.now(),
+        ...(settlementFailed
+          ? {
+              settlementRetry: {
+                settlementId: `expected-close:${sessionId}:${session.fence}:${session.acquisitionGeneration ?? 'unknown'}`,
+                detail: 'the last surface holding this session released it'
+              }
+            }
+          : {})
       })
       session.owesProviderChildWindDown = false
       context.forgetStatus(sessionId)
@@ -199,7 +208,9 @@ export function createStructuredAgentSessionHolds(
     isTurnActive: (sessionId) => {
       const session = context.sessions.get(sessionId)
       return session
-        ? activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null
+        ? activeStructuredAgentSessionTurnId(
+            liveStructuredAgentSessionItems(session.journal.snapshot().items, session.fence)
+          ) !== null
         : false
     },
     onError: (error) => context.deps.onEventSinkError?.(error),

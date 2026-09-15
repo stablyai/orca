@@ -1,5 +1,8 @@
 import type { AgentSessionHandoffRequest } from '../../../shared/agent-session-wire'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  liveStructuredAgentSessionItems
+} from '../../../shared/structured-agent-session-projection'
 import type { StructuredAgentSessionHandoffQueue } from './structured-agent-session-handoff-queue'
 import type {
   StructuredAgentSessionHandoffDeps,
@@ -34,7 +37,12 @@ export function queueStructuredHandoffAfterTurn(input: {
     sessionId,
     async (signal) => {
       if (params.direction === 'to-tui') {
-        return !activeStructuredAgentSessionTurnId(deps.session(sessionId).journal.snapshot().items)
+        return !activeStructuredAgentSessionTurnId(
+          liveStructuredAgentSessionItems(
+            deps.session(sessionId).journal.snapshot().items,
+            params.envelope.expectedRuntimeFence
+          )
+        )
       }
       tuiReadiness = tuiOwner
         ? ((await deps.transport?.waitForTuiIdleOrExit(tuiOwner, signal)) ?? null)

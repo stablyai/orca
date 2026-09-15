@@ -28,7 +28,9 @@ import { tearDownStructuredAgentSessionHost } from './structured-agent-session-h
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
 const attachFlow = vi.hoisted(() => ({
-  journal: null as AgentSessionJournal | null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: vi.hoisted cannot infer the journal type before the test initializes it.
+  journal: null as AgentSessionJournal | null,
+  acquiredOwner: false
 }))
 
 // The lease reservation, the record store and the provider child are not what
@@ -36,11 +38,20 @@ const attachFlow = vi.hoisted(() => ({
 vi.mock('./structured-agent-session-attach-flow', () => ({
   performAttach: async (input: {
     onAttached: (
-      attached: { journal: AgentSessionJournal; recovery: null },
-      generation: string | null
+      attached: {
+        journal: AgentSessionJournal
+        recovery: null
+        unconfirmedClientMessageIds?: string[]
+      },
+      generation: string | null,
+      acquiredOwner: boolean
     ) => Promise<void>
   }) => {
-    await input.onAttached({ journal: attachFlow.journal!, recovery: null }, null)
+    await input.onAttached(
+      { journal: attachFlow.journal!, recovery: null, unconfirmedClientMessageIds: [] },
+      null,
+      attachFlow.acquiredOwner
+    )
     return { ok: true, value: {} }
   }
 }))
@@ -106,8 +117,11 @@ function flakyClose(journal: AgentSessionJournal, failures: number): AgentSessio
 }
 
 function attachContext(
-  sessions: Map<string, StructuredAgentSessionHostSession>
+  sessions: Map<string, StructuredAgentSessionHostSession>,
+  record: unknown = null,
+  publish: () => void = () => undefined
 ): StructuredAgentSessionAttachContext {
+  let currentRecord = record
   const eventSink = {
     sink: {},
     drained: async () => ({ ok: true }) as const,
@@ -115,8 +129,21 @@ function attachContext(
     bind: () => undefined,
     close: () => undefined
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture intentionally supplies only the attach dependencies exercised by these orchestration tests.
   return {
-    deps: { store: { getRecord: () => null }, claimKeyId: 'key-1', journalRoot: root },
+    deps: {
+      store: {
+        getRecord: () => currentRecord,
+        transitionHandoff: async (_sessionId: string, transition: (record: never) => never) => {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake store forwards the real transition callback without modeling its durable record type.
+          currentRecord = transition(currentRecord as never)
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake store returns the test record through the production callback boundary.
+          return currentRecord as never
+        }
+      },
+      claimKeyId: 'key-1',
+      journalRoot: root
+    },
     runtimeState: {
       resolveRecovery: async () => undefined,
       eventSinkFor: () => eventSink,
@@ -127,13 +154,14 @@ function attachContext(
     subscribers: {
       reset: () => undefined,
       snapshot: () => undefined,
-      publish: () => undefined
+      publish
     },
     tasks: { trackAttach: <T>(task: Promise<T>) => task },
     reconcileLeases: async () => null,
     serialize: <T>(_sessionId: string, task: () => Promise<T>) => task(),
     now: () => 1,
     forgetStatus: () => undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture intentionally supplies only the attach dependencies exercised by these orchestration tests.
   } as unknown as StructuredAgentSessionAttachContext
 }
 
@@ -143,11 +171,13 @@ const attachParams = {
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-close-retry-'))
+  attachFlow.acquiredOwner = false
   // The registry is process-wide; drain it so one case cannot see another's.
   await agentSessionJournalCloseRetries.retryAll()
 })
 
 afterEach(async () => {
+  attachFlow.acquiredOwner = false
   await agentSessionJournalCloseRetries.retryAll()
   await journals.closeAll()
   await rm(root, { recursive: true, force: true })
@@ -173,6 +203,120 @@ describe('the registry', () => {
 })
 
 describe('the attach orchestration', () => {
+  it('does not hold attach on a dead-generation settlement that never settles', async () => {
+    const directory = join(root, 'settlement-stall')
+    const journal = await journals.open({ identity: IDENTITY, journalDir: directory })
+    await journal.appendItem(
+      { provider: 'codex', threadId: SESSION, turnId: 'turn-1', ordinal: 0 },
+      { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: 1 },
+      { fence: 0 }
+    )
+    let releaseSettlement!: () => void
+    vi.spyOn(journal, 'markPendingSubmissionsUnknown').mockReturnValue(
+      new Promise<string[]>((resolve) => {
+        releaseSettlement = () => resolve([])
+      })
+    )
+    attachFlow.journal = journal
+    attachFlow.acquiredOwner = true
+    const sessions = new Map<string, StructuredAgentSessionHostSession>()
+    const attach = attachStructuredAgentSession(
+      attachContext(sessions, { lease: { runtimeFence: 1 } }),
+      'caller-1',
+      attachParams
+    )
+
+    await expect(
+      Promise.race([
+        attach.then(() => 'attached' as const),
+        new Promise<'timed-out'>((resolve) => setTimeout(() => resolve('timed-out'), 100))
+      ])
+    ).resolves.toBe('attached')
+    expect(sessions.has(SESSION)).toBe(true)
+
+    releaseSettlement()
+    await attach
+  })
+
+  it('persists a retry latch when detached settlement fails without a prior latch', async () => {
+    const directory = join(root, 'settlement-latch')
+    const journal = await journals.open({ identity: IDENTITY, journalDir: directory })
+    await journal.appendItem(
+      { provider: 'codex', threadId: SESSION, turnId: 'turn-1', ordinal: 0 },
+      { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: 1 },
+      { fence: 0 }
+    )
+    vi.spyOn(journal, 'appendLifecycleBatch').mockRejectedValue(new Error('journal unavailable'))
+    attachFlow.journal = journal
+    attachFlow.acquiredOwner = true
+    const record = {
+      lease: {
+        runtimeFence: 1,
+        claimStatus: 'live',
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This optional lease field is explicitly absent in the fixture's initial state.
+        settlementRetryRequired: undefined as boolean | undefined,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This optional lease field is explicitly absent in the fixture's initial state.
+        settlementRetryFence: undefined as number | undefined,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This optional lease field is explicitly absent in the fixture's initial state.
+        settlementRetryId: undefined as string | undefined,
+        deathEvidence: null
+      }
+    }
+    const sessions = new Map<string, StructuredAgentSessionHostSession>()
+    const context = attachContext(sessions, record)
+    const attach = attachStructuredAgentSession(context, 'caller-1', attachParams)
+
+    await attach
+    await vi.waitFor(() =>
+      expect(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake store returns the local fixture shape.
+        (context.deps.store.getRecord(SESSION) as typeof record).lease.settlementRetryRequired
+      ).toBe(true)
+    )
+    expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake store returns the local fixture shape.
+      (context.deps.store.getRecord(SESSION) as typeof record).lease.settlementRetryFence
+    ).toBe(0)
+  })
+
+  it('publishes detached settlement rows after the new owner is attached', async () => {
+    const directory = join(root, 'settlement-publish')
+    const journal = await journals.open({ identity: IDENTITY, journalDir: directory })
+    await journal.appendItem(
+      { provider: 'codex', threadId: SESSION, turnId: 'turn-1', ordinal: 0 },
+      { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: 1 },
+      { fence: 0 }
+    )
+    attachFlow.journal = journal
+    attachFlow.acquiredOwner = true
+    const publish = vi.fn()
+    const context = attachContext(
+      new Map<string, StructuredAgentSessionHostSession>(),
+      {
+        lease: {
+          runtimeFence: 1,
+          claimStatus: 'live',
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This optional lease field is explicitly absent in the fixture's initial state.
+          settlementRetryRequired: undefined as boolean | undefined,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This optional lease field is explicitly absent in the fixture's initial state.
+          settlementRetryFence: undefined as number | undefined,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This optional lease field is explicitly absent in the fixture's initial state.
+          settlementRetryId: undefined as string | undefined,
+          deathEvidence: { kind: 'exit-observed', detail: 'provider stopped', observedAt: 2 }
+        }
+      },
+      publish
+    )
+
+    await attachStructuredAgentSession(context, 'caller-1', attachParams)
+    await vi.waitFor(() => expect(publish.mock.calls.length).toBeGreaterThanOrEqual(2))
+    expect(journal.snapshot().items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ body: expect.objectContaining({ state: 'interrupted' }) })
+      ])
+    )
+  })
+
   it('ABORTS the map replacement when the previous journal will not close', async () => {
     const previousDir = join(root, 'previous')
     const provisionalDir = join(root, 'provisional')

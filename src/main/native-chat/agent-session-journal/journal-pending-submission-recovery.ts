@@ -6,14 +6,19 @@ import type { AgentSessionJournal } from './journal-store'
 export async function markJournalPendingSubmissionsUnknown(
   journal: AgentSessionJournal,
   fence: number,
-  reason: string = DISPATCH_DOUBT_HOST_RESTARTED
+  _boundary: { mode: 'death-confirmed' | 'new-owner-not-publishing' },
+  reason: string = DISPATCH_DOUBT_HOST_RESTARTED,
+  throughFence: number = fence,
+  fromFence = 0
 ): Promise<string[]> {
   const unresolved = journal
     .submissions()
     .filter(
       (entry) =>
-        entry.dispatchState === 'pending' ||
-        (entry.dispatchState === 'unknown' && entry.recovered !== true)
+        entry.fence >= fromFence &&
+        entry.fence <= throughFence &&
+        (entry.dispatchState === 'pending' ||
+          (entry.dispatchState === 'unknown' && entry.recovered !== true))
     )
   for (const entry of unresolved) {
     // An earlier reason already names a sharper fact than "the host restarted".

@@ -218,4 +218,19 @@ describe('mobile structured prompt cancellation', () => {
       expect.any(Object)
     )
   })
+
+  it('does not cancel a turn from an older owner generation', async () => {
+    state = {
+      ...state,
+      items: [{ ...runningTurn(), ownerFence: 2 }, pendingApproval()]
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+
+    await act(async () => {
+      expect(await hook.cancelPrompt()).toBe(false)
+    })
+    expect(mocks.sendRequest).not.toHaveBeenCalled()
+  })
 })

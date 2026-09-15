@@ -80,7 +80,8 @@ export function applyAgentSessionRestartAdjudication(args: {
       handoffOperationId: null,
       deathEvidence: adjudication.evidence,
       settlementRetryRequired: true,
-      settlementRetryId: agentSessionRestartEvictionSettlementId(record.lease, adjudication)
+      settlementRetryId: agentSessionRestartEvictionSettlementId(record.lease, adjudication),
+      settlementRetryFence: record.lease.runtimeFence
     })
   }
   const stage: AgentSessionHandoffStage =

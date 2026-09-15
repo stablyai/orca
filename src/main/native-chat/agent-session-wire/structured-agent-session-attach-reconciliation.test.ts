@@ -80,12 +80,13 @@ async function crashedJournal(clientMessageId = 'cm_1', text = 'deploy the thing
   await journal.close()
 }
 
-async function attach(adapter: StructuredAgentSessionAdapter) {
+async function attach(adapter: StructuredAgentSessionAdapter, recoverPending?: false) {
   const attached = await attachJournal({
     record: RECORD,
     params: PARAMS,
     journalRoot: root,
-    adapter
+    adapter,
+    ...(recoverPending === false ? { recoverPending } : {})
   })
   journals.track(attached.journal)
   return attached
@@ -101,6 +102,16 @@ afterEach(async () => {
 })
 
 describe('attachJournal restart reconciliation', () => {
+  it('does not mark an existing live writer’s pending submission unknown', async () => {
+    await crashedJournal()
+    const { adapter } = adapterWith()
+
+    const attached = await attach(adapter, false)
+
+    expect(attached.journal.submissions()[0]?.dispatchState).toBe('pending')
+    expect(attached.unconfirmedClientMessageIds).toEqual([])
+  })
+
   it('settles a provably undelivered submission and stops reporting it unconfirmed', async () => {
     await crashedJournal()
     const { adapter, dispatch } = adapterWith(async () => window())

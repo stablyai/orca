@@ -253,8 +253,21 @@ export class AgentSessionJournal {
   }
 
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
-  async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
-    return markJournalPendingSubmissionsUnknown(this, fence, reason)
+  async markPendingSubmissionsUnknown(
+    fence: number,
+    boundary: { mode: 'death-confirmed' | 'new-owner-not-publishing' },
+    reason?: string,
+    throughFence?: number,
+    fromFence?: number
+  ): Promise<string[]> {
+    return markJournalPendingSubmissionsUnknown(
+      this,
+      fence,
+      boundary,
+      reason,
+      throughFence,
+      fromFence
+    )
   }
 
   /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,

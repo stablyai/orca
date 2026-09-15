@@ -124,7 +124,10 @@ export function disposeStructuredAgentSessionSendResult(
     return {
       entries,
       error: result.refusal.message,
-      blockedClientMessageId: entries[0]?.clientMessageId ?? null,
+      blockedClientMessageId:
+        entries[
+          input.entries.findIndex((entry) => entry.clientMessageId === input.entry.clientMessageId)
+        ]?.clientMessageId ?? null,
       retryWithFreshClientMessageId: null
     }
   }

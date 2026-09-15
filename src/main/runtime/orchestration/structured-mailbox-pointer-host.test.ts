@@ -57,7 +57,7 @@ describe('structured mailbox pointer host', () => {
     // runtime cannot see at all.
     expect(createStructuredMailboxPointerHost().readGateFacts('s1')).toBeNull()
     hostRef.current = {
-      journalSnapshot: () => {
+      currentOwnerJournalItems: () => {
         throw new Error('agent_session_ownership_unknown')
       }
     }

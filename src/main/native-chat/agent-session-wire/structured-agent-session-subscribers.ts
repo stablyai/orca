@@ -13,6 +13,7 @@ import {
   type AgentSessionBackgroundTaskState,
   type AgentSessionSlashCommand,
   type AgentSessionHandoffStatus,
+  type AgentSessionHistoryPage,
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
 } from '../../../shared/agent-session-wire'
@@ -22,6 +23,11 @@ import {
   createAgentSessionCatchUpReader,
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
+import {
+  publishAgentSessionBackgroundTasks,
+  publishAgentSessionHandoff,
+  type AgentSessionSubscriber
+} from './agent-session-subscriber-notifications'
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
 export type AgentSessionSubscribeInput = {
@@ -31,15 +37,6 @@ export type AgentSessionSubscribeInput = {
   cursor?: AgentJournalCursor
 }
 
-type Subscriber = {
-  id: string
-  sessionId: string
-  emit: AgentSessionSubscriberEmit
-  cursor: AgentJournalCursor
-  fence: number
-  commands?: AgentSessionSlashCommand[] | null
-}
-
 export type AgentSessionSubscribersHooks = {
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
   /** Fires after any publication that can change journal content, whether or not anyone
@@ -47,10 +44,13 @@ export type AgentSessionSubscribersHooks = {
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
   /** Host wall clock, stamped once per published frame as `hostNow`. */
   now?: () => number
+  projectPage?: (sessionId: string, page: AgentSessionHistoryPage) => AgentSessionHistoryPage
+  readJournal?: (sessionId: string) => AgentSessionJournal | undefined
+  needsOwnerSnapshot?: (sessionId: string, journal: AgentSessionJournal) => boolean
 }
 
 export class AgentSessionSubscribers {
-  private readonly bySession = new Map<string, Map<string, Subscriber>>()
+  private readonly bySession = new Map<string, Map<string, AgentSessionSubscriber>>()
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
@@ -68,22 +68,25 @@ export class AgentSessionSubscribers {
     backgroundTasks?: AgentSessionBackgroundTaskState | null
   }): () => void {
     const liveCursor = input.journal.cursor()
-    const subscriber: Subscriber = {
+    const subscriber: AgentSessionSubscriber = {
       id: input.id,
       sessionId: input.sessionId,
       emit: input.emit,
       cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
       fence: input.fence
     }
-    const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
+    const session = this.bySession.get(input.sessionId) ?? new Map<string, AgentSessionSubscriber>()
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
 
     const hostNow = this.now()
-    if (input.cursor) {
+    if (input.cursor && !this.hooks.needsOwnerSnapshot?.(input.sessionId, input.journal)) {
       this.deliver(subscriber, input.journal, hostNow, input.handoff, true, input.backgroundTasks)
     } else {
-      const page = readAgentSessionHydrationPage(input.journal, input.fence)
+      const page = this.ownerPage(
+        input.sessionId,
+        readAgentSessionHydrationPage(input.journal, input.fence)
+      )
       this.emit(subscriber, {
         type: 'snapshot',
         sessionId: input.sessionId,
@@ -163,7 +166,7 @@ export class AgentSessionSubscribers {
     backgroundTasks: AgentSessionBackgroundTaskState | null | undefined,
     frame: { type: 'snapshot' } | { type: 'reset'; reset: AgentJournalResetReason }
   ): void {
-    const page = readAgentSessionHydrationPage(journal, fence)
+    const page = this.ownerPage(sessionId, readAgentSessionHydrationPage(journal, fence))
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
       this.emit(subscriber, {
@@ -182,18 +185,16 @@ export class AgentSessionSubscribers {
   }
 
   handoff(sessionId: string, fence: number, handoff: AgentSessionHandoffStatus): void {
-    const hostNow = this.now()
-    for (const subscriber of this.subscribers(sessionId)) {
-      this.emit(subscriber, {
-        type: 'batch',
-        sessionId,
-        batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence,
-        handoff,
-        hostNow
-      })
-      subscriber.fence = fence
-    }
+    publishAgentSessionHandoff({
+      sessionId,
+      fence,
+      handoff,
+      hostNow: this.now(),
+      subscribers: this.subscribers(sessionId),
+      readJournal: (id) => this.hooks.readJournal?.(id),
+      projectPage: (id, page) => this.ownerPage(id, page),
+      emit: (subscriber, event) => this.emit(subscriber, event)
+    })
   }
 
   backgroundTasks(
@@ -201,26 +202,22 @@ export class AgentSessionSubscribers {
     state: AgentSessionBackgroundTaskState | null,
     fence: number
   ): void {
-    const hostNow = this.now()
-    for (const subscriber of this.subscribers(sessionId)) {
-      this.emit(subscriber, {
-        type: 'batch',
-        sessionId,
-        batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence,
-        backgroundTasks: state,
-        hostNow
-      })
-      subscriber.fence = fence
-    }
+    publishAgentSessionBackgroundTasks({
+      sessionId,
+      fence,
+      state,
+      hostNow: this.now(),
+      subscribers: this.subscribers(sessionId),
+      emit: (subscriber, event) => this.emit(subscriber, event)
+    })
   }
 
-  private subscribers(sessionId: string): Subscriber[] {
+  private subscribers(sessionId: string): AgentSessionSubscriber[] {
     return [...(this.bySession.get(sessionId)?.values() ?? [])]
   }
 
   private deliver(
-    subscriber: Subscriber,
+    subscriber: AgentSessionSubscriber,
     journal: AgentSessionJournal,
     hostNow: number,
     handoff?: AgentSessionHandoffStatus,
@@ -241,7 +238,10 @@ export class AgentSessionSubscribers {
         limit: AGENT_SESSION_HISTORY_MAX_LIMIT
       })
       if (!result.ok) {
-        const page = { ...result.page, fence: subscriber.fence }
+        const page = this.ownerPage(subscriber.sessionId, {
+          ...result.page,
+          fence: subscriber.fence
+        })
         this.emit(subscriber, {
           type: 'reset',
           sessionId: subscriber.sessionId,
@@ -256,7 +256,7 @@ export class AgentSessionSubscribers {
         subscriber.cursor = page.liveCursor ?? page.window.nextCursor
         return
       }
-      const page = result.page
+      const page = this.ownerPage(subscriber.sessionId, result.page)
       const advanced = page.window.nextCursor.sequence > subscriber.cursor.sequence
       if (!advanced) {
         const commandsChanged =
@@ -300,12 +300,16 @@ export class AgentSessionSubscribers {
 
   private now = (): number => this.hooks.now?.() ?? Date.now()
 
-  private isActive = (subscriber: Subscriber): boolean =>
+  private ownerPage(sessionId: string, page: AgentSessionHistoryPage): AgentSessionHistoryPage {
+    return this.hooks.projectPage?.(sessionId, page) ?? page
+  }
+
+  private isActive = (subscriber: AgentSessionSubscriber): boolean =>
     this.bySession.get(subscriber.sessionId)?.get(subscriber.id) === subscriber
 
   /** A dead transport cannot be allowed to turn a durable mutation into an
    *  unknown outcome or poison every later publication. */
-  private emit(subscriber: Subscriber, event: AgentSessionSubscribeEvent): void {
+  private emit(subscriber: AgentSessionSubscriber, event: AgentSessionSubscribeEvent): void {
     try {
       const commands = this.hooks.readCommands?.(subscriber.sessionId) ?? null
       const includeCommands =
@@ -319,7 +323,7 @@ export class AgentSessionSubscribers {
     }
   }
 
-  private drop(subscriber: Subscriber): void {
+  private drop(subscriber: AgentSessionSubscriber): void {
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)
     if (session?.size === 0) {

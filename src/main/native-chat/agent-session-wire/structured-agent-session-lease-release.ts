@@ -23,6 +23,7 @@ export async function releaseStoredStructuredAgentSessionOwner(input: {
   hasProviderChild: boolean
   expectedFence: number
   now: number
+  settlementRetry?: { settlementId: string; detail: string }
 }): Promise<void> {
   if (!input.hasProviderChild) {
     return
@@ -38,7 +39,8 @@ export async function releaseStoredStructuredAgentSessionOwner(input: {
   await releaseStoredAgentSessionOwnerAfterSurfaceClose(input.store, {
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,
-    now: input.now
+    now: input.now,
+    ...(input.settlementRetry ? { settlementRetry: input.settlementRetry } : {})
   })
 }
 

@@ -19,6 +19,14 @@ import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
+import {
+  projectStructuredAgentSessionOwnerPage,
+  structuredAgentSessionNeedsOwnerSnapshot
+} from './structured-agent-session-owner-projection'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
 
 const SESSION = 'subscriber-session'
 
@@ -35,6 +43,81 @@ afterEach(async () => {
 })
 
 describe('AgentSessionSubscribers', () => {
+  it('replaces an old paired client’s raw pending prompt when ownership changes', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'owner-journal')
+    })
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: 'prompt' },
+      {
+        kind: 'approval',
+        title: 'Old request',
+        detail: null,
+        options: [],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      { fence: 7 }
+    )
+    let record = agentSessionRecordFixture(agentSessionLeaseFixture({ runtimeFence: 7 }))
+    const events: AgentSessionSubscribeEvent[] = []
+    const subscribers = new AgentSessionSubscribers({
+      readJournal: () => journal,
+      projectPage: (_sessionId, page) => projectStructuredAgentSessionOwnerPage(page, record),
+      needsOwnerSnapshot: () => structuredAgentSessionNeedsOwnerSnapshot(journal.snapshot(), record)
+    })
+    subscribers.open({
+      id: 'old-client',
+      sessionId: SESSION,
+      journal,
+      fence: 7,
+      emit: (event) => events.push(event)
+    })
+    expect(events[0]).toMatchObject({
+      type: 'snapshot',
+      page: { items: [{ body: { resolution: { state: 'pending' } } }] }
+    })
+
+    record = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        runtimeFence: 8,
+        claimStatus: 'released',
+        ownerProcess: null
+      })
+    )
+    subscribers.handoff(SESSION, 8, {
+      owner: 'none',
+      direction: 'to-native',
+      phase: 'failed',
+      stage: null,
+      operationId: null
+    })
+    expect(events.at(-1)).toMatchObject({
+      type: 'snapshot',
+      page: { items: [{ body: { resolution: { state: 'cancelled' } } }] }
+    })
+
+    const reconnected: AgentSessionSubscribeEvent[] = []
+    subscribers.open({
+      id: 'reconnected',
+      sessionId: SESSION,
+      journal,
+      fence: 8,
+      cursor: journal.cursor(),
+      emit: (event) => reconnected.push(event)
+    })
+    expect(reconnected[0]).toMatchObject({
+      type: 'snapshot',
+      page: { items: [{ body: { resolution: { state: 'cancelled' } } }] }
+    })
+  })
+
   it('publishes the current fence when a resumed cursor is already caught up', async () => {
     const journal = await journals.open({
       identity: {

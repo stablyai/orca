@@ -32,6 +32,35 @@ describe('agent session handoff restart transitions', () => {
     })
   })
 
+  it('still recovers a TUI whose prior native generation needs settlement', () => {
+    const operationId = '1800000000000-00000000000000000000000000000001'
+    const record = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        runtimeKind: 'tui',
+        settlementRetryRequired: true,
+        settlementRetryId: 'old-generation',
+        settlementRetryFence: 2
+      })
+    )
+
+    const next = recoverDeadTuiOwnerForHandoff({
+      record,
+      expectedFence: 7,
+      operationId,
+      probe: { outcome: 'pid-absent' },
+      now: 1_800_000_001_000
+    })
+
+    expect(next.lease).toMatchObject({
+      runtimeFence: 8,
+      handoffStage: 'old-owner-stopped',
+      handoffOperationId: operationId,
+      settlementRetryRequired: true,
+      settlementRetryFence: 7,
+      settlementRetryId: 'restart-eviction:session-alpha-1:8'
+    })
+  })
+
   it('preserves the stopped owner and operation for durable retry', () => {
     const handoffOperationId = '1800000000000-00000000000000000000000000000001'
     const record = agentSessionRecordFixture(

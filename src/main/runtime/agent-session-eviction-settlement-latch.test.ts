@@ -112,4 +112,70 @@ describe('proven-dead agent session eviction settlement', () => {
       unreconciled: false
     })
   })
+
+  it('evicts a TUI owner even when an earlier generation still needs settlement', () => {
+    const record = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        runtimeKind: 'tui',
+        settlementRetryRequired: true,
+        settlementRetryId: 'old-generation',
+        settlementRetryFence: 4,
+        deathEvidence: {
+          kind: 'exit-observed',
+          detail: 'old generation exited',
+          observedAt: NOW - 1
+        }
+      })
+    )
+
+    const evicted = evictAgentSessionOwner({
+      record,
+      expectedFence: 7,
+      probe: { outcome: 'pid-absent' },
+      now: NOW,
+      journalSettlement: 'required'
+    })
+
+    expect(evicted.lease).toMatchObject({
+      claimStatus: 'released',
+      runtimeFence: 8,
+      settlementRetryRequired: true,
+      settlementRetryId: 'restart-eviction:session-alpha-1:8',
+      settlementRetryFence: 7,
+      deathEvidence: { kind: 'pid-absent' }
+    })
+  })
+
+  it('keeps an earlier settlement latch across an intentional eviction', () => {
+    const record = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        runtimeKind: 'tui',
+        settlementRetryRequired: true,
+        settlementRetryId: 'old-generation',
+        settlementRetryFence: 4,
+        deathEvidence: {
+          kind: 'exit-observed',
+          detail: 'old generation exited',
+          observedAt: NOW - 1
+        }
+      })
+    )
+
+    const evicted = evictAgentSessionOwner({
+      record,
+      expectedFence: 7,
+      probe: { outcome: 'exit-observed' },
+      now: NOW,
+      journalSettlement: 'not-required'
+    })
+
+    expect(evicted.lease).toMatchObject({
+      claimStatus: 'released',
+      runtimeFence: 8,
+      settlementRetryRequired: true,
+      settlementRetryId: 'old-generation',
+      settlementRetryFence: 4,
+      deathEvidence: { detail: 'old generation exited' }
+    })
+  })
 })

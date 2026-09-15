@@ -5,6 +5,8 @@ import { StructuredConversationCommandController } from './structured-conversati
 // Mutations share one durable admission path and serialize per session.
 
 import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import { liveStructuredAgentSessionItems } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type * as SessionWire from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
@@ -316,6 +318,16 @@ export class StructuredAgentSessionHost {
    *  revised or tombstoned in place, so an item's ABSENCE from a bounded page proves nothing. */
   journalSnapshot = (sessionId: string): AgentJournalSnapshot =>
     this.requireSession(sessionId).journal.snapshot()
+
+  currentOwnerJournalItems = (sessionId: string): AgentJournalRenderItem[] => {
+    const record = this.deps.store.getRecord(sessionId)
+    if (!record) {
+      throw new Error('agent_session_ownership_unknown')
+    }
+    const fence =
+      record.lease.claimStatus === 'live' ? record.lease.runtimeFence : Number.MAX_SAFE_INTEGER
+    return liveStructuredAgentSessionItems(this.journalSnapshot(sessionId).items, fence)
+  }
 
   subscribe = (input: AgentSessionSubscribeInput): (() => void) =>
     this.backgroundTasks.subscribe(input)

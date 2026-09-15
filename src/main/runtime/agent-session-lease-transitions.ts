@@ -61,8 +61,17 @@ export function reserveAgentSessionOwner(args: {
   reservation: AgentSessionReservation
 }): { record: AgentSessionRecord; disposition: 'reserved' | 'retry-reservation' } {
   const { record, reservation } = args
+  // A released legacy settlement latch no longer speaks for an owner. Clear its stage
+  // only as part of the winning reservation; the settlement hint still follows it.
+  const reservable =
+    record.lease.settlementRetryRequired &&
+    record.lease.claimStatus === 'released' &&
+    record.lease.ownerProcess === null &&
+    record.lease.handoffStage === 'recovering'
+      ? withLease(record, { ...record.lease, handoffStage: null })
+      : record
   const decision = evaluateAgentSessionAcquisition({
-    lease: record.lease,
+    lease: reservable.lease,
     expectedFence: args.expectedFence,
     handoffOperationId: reservation.handoffOperationId,
     probe: args.probe
@@ -75,8 +84,8 @@ export function reserveAgentSessionOwner(args: {
   }
   return {
     disposition: 'reserved',
-    record: withLease(record, {
-      ...record.lease,
+    record: withLease(reservable, {
+      ...reservable.lease,
       runtimeKind: reservation.runtimeKind,
       runtimeFence: decision.nextFence,
       // Why: a reserved owner is not yet a writer; it may only talk to the provider to prove resume.
@@ -90,9 +99,16 @@ export function reserveAgentSessionOwner(args: {
       handoffOperationId: reservation.handoffOperationId,
       claimKeyId: reservation.claimKeyId,
       claimStatus: 'reserved',
-      settlementRetryRequired: undefined,
-      settlementRetryId: undefined,
-      deathEvidence: null
+      // A prior generation's journal obligation survives the new reservation.
+      settlementRetryRequired: record.lease.settlementRetryRequired,
+      settlementRetryId: record.lease.settlementRetryId,
+      settlementRetryFence: record.lease.settlementRetryRequired
+        ? (record.lease.settlementRetryFence ??
+          (record.lease.claimStatus === 'released'
+            ? record.lease.runtimeFence - 1
+            : record.lease.runtimeFence))
+        : undefined,
+      deathEvidence: record.lease.deathEvidence
     })
   }
 }
@@ -212,9 +228,6 @@ export function evictAgentSessionOwner(args: {
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
-  if (record.lease.settlementRetryRequired) {
-    throw new Error('agent_session_ownership_unknown')
-  }
   const adjudication = adjudicateAgentSessionRestart({
     lease: record.lease,
     probe: args.probe,
@@ -235,6 +248,8 @@ export function evictAgentSessionOwner(args: {
     throw new Error('agent_session_ownership_unknown')
   }
   const settlementRequired = args.journalSettlement === 'required'
+  const priorSettlementRequired = record.lease.settlementRetryRequired === true
+  const preservePriorSettlement = priorSettlementRequired && !settlementRequired
   return withLease(record, {
     ...record.lease,
     runtimeFence: adjudication.nextFence,
@@ -245,11 +260,17 @@ export function evictAgentSessionOwner(args: {
     claimStatus: 'released',
     lastRenewedAt: args.now,
     handoffOperationId: null,
-    deathEvidence: adjudication.evidence,
-    settlementRetryRequired: settlementRequired ? true : undefined,
+    // A pending settlement belongs to an earlier generation. Keep its evidence when this
+    // eviction intentionally owes no new journal work; a required eviction supersedes it with a
+    // single retry covering both generations.
+    deathEvidence: preservePriorSettlement ? record.lease.deathEvidence : adjudication.evidence,
+    settlementRetryRequired: settlementRequired || priorSettlementRequired ? true : undefined,
     settlementRetryId: settlementRequired
       ? agentSessionRestartEvictionSettlementId(record.lease, adjudication)
-      : undefined
+      : record.lease.settlementRetryId,
+    settlementRetryFence: settlementRequired
+      ? record.lease.runtimeFence
+      : record.lease.settlementRetryFence
   })
 }
 

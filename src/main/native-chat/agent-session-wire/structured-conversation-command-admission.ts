@@ -1,12 +1,18 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  liveStructuredAgentSessionItems
+} from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 export function conversationCommandBlocked(
   ctx: AgentSessionTurnContext,
   record: AgentSessionRecord
 ): string | null {
-  const items = ctx.journal.snapshot().items
+  const items = liveStructuredAgentSessionItems(
+    ctx.journal.snapshot().items,
+    record.lease.runtimeFence
+  )
   if (record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded') {
     return 'agent_session_rewind:outcome-unknown'
   }
@@ -50,7 +56,11 @@ export function conversationCommandBlocked(
   if (
     ctx.journal
       .submissions()
-      .some((entry) => entry.dispatchState === 'pending' || entry.dispatchState === 'unknown')
+      .some(
+        (entry) =>
+          entry.fence === record.lease.runtimeFence &&
+          (entry.dispatchState === 'pending' || entry.dispatchState === 'unknown')
+      )
   ) {
     return 'Resolve pending or unconfirmed messages before using this command.'
   }

@@ -776,4 +776,70 @@ describe('useMobileStructuredAgentSession', () => {
       )
     )
   })
+
+  it('keeps the transcript visible while reconnecting', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness, { connected: true }))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() => listener?.(snapshotWithMessage()))
+    expect(hook?.session.messages).toHaveLength(1)
+
+    await act(async () => {
+      renderer?.update(createElement(Harness, { connected: false }))
+    })
+    expect(hook?.session.messages).toHaveLength(1)
+    expect(hook?.session.status).toBe('ready')
+
+    await act(async () => {
+      renderer?.update(createElement(Harness, { connected: true }))
+    })
+    expect(hook?.session.messages).toHaveLength(1)
+  })
+
+  it('restores the correct cached transcript when switching tabs offline', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness, { connected: true, sessionId: 'session-1' }))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() => listener?.(snapshotWithMessage()))
+    expect(hook?.session.messages).toHaveLength(1)
+
+    await act(async () => {
+      renderer?.update(createElement(Harness, { connected: false, sessionId: 'session-2' }))
+    })
+    expect(hook?.session.messages).toEqual([])
+    expect(hook?.session.status).toBe('idle')
+
+    await act(async () => {
+      renderer?.update(createElement(Harness, { connected: false, sessionId: 'session-1' }))
+    })
+    expect(hook?.session.messages).toHaveLength(1)
+  })
+
+  it('isolates matching provider session ids across host and workspace sources', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(Harness, {
+          connected: true,
+          sessionId: 'session-1',
+          sourceIdentity: 'host-a\0workspace-a'
+        })
+      )
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() => listener?.(snapshotWithMessage()))
+    expect(hook?.session.messages).toHaveLength(1)
+
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, {
+          connected: false,
+          sessionId: 'session-1',
+          sourceIdentity: 'host-b\0workspace-b'
+        })
+      )
+    })
+    expect(hook?.session.messages).toEqual([])
+  })
 })

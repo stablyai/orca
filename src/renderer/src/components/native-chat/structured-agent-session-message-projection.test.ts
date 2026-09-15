@@ -5,7 +5,10 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
-import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+import {
+  pendingStructuredSessionPrompts,
+  projectStructuredAgentSessionMessages
+} from './structured-agent-session-message-projection'
 
 function submission(index: number): AgentJournalSubmission {
   return {
@@ -31,6 +34,32 @@ function item(index: number): AgentJournalRenderItem {
 }
 
 describe('structured agent session message projection', () => {
+  it('shows historical prompts without letting them replace the current owner composer', () => {
+    const approval: AgentJournalRenderItem = {
+      ...item(1),
+      ownerFence: 1,
+      body: {
+        kind: 'approval',
+        title: 'Old approval',
+        detail: null,
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      }
+    }
+    const current: AgentJournalRenderItem = {
+      ...item(2),
+      ownerFence: 3,
+      body: {
+        kind: 'question',
+        question: 'Current question',
+        options: [{ id: 'yes', label: 'Yes' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      }
+    }
+    expect(pendingStructuredSessionPrompts([approval], 3)).toEqual([])
+    expect(pendingStructuredSessionPrompts([approval, current], 3)).toEqual([current])
+  })
+
   it.each([5, 10])('renders %i rapid accepted desktop sends exactly once', (sendCount) => {
     const outbox = Array.from({ length: sendCount }, (_, index) =>
       createStructuredAgentSessionOutboxEntry({

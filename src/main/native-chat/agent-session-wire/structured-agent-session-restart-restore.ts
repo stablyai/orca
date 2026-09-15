@@ -68,7 +68,13 @@ export async function restoreOneStructuredAgentSessionRead(
       return
     }
     input.onReadable(sessionId, restored)
-    await input.retrySettlement(sessionId, restored.params)
+    // A never-reopened chat can retain an attention row if the best-effort write fails;
+    // it cannot veto a later attach, and close drops the host's status projection.
+    try {
+      await input.retrySettlement(sessionId, restored.params)
+    } catch (error) {
+      console.error('agent-session restart settlement deferred', sessionId, error)
+    }
     await input.restoreHandoff(sessionId)
   })
 }

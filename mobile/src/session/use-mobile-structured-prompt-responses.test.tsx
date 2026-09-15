@@ -98,6 +98,40 @@ afterEach(() => {
 })
 
 describe('useMobileStructuredPromptResponses', () => {
+  it('ignores prompts from an older owner generation', async () => {
+    const prompt = { ...groupedPrompt('item-old', 1), ownerFence: 1 }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test double only exercises the mutate call; its return shape is the accepted prompt result.
+    const mutate = vi.fn(async () => ({
+      status: 'accepted' as const,
+      value: {
+        itemId: prompt.itemId,
+        revision: prompt.revision,
+        resolution: {
+          state: 'resolved' as const,
+          selectedOptionId: 'q1:choice-1',
+          resolvedBy: 'mobile',
+          resolvedAt: 2
+        }
+      },
+      sameFence: true
+    })) as unknown as StructuredAgentSessionMutate
+
+    act(() => {
+      renderer = create(
+        createElement(Probe, {
+          sessionKey: 'session-a',
+          state: { ...sessionState(prompt), fence: 2 },
+          mutate
+        })
+      )
+    })
+
+    await act(async () => {
+      expect(await hook().respondQuestion('One')).toBe(false)
+    })
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['another session', 'session-b', groupedPrompt('item-b', 1)],
     ['a newer prompt revision', 'session-a', groupedPrompt('item-a', 2)]

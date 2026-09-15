@@ -224,6 +224,8 @@ export type AgentJournalRenderItem = {
   body: AgentJournalItemBody
   sequence: number
   observedAt: number
+  /** Fence of the first row, unchanged by later revisions or settlement. */
+  ownerFence?: number
   /** Set when the row was appended by crash reconciliation rather than live. */
   recovered?: true
 }

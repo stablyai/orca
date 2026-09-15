@@ -1,6 +1,9 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionHandoffRequest } from '../../../shared/agent-session-wire'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  liveStructuredAgentSessionItems
+} from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { structuredHandoffRetryResumesStoppedOwner } from './structured-agent-session-handoff-admission'
 import { structuredSessionHasPendingPrompt } from './structured-agent-session-handoff-status'
@@ -28,13 +31,15 @@ export function assertScheduledStructuredHandoffIsAdmissible(input: {
   ) {
     throw new Error('agent_session_checkpoint_stale')
   }
-  if (structuredSessionHasPendingPrompt(input.journal)) {
+  if (structuredSessionHasPendingPrompt(input.journal, record.lease.runtimeFence)) {
     throw new Error('Resolve the pending question or approval before switching.')
   }
   if (params.mode !== 'stop-turn' && input.journal.cursor().sequence !== input.journalSequence) {
     throw new Error('The session changed before the handoff started.')
   }
-  const activeTurn = activeStructuredAgentSessionTurnId(input.journal.snapshot().items)
+  const activeTurn = activeStructuredAgentSessionTurnId(
+    liveStructuredAgentSessionItems(input.journal.snapshot().items, record.lease.runtimeFence)
+  )
   if (params.direction === 'to-tui') {
     const expectedTurn = params.mode === 'stop-turn' ? input.turnId : null
     if (activeTurn !== expectedTurn) {
