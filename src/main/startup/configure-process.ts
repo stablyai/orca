@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { isMacPortsPortExecutablePresent } from '../../shared/macports-port-executable'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
@@ -145,6 +146,11 @@ export function patchPackagedProcessPath(): void {
 
   if (process.platform !== 'win32') {
     appendPaths.push('/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin')
+
+    if (process.platform === 'darwin' && isMacPortsPortExecutablePresent()) {
+      // Why gated unlike Homebrew: Intel-Mac leftover after brew dropped Intel; don't seed /opt/local unless `port` is actually installed.
+      appendPaths.push('/opt/local/bin', '/opt/local/sbin')
+    }
 
     if (process.platform === 'linux') {
       // Why: snap and Linuxbrew ship on Linux only, so seeding them elsewhere adds phantom PATH entries every spawn must stat.
