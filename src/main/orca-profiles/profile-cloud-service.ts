@@ -45,6 +45,7 @@ function isUserCancelledAuthError(message: string): boolean {
   )
 }
 
+/** Auth status for an already-resolved active profile, avoiding a second index read. */
 function activeAuth(
   active: ReturnType<typeof ensureActiveOrcaProfile>,
   userDataPath: string

@@ -53,6 +53,7 @@ type RegisterOrcaProfileHandlersOptions = {
   onBeforeSignOut?: () => void
 }
 
+/** Trims and validates a renderer-supplied profile id; anything else is rejected before use. */
 function profileIdFromArgs(args: unknown): string {
   if (
     !args ||
@@ -68,6 +69,7 @@ function profileIdFromArgs(args: unknown): string {
   return profileId
 }
 
+/** Validates a project transfer request: both profile ids, the repo id, and a move/copy mode. */
 function transferProjectArgsFromUnknown(args: unknown): TransferOrcaProfileProjectArgs {
   if (!args || typeof args !== 'object') {
     throw new Error('invalid_orca_profile_project_transfer')
@@ -88,6 +90,7 @@ function transferProjectArgsFromUnknown(args: unknown): TransferOrcaProfileProje
   }
 }
 
+/** Validates a project lookup: trimmed path plus normalised host, connection, and excluded profile. */
 function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjectsByPathArgs {
   if (!args || typeof args !== 'object') {
     throw new Error('invalid_orca_profile_project_path')
@@ -119,6 +122,7 @@ function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjec
   }
 }
 
+/** Trims and validates the `orgId` of an org selection request. */
 function orgIdFromUnknown(args: unknown): string {
   if (!args || typeof args !== 'object') {
     throw new Error('invalid_orca_profile_org_selection')
@@ -130,6 +134,7 @@ function orgIdFromUnknown(args: unknown): string {
   return orgId
 }
 
+/** Keeps only the trimmed, non-empty `orgId`/`name` of a create request; everything else is dropped. */
 function createCloudLinkedProfileArgsFromUnknown(args: unknown): CreateCloudLinkedOrcaProfileArgs {
   if (!args || typeof args !== 'object') {
     return {}
@@ -143,6 +148,7 @@ function createCloudLinkedProfileArgsFromUnknown(args: unknown): CreateCloudLink
   }
 }
 
+/** Runs the pre-relaunch cleanup hook; a failure is logged but never blocks the profile switch. */
 async function runBeforeProfileRelaunch(
   onBeforeRelaunch?: () => void | Promise<void>
 ): Promise<void> {
@@ -156,6 +162,7 @@ async function runBeforeProfileRelaunch(
   }
 }
 
+/** Schedules the app relaunch that completes a profile switch or transfer. */
 function scheduleProfileRelaunch(reason: Extract<AppRelaunchReason, `profile-${string}`>): void {
   setTimeout(() => {
     relaunchApp(reason)

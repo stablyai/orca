@@ -7,6 +7,7 @@ import { noopUnsubscribe } from './web-storage'
 
 /** Browser-fallback `orcaProfiles` API: no cloud sign-in, so every cloud call reports unconfigured. */
 export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
+  /** The one status the browser client can report: local profile, cloud sign-in unconfigured. */
   const webOrcaProfileAuthStatus = () =>
     Promise.resolve({
       activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
