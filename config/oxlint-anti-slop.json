@@ -38,7 +38,7 @@
     "anti-slop/no-shape-in-symbol-names": "off",
     "anti-slop/no-unknown-parameters": "off",
     "anti-slop/no-unknown-returns": "off",
-    "anti-slop/no-unknown-type-aliases": "off",
+    "anti-slop/no-unknown-type-aliases": "error",
     "anti-slop/no-unsafe-dictionary-type": "off",
     "anti-slop/no-widen-then-assert": "off",
     "anti-slop/require-readable-spacing": "off",
