@@ -3,7 +3,11 @@
 // user turn lands in the transcript. Kept separate from the view so the prune
 // rule (match on normalized user-message content) is unit-testable without React.
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import {
+  isNativeChatPendingRowId,
+  NATIVE_CHAT_ANCHORED_PENDING_ID_PREFIX,
+  type NativeChatMessage
+} from '../../../../shared/native-chat-types'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
@@ -262,9 +266,14 @@ export function pendingSendsAsMessages(
     }))
 }
 
+export const ANCHORED_PENDING_ID_PREFIX = NATIVE_CHAT_ANCHORED_PENDING_ID_PREFIX
+
 /** True when a message id was minted for an optimistic pending send. */
-export function isPendingMessageId(id: string): boolean {
-  return id.startsWith('pending:')
+export const isPendingMessageId = isNativeChatPendingRowId
+
+/** True for a pending echo that carries a position of its own. */
+export function isAnchoredPendingMessageId(id: string): boolean {
+  return id.startsWith(ANCHORED_PENDING_ID_PREFIX)
 }
 
 // Why: the seeded prompt has a synthetic id that never matches the real turn's,

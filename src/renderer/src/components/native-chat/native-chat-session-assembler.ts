@@ -12,7 +12,11 @@ import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from '../../../../shared/native-chat-image-transcript-markers'
-import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-pending'
+import {
+  isAnchoredPendingMessageId,
+  isLaunchPromptMessageId,
+  isPendingMessageId
+} from './native-chat-pending'
 
 /** Messages grouped by source. Higher-priority sources (transcript > hook >
  *  scrape) supersede lower ones when they describe the same turn. */
@@ -97,6 +101,10 @@ function supersedes(candidate: NativeChatMessage, existing: NativeChatMessage): 
 function messageSortRank(message: NativeChatMessage): number {
   if (message.id === NATIVE_CHAT_STREAMING_ID) {
     return 1
+  }
+  // An anchored echo owns a position between real rows, so it sorts as content.
+  if (isAnchoredPendingMessageId(message.id)) {
+    return 0
   }
   if (isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
     return 2

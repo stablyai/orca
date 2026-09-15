@@ -231,3 +231,16 @@ export function isSubagentGroupBlock(
 ): block is NativeChatSubagentGroupBlock {
   return block.type === 'subagent-group'
 }
+
+/** Optimistic composer echoes. `pending:` sits at the tail; `pending-at:` carries
+ *  a position of its own. Declared here because the fold pass must recognise them
+ *  as view artefacts, not transcript rows. */
+export const NATIVE_CHAT_PENDING_ID_PREFIX = 'pending:'
+export const NATIVE_CHAT_ANCHORED_PENDING_ID_PREFIX = 'pending-at:'
+
+export function isNativeChatPendingRowId(id: string): boolean {
+  return (
+    id.startsWith(NATIVE_CHAT_PENDING_ID_PREFIX) ||
+    id.startsWith(NATIVE_CHAT_ANCHORED_PENDING_ID_PREFIX)
+  )
+}
