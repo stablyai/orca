@@ -20,10 +20,10 @@ const ANCHOR_NUDGE_MS = 0.5
  * the DOM. So an anchored echo is re-minted under `pending-at:`, which the
  * assembler ranks as content, and takes its anchor's timestamp plus a nudge.
  *
- * "Still at the tail" is NOT a reason to leave an echo trailing: a folded turn
- * grows in place under the id that opened it, so a mid-turn send names a
- * boundary that is still the tail when the reply is complete. Only a boundary
- * that is absent, or carries no timestamp to sort against, falls back.
+ * An echo still at the tail keeps `pending:` and rank 2, so the streaming preview
+ * stays ahead of it — the tier `messageSortRank` exists to hold. Only an echo the
+ * transcript has moved past is repositioned. A boundary that is absent, or that
+ * carries no timestamp to sort against, falls back to the tail rather than guess.
  */
 export function anchorPendingMessagesToSendBoundary(
   messages: readonly NativeChatMessage[],
@@ -36,12 +36,14 @@ export function anchorPendingMessagesToSendBoundary(
   const boundaryByMessageId = new Map(
     pending.map((entry) => [`pending:${entry.id}`, entry.afterMessageId ?? null])
   )
+  const tailId = messages.at(-1)?.id ?? null
   const anchorById = new Map(messages.map((message) => [message.id, message]))
   const anchored = new Map<string, NativeChatMessage[]>()
   const trailing: NativeChatMessage[] = []
   for (const message of pendingMessages) {
     const boundaryId = boundaryByMessageId.get(message.id) ?? null
-    const anchor = boundaryId === null ? undefined : anchorById.get(boundaryId)
+    const anchor =
+      boundaryId === null || boundaryId === tailId ? undefined : anchorById.get(boundaryId)
     if (!anchor || anchor.timestamp === null) {
       trailing.push(message)
       continue

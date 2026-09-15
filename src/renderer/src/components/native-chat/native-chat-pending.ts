@@ -3,7 +3,11 @@
 // user turn lands in the transcript. Kept separate from the view so the prune
 // rule (match on normalized user-message content) is unit-testable without React.
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import {
+  isNativeChatPendingRowId,
+  NATIVE_CHAT_ANCHORED_PENDING_ID_PREFIX,
+  type NativeChatMessage
+} from '../../../../shared/native-chat-types'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
@@ -262,15 +266,10 @@ export function pendingSendsAsMessages(
     }))
 }
 
-/** Id form for an echo placed at its send boundary rather than pinned to the
- *  tail. Separate so `messageSortRank` can order it as content while a
- *  still-at-tail echo keeps its tier behind the streaming bubble. */
-export const ANCHORED_PENDING_ID_PREFIX = 'pending-at:'
+export const ANCHORED_PENDING_ID_PREFIX = NATIVE_CHAT_ANCHORED_PENDING_ID_PREFIX
 
 /** True when a message id was minted for an optimistic pending send. */
-export function isPendingMessageId(id: string): boolean {
-  return id.startsWith('pending:') || id.startsWith(ANCHORED_PENDING_ID_PREFIX)
-}
+export const isPendingMessageId = isNativeChatPendingRowId
 
 /** True for a pending echo that carries a position of its own. */
 export function isAnchoredPendingMessageId(id: string): boolean {

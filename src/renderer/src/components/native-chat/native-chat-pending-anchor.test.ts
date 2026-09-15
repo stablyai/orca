@@ -6,6 +6,8 @@ import {
 } from './native-chat-pending-anchor'
 import { pendingSendsAsMessages, type NativeChatPendingSend } from './native-chat-pending'
 import { orderNativeChatMessages } from './native-chat-message-grouping'
+import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
 
 function message(
   id: string,
@@ -39,7 +41,7 @@ describe('anchorPendingMessagesToSendBoundary', () => {
   it('keeps an unmatchable echo where it was sent as the turn keeps going', () => {
     const atSendTime = [message('u1', 'user', 'first'), message('a1', 'assistant', 'working')]
     const pending = [send('p1', 'second', 'a1')]
-    expect(placed(atSendTime, pending)).toEqual(['u1', 'a1', 'pending-at:p1'])
+    expect(placed(atSendTime, pending)).toEqual(['u1', 'a1', 'pending:p1'])
 
     const laterTurns = [
       ...atSendTime,
@@ -49,20 +51,17 @@ describe('anchorPendingMessagesToSendBoundary', () => {
     expect(placed(laterTurns, pending)).toEqual(['u1', 'a1', 'pending-at:p1', 'a2', 'a3'])
   })
 
-  // The case the first attempt at this fix missed: `foldToolMessages` folds a
-  // whole turn into the assistant message that opened it, so that message keeps
-  // its id and grows in place. A mid-turn send therefore names a boundary that is
-  // STILL the tail once the reply is complete — treating "at the tail" as "nothing
-  // came after" left the echo below the entire answer, exactly the reported bug.
-  it('anchors even when the boundary is still the tail, because a folded turn grows in place', () => {
-    const atSendTime = [message('u1', 'user', 'first'), message('a1', 'assistant', 'working')]
+  // Review note from @pullfrog: a still-at-tail echo must stay on `pending:` and
+  // rank 2, or it sorts AHEAD of the streaming preview — the tier the comment on
+  // `messageSortRank` calls load-bearing. Only an echo the transcript moved past
+  // is repositioned.
+  it('leaves a still-at-tail echo trailing so the streaming bubble keeps its place', () => {
+    const atSendTime = [message('u1', 'user', 'first', 10), message('a1', 'assistant', 'go', 20)]
     const pending = [send('p1', 'second', 'a1')]
-    const grownInPlace = [
-      message('u1', 'user', 'first'),
-      message('a1', 'assistant', 'working, ran 3 commands, done')
-    ]
-    expect(placed(atSendTime, pending)).toEqual(['u1', 'a1', 'pending-at:p1'])
-    expect(placed(grownInPlace, pending)).toEqual(['u1', 'a1', 'pending-at:p1'])
+    expect(placed(atSendTime, pending)).toEqual(['u1', 'a1', 'pending:p1'])
+
+    const turnMovedOn = [...atSendTime, message('a2', 'assistant', 'done', 30)]
+    expect(placed(turnMovedOn, pending)).toEqual(['u1', 'a1', 'pending-at:p1', 'a2'])
   })
 
   it('trails an echo whose boundary a bounded read paged out instead of guessing', () => {
@@ -142,6 +141,73 @@ describe('anchored order survives the list projection', () => {
       'pending-at:p1',
       'a2',
       'a3'
+    ])
+  })
+})
+
+// Two regressions @pullfrog caught in the anchoring itself, both verified through
+// the same path the list renders.
+describe('anchoring does not cost the turn its content or its tiers', () => {
+  it('keeps a tool result whose call sits after the echo', () => {
+    const messages: NativeChatMessage[] = [
+      message('u1', 'user', 'first', 10),
+      {
+        id: 'a1',
+        role: 'assistant',
+        timestamp: 20,
+        source: 'transcript',
+        blocks: [
+          { type: 'text', text: 'opened the turn' },
+          { type: 'tool-call', name: 'Bash', input: { command: 'ls' } }
+        ]
+      },
+      {
+        id: 'tr',
+        role: 'tool',
+        timestamp: 40,
+        source: 'transcript',
+        blocks: [{ type: 'tool-result', output: 'a.txt' }]
+      }
+    ]
+    const pending = [send('p1', 'sent mid-turn', 'a1')]
+    const project = createNativeChatMessageListProjection()
+    const rows = project([
+      ...anchorPendingMessagesToSendBoundary(
+        messages,
+        pending,
+        pendingSendsAsMessages(pending, messages)
+      ).messages
+    ])
+    // Ending the fold run on the echo strands the result, and
+    // `dropUnattributableToolResults` then deletes the row outright.
+    const outputs = rows.flatMap((row) =>
+      row.blocks.filter((block) => block.type === 'tool-result').map((block) => block.output)
+    )
+    expect(outputs).toEqual(['a.txt'])
+    expect(rows.map((row) => row.id)).toContain('pending-at:p1')
+  })
+
+  it('keeps a still-at-tail echo behind the streaming preview', () => {
+    const messages = [message('u1', 'user', 'first', 10), message('a1', 'assistant', 'go', 20)]
+    const pending = [send('p1', 'just sent', 'a1')]
+    const streaming: NativeChatMessage = {
+      id: NATIVE_CHAT_STREAMING_ID,
+      role: 'assistant',
+      timestamp: null,
+      source: 'scrape',
+      blocks: [{ type: 'text', text: 'typing' }]
+    }
+    const anchored = anchorPendingMessagesToSendBoundary(
+      messages,
+      pending,
+      pendingSendsAsMessages(pending, messages)
+    )
+    const ordered = orderNativeChatMessages([...anchored.messages, streaming, ...anchored.trailing])
+    expect(ordered.map((row) => row.id)).toEqual([
+      'u1',
+      'a1',
+      NATIVE_CHAT_STREAMING_ID,
+      'pending:p1'
     ])
   })
 })

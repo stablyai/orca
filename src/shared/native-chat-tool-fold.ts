@@ -1,4 +1,5 @@
 import {
+  isNativeChatPendingRowId,
   isSubagentGroupBlock,
   isToolCallBlock,
   isToolResultBlock,
@@ -116,6 +117,10 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
       clonedAssistantIndex = -1
     } else if (
       !isSubagentRosterMessage(message) &&
+      // An optimistic echo is a view artefact sitting where the user typed, not a
+      // transcript row. Ending the run on it strands the tool results that follow,
+      // and `dropUnattributableToolResults` then deletes them outright.
+      !isNativeChatPendingRowId(message.id) &&
       (!isNoiseMessage(message) || isInterruptionBoundary(message))
     ) {
       mutableAssistantIndex = -1
