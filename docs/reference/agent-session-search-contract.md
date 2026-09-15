@@ -29,10 +29,12 @@ Results contain `kind: 'results'`, `hits`, `page: { cursor, hasMore }`,
 contains `route`, optional `repairedTerms`, and `scope`. Diagnostics never appear
 at the top level. Status is never attached to search results.
 
-A cursor belongs to one query and one host's index generation. Query, scope,
-filters, and sorting must remain the same; page size may change. Writes that
-advance the generation can invalidate it, including retention purges. A refused
-cursor yields `{ kind: 'stale-cursor', generation, expectedGeneration? }` and the
+A cursor belongs to one query, one host's index generation, and an opaque persisted
+index incarnation. Query, scope, filters, and sorting must remain the same; page
+size may change. Writes that advance the generation can invalidate it, including
+retention purges. Clearing or rebuilding the database invalidates it even when the
+new generation counter matches. A refused cursor yields
+`{ kind: 'stale-cursor', generation, expectedGeneration? }` and the
 client discards it and issues page 1 without a cursor. Reusing that refused cursor
 continues to fail; there is no server-side cursor acknowledgement state.
 Malformed cursors and cursors for a different query yield
@@ -131,7 +133,33 @@ uses the absent-service sentinel above. Transport failures, authentication error
 and invalid payloads remain errors. Unknown request fields are stripped for wire
 compatibility.
 
-The process-local `setSessionSearchService(service | null)` registry is the only
-production seam in this PR. Tests use fake services and a real synthetic store.
-Nothing constructs an engine or indexer in production. PR 3b owns process
-lifecycle, consent/settings application, and registration of the production service.
+The process-local `setSessionSearchService(service | null)` registry connects
+these endpoints to the production service installed by PR 3b. Desktop indexing
+runs in the scanner child; orcad and the SSH relay register their own in-process
+services. Registration alone does not grant consent.
+
+## Desktop index controls (PR8)
+
+Settings → Agent Session History controls this desktop's persisted
+`aiVaultSearch { enabled, historyDays }` policy. It stays local even when another
+execution host is selected. Paired clients cannot grant consent or clear an index
+through this surface; SSH relay registration remains disabled without a separate
+host consent mechanism.
+
+`aiVault.clearSearchIndex()` is a no-argument desktop-only preload operation over
+`aiVault:clearSearchIndex`. It addresses the local scanner child, not the selected
+remote host. The child's existing interactive request lane executes `searchClear`
+through `SessionSearchInstance.clear()`: close the indexer and database handles,
+remove the SQLite database and sidecars, then reconstruct only if consent remains
+enabled. Errors propagate to the settings pane. This operation never deletes
+original transcripts. There is no new runtime or relay method. Opaque cursors also
+carry a persistent database identity: clearing creates a new identity, so a
+pre-clear or legacy cursor returns `stale-cursor` even if the rebuilt numeric
+generation happens to match. Reopening the same database preserves its identity.
+
+Disabling closes the indexer and keeps the index copy; clearing deletes the copy.
+Changing retention reuses the existing close-and-construct policy application.
+The settings pane reads status only while enabled and visible, polls only an
+observed indexing phase, and stops on completion or error. Opening the pane,
+changing policy, or pressing Refresh obtains a new observation. The indexer's own
+schedule does not depend on the pane.

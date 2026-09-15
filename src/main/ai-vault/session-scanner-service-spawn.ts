@@ -109,6 +109,10 @@ export function reconcileSessionSearchInService(): Promise<void> {
   return getSharedClient().request({ type: 'request', operation: 'searchReconcile' })
 }
 
+export function clearSessionSearchInService(): Promise<void> {
+  return getSharedClient().request({ type: 'request', operation: 'searchClear' })
+}
+
 /** Boot and every settings change: push the policy and keep a child while the index runs. */
 export function updateSessionSearchInService(init: AiVaultSessionSearchInit): void {
   getSharedClient().updateSessionSearch(init)

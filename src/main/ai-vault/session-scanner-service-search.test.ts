@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
@@ -154,6 +154,21 @@ it('discovers a new root through the parent exchange on manual reconciliation', 
   if (response.kind === 'results') {
     expect(response.hits.map((hit) => hit.sessionId)).toEqual([id])
   }
+})
+
+it('clears the owned index and rebuilds from the transcripts still on disk', async () => {
+  const transcriptPath = join(harness.claudeProjectDir, `${SESSION_ID}.jsonl`)
+  expect((await searchSessions('distinctive')).kind).toBe('results')
+  rmSync(transcriptPath)
+
+  expect(await call({ type: 'request', operation: 'searchClear' })).toEqual({
+    operation: 'searchClear',
+    value: null,
+    type: 'result',
+    id: expect.any(Number)
+  })
+  expect(await searchSessions('distinctive')).toMatchObject({ kind: 'results', hits: [] })
+  expect(existsSync(harness.databasePath)).toBe(true)
 })
 
 it('answers disabled once consent is withdrawn, without a respawn', async () => {

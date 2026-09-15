@@ -26,6 +26,7 @@ export type AiVaultServiceOperation =
   | 'searchSessions'
   | 'searchStatus'
   | 'searchReconcile'
+  | 'searchClear'
 
 // Typed from the union so a new operation cannot be added without landing here,
 // and held as strings so recognising one costs no assertion.
@@ -36,7 +37,8 @@ const AI_VAULT_SERVICE_OPERATIONS: ReadonlySet<string> = new Set<AiVaultServiceO
   'firstPrompt',
   'searchSessions',
   'searchStatus',
-  'searchReconcile'
+  'searchReconcile',
+  'searchClear'
 ])
 
 export type AiVaultServiceSubagentRequest = {
@@ -83,6 +85,7 @@ export type AiVaultServiceRequestBody =
   | { type: 'request'; operation: 'searchSessions'; request: AiVaultSearchRequest }
   | { type: 'request'; operation: 'searchStatus' }
   | { type: 'request'; operation: 'searchReconcile' }
+  | { type: 'request'; operation: 'searchClear' }
 
 export type AiVaultServiceRequest = AiVaultServiceRequestBody & { id: number }
 
@@ -104,6 +107,7 @@ export type AiVaultServiceResultValue =
   | { operation: 'searchSessions'; value: AiVaultSearchResponse }
   | { operation: 'searchStatus'; value: AiVaultSearchStatus }
   | { operation: 'searchReconcile'; value: null }
+  | { operation: 'searchClear'; value: null }
 
 export type AiVaultServiceChildMessage =
   | { type: 'sessionSearchRoots'; id: number }

@@ -3,6 +3,7 @@ import type {
   AiVaultSearchRequestSchema,
   AiVaultSearchResponseSchema,
   AiVaultSearchHitSchema,
+  AiVaultSearchHostOutcomeSchema,
   AiVaultSearchStatusSchema
 } from './ai-vault-search-contract'
 
@@ -20,3 +21,5 @@ export type AiVaultSearchResponse = z.infer<typeof AiVaultSearchResponseSchema>
  */
 export type AiVaultSearchHit = z.infer<typeof AiVaultSearchHitSchema>
 export type AiVaultSearchStatus = z.infer<typeof AiVaultSearchStatusSchema>
+/** Only an all-computers merge reports these; a single-host answer omits them. */
+export type AiVaultSearchHostOutcome = z.infer<typeof AiVaultSearchHostOutcomeSchema>

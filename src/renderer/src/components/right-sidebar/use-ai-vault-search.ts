@@ -5,6 +5,8 @@ import type {
   AiVaultSearchResponse
 } from '../../../../shared/ai-vault-search-types'
 import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
@@ -17,7 +19,7 @@ import { aiVaultSearchHitToSession } from './ai-vault-search-session'
 
 type SearchIdentity = {
   request: AiVaultSearchRequest | null
-  host: ExecutionHostId | null
+  scope: ExecutionHostScope | null
   policyKey: string
   revision: number
 }
@@ -32,26 +34,26 @@ type SearchPage = {
 
 export function useAiVaultSearch(
   request: AiVaultSearchRequest | null,
-  host: ExecutionHostId | null,
+  scope: ExecutionHostScope | null,
   policyKey: string
 ) {
   const [page, setPage] = useState<SearchPage | null>(null)
   const [revision, setRevision] = useState(0)
   const loadPage = useRef<((cursor: string) => void) | null>(null)
   const identity = useMemo(
-    () => ({ request, host, policyKey, revision }),
-    [request, host, policyKey, revision]
+    () => ({ request, scope, policyKey, revision }),
+    [request, scope, policyKey, revision]
   )
 
   useEffect(() => {
-    const { request, host } = identity
-    if (!request || !host) {
+    const { request, scope } = identity
+    if (!request || !scope) {
       return
     }
     let cancelled = false
     let pending = false
     async function run(cursor?: string) {
-      if (pending || cancelled || !request || !host) {
+      if (pending || cancelled || !request || !scope) {
         return
       }
       pending = true
@@ -63,14 +65,14 @@ export function useAiVaultSearch(
         loading: true
       }))
       try {
-        let response = await window.api.aiVault.searchSessions({ ...request, cursor }, host)
+        let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
         let append = Boolean(cursor)
         if (cancelled) {
           return
         }
         if (response.kind === 'stale-cursor') {
           append = false
-          response = await window.api.aiVault.searchSessions(request, host)
+          response = await window.api.aiVault.searchSessions(request, scope)
         }
         if (cancelled) {
           return
@@ -110,7 +112,7 @@ export function useAiVaultSearch(
     hits: current?.hits ?? [],
     response: current?.response ?? null,
     error: current?.error ?? false,
-    loading: Boolean(request && host && (!current || current.loading)),
+    loading: Boolean(request && scope && (!current || current.loading)),
     removeHit: (hit: AiVaultSearchHit) =>
       setPage((previous) =>
         previous?.identity === identity
@@ -126,6 +128,11 @@ export function useAiVaultSearch(
   }
 }
 
+/** Under `all` every hit names its own host; a single-host answer belongs to the host we addressed. */
+function hitExecutionHostId(hit: AiVaultSearchHit, host: ExecutionHostId | null): ExecutionHostId {
+  return host ?? parseExecutionHostId(hit.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID
+}
+
 export function useAiVaultPanelSearch(
   query: string,
   agents: readonly AiVaultAgent[],
@@ -135,21 +142,23 @@ export function useAiVaultPanelSearch(
   const settings = useAppStore((state) => state.settings?.aiVaultSearch)
   const policy = resolveAiVaultSearchSettings({ aiVaultSearch: settings })
   const host = parseExecutionHostId(executionHostScope)?.id ?? null
+  const scope: ExecutionHostScope | null =
+    executionHostScope === ALL_EXECUTION_HOSTS_SCOPE ? ALL_EXECUTION_HOSTS_SCOPE : host
   const searching = query.trim().length > 0
   const localConsent = executionHostScope === 'local' && !isWebClientLocation() && !policy.enabled
   const request = useMemo(
     () =>
-      searching && host && !localConsent && agents.length > 0
+      searching && scope && !localConsent && agents.length > 0
         ? {
             query: query.trim(),
             filters: { agents: [...agents], ...(paths ? { scopePaths: [...paths] } : {}) }
           }
         : null,
-    [searching, host, localConsent, agents, query, paths]
+    [searching, scope, localConsent, agents, query, paths]
   )
-  const search = useAiVaultSearch(request, host, JSON.stringify(policy))
+  const search = useAiVaultSearch(request, scope, JSON.stringify(policy))
   const sessions = useMemo(
-    () => (host ? search.hits.map((hit) => aiVaultSearchHitToSession(hit, host)) : []),
+    () => search.hits.map((hit) => aiVaultSearchHitToSession(hit, hitExecutionHostId(hit, host))),
     [search.hits, host]
   )
   const searchHits = useMemo(
@@ -169,6 +178,6 @@ export function useAiVaultPanelSearch(
     searching,
     localConsent,
     host,
-    resetKey: JSON.stringify([host, request])
+    resetKey: JSON.stringify([scope, request])
   }
 }

@@ -3,7 +3,40 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
+import type { AiVaultSearchHostOutcome } from '../../../../shared/ai-vault-search-types'
+import { getExecutionHostLabel, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { useAiVaultPanelSearch } from './use-ai-vault-search'
+
+// Short English like `getExecutionHostLabel`, which these read beside; null means the host answered.
+function hostSkipReason(outcome: AiVaultSearchHostOutcome['outcome']): string | null {
+  switch (outcome) {
+    case 'searched':
+      return null
+    case 'stale':
+      return 'index changed'
+    case 'disabled':
+      return 'search off'
+    case 'not-ready':
+      return 'not ready'
+    case 'no-service':
+      return 'unavailable'
+    case 'unreachable':
+      return 'unreachable'
+  }
+}
+
+function describeSkippedHosts(hosts: readonly AiVaultSearchHostOutcome[]): string | null {
+  const skipped = hosts.flatMap((entry) => {
+    const reason = hostSkipReason(entry.outcome)
+    const label = getExecutionHostLabel(parseExecutionHostId(entry.executionHostId)?.id ?? null)
+    return reason ? [`${label} (${reason})`] : []
+  })
+  return skipped.length > 0
+    ? translate('sessionSearch.panel.hostsSkipped', 'Not searched: {{value0}}', {
+        value0: skipped.join(' · ')
+      })
+    : null
+}
 
 export function AiVaultPanelSearch({
   search,
@@ -17,7 +50,6 @@ export function AiVaultPanelSearch({
   children: ReactNode
 }) {
   const { localConsent, response, error, loading, retry: onRetry } = search
-  const allHosts = !search.host
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(false)
   async function enable() {
@@ -37,12 +69,7 @@ export function AiVaultPanelSearch({
   }
   const unavailable = response?.kind === 'unavailable' ? response.reason : null
   let message: string | null = null
-  if (allHosts) {
-    message = translate(
-      'sessionSearch.panel.chooseHost',
-      'Choose one computer to search its sessions.'
-    )
-  } else if (localConsent) {
+  if (localConsent) {
     message = translate(
       'sessionSearch.panel.consent',
       'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.'
@@ -98,15 +125,18 @@ export function AiVaultPanelSearch({
       'No matching sessions in the indexed history. Try another query or scope.'
     )
   }
+  const skippedHosts =
+    response?.kind === 'results' ? describeSkippedHosts(response.hosts ?? []) : null
   return (
     <>
-      {message && (
+      {(message || skippedHosts) && (
         <div
           className="space-y-2 border-b border-sidebar-border px-3 py-3 text-xs text-muted-foreground"
           role="status"
         >
-          <p>{message}</p>
-          {localConsent && !allHosts ? (
+          {message && <p>{message}</p>}
+          {skippedHosts && <p>{skippedHosts}</p>}
+          {localConsent ? (
             <>
               {saveError && (
                 <p className="text-destructive">
@@ -125,8 +155,7 @@ export function AiVaultPanelSearch({
                 </Button>
               </div>
             </>
-          ) : !allHosts &&
-            !noAgents &&
+          ) : !noAgents &&
             (error ||
               unavailable ||
               response?.kind === 'stale-cursor' ||

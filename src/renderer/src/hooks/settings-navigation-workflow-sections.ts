@@ -15,6 +15,7 @@ import {
   BookOpen,
   CalendarClock,
   Files,
+  History,
   GitBranch,
   Globe,
   ListChecks,
@@ -67,6 +68,25 @@ export function buildWorkflowSettingsSections(
       searchEntries: getShareSkillsSettingsSearchEntries(),
       group: 'workflows',
       badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+    },
+    {
+      id: 'session-history',
+      title: translate('sessionHistory.settings.title', 'Agent Session History'),
+      description: translate(
+        'sessionHistory.settings.description',
+        'Manage session search on this computer. These settings do not enable indexing on SSH or paired hosts.'
+      ),
+      icon: History,
+      searchEntries: [
+        {
+          title: translate('sessionHistory.settings.enable', 'Enable session history search'),
+          description: translate(
+            'sessionHistory.settings.searchDescription',
+            'Transcript indexing, index status and delete index.'
+          )
+        }
+      ],
+      group: 'workflows'
     },
     {
       id: 'git',

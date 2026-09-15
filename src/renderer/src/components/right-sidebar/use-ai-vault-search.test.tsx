@@ -5,12 +5,21 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse
 } from '../../../../shared/ai-vault-search-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { searchResults } from '../../../../shared/ai-vault-search-test-fixture'
-import { useAiVaultSearch } from './use-ai-vault-search'
+import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
+import { searchHit, searchResults } from '../../../../shared/ai-vault-search-test-fixture'
+import { useAiVaultPanelSearch, useAiVaultSearch } from './use-ai-vault-search'
 
+vi.mock('@/store', () => ({
+  useAppStore: (select: (state: { settings: undefined }) => unknown) =>
+    select({ settings: undefined })
+}))
+
+const ALL_AGENTS = ['codex' as const]
+const ALL_REQUEST = { query: 'needle', filters: { agents: ['codex'] } }
 const searchSessions =
-  vi.fn<(request: AiVaultSearchRequest, host?: ExecutionHostId) => Promise<AiVaultSearchResponse>>()
+  vi.fn<
+    (request: AiVaultSearchRequest, scope?: ExecutionHostScope) => Promise<AiVaultSearchResponse>
+  >()
 const empty: AiVaultSearchResponse = {
   kind: 'results',
   hits: [],
@@ -207,5 +216,54 @@ it('removes a confirmed-deleted hit without re-querying a potentially stale inde
   act(() => result.current.removeHit(response.hits[0]))
   expect(result.current.hits).toEqual([])
   expect(searchSessions).toHaveBeenCalledTimes(1)
+  unmount()
+})
+
+it('searches every computer at once and keeps each hit on the computer that owns it', async () => {
+  searchSessions.mockResolvedValueOnce({
+    ...searchResults(),
+    hits: [
+      { ...searchHit(), sessionId: 'remote', executionHostId: 'ssh:build-box' },
+      { ...searchHit(), sessionId: 'unattributed' }
+    ],
+    generation: 0,
+    hosts: [
+      { executionHostId: 'local', outcome: 'searched' },
+      { executionHostId: 'ssh:build-box', outcome: 'searched' }
+    ]
+  })
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all')
+  )
+  await debounce()
+  expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
+    { ...ALL_REQUEST, cursor: undefined },
+    'all'
+  )
+  expect(result.current.sessions.map((session) => session.executionHostId)).toEqual([
+    'ssh:build-box',
+    'local'
+  ])
+  unmount()
+})
+
+it('restarts page one under the all scope when the merged cursor goes stale', async () => {
+  searchSessions.mockResolvedValueOnce({
+    ...searchResults(),
+    generation: 0,
+    page: { cursor: 'merged', hasMore: true }
+  })
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all')
+  )
+  await debounce()
+  searchSessions
+    .mockResolvedValueOnce({ kind: 'stale-cursor', generation: 0 })
+    .mockResolvedValueOnce({ ...searchResults(), generation: 0 })
+  act(() => result.current.loadMore())
+  await debounce()
+  expect(searchSessions.mock.calls[1]).toEqual([{ ...ALL_REQUEST, cursor: 'merged' }, 'all'])
+  expect(searchSessions.mock.calls[2]).toEqual([ALL_REQUEST, 'all'])
+  expect(result.current.sessions.map((session) => session.executionHostId)).toEqual(['local'])
   unmount()
 })
