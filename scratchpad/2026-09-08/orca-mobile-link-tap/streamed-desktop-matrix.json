@@ -1,0 +1,158 @@
+[
+  {
+    "id": "markdown",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 0,
+      "timestamp": 1788848303.008378
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 332
+    },
+    "point": {
+      "x": 170,
+      "y": 332
+    },
+    "hit": {
+      "x": 170,
+      "y": 332,
+      "adjusted": true,
+      "handled": false
+    }
+  },
+  {
+    "id": "automatic",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 192,
+      "timestamp": 1788848303.048197
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 332
+    },
+    "point": {
+      "x": 170,
+      "y": 332
+    },
+    "hit": {
+      "x": 170,
+      "y": 332,
+      "adjusted": true,
+      "handled": false
+    }
+  },
+  {
+    "id": "internal",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 248,
+      "timestamp": 1788848303.065038
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 332
+    },
+    "point": {
+      "x": 170,
+      "y": 332
+    },
+    "hit": {
+      "x": 170,
+      "y": 332,
+      "adjusted": true,
+      "handled": false
+    }
+  },
+  {
+    "id": "card",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 304,
+      "timestamp": 1788848303.082649
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 332
+    },
+    "point": {
+      "x": 170,
+      "y": 332
+    },
+    "hit": {
+      "x": 170,
+      "y": 332,
+      "adjusted": true,
+      "handled": false
+    }
+  },
+  {
+    "id": "button",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 360,
+      "timestamp": 1788848303.099766
+    },
+    "cssPoint": {
+      "x": 99.125,
+      "y": 332
+    },
+    "point": {
+      "x": 99,
+      "y": 332
+    },
+    "hit": {
+      "x": 99,
+      "y": 332,
+      "adjusted": true,
+      "handled": false
+    }
+  },
+  {
+    "id": "external",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 416,
+      "timestamp": 1788848303.116355
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 332
+    },
+    "point": {
+      "x": 170,
+      "y": 332
+    },
+    "hit": {
+      "x": 170,
+      "y": 332,
+      "adjusted": true,
+      "handled": false
+    }
+  }
+]
