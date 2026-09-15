@@ -52,15 +52,13 @@ export type SubmissionReconciliation =
       providerItemId: string
       identity: AgentJournalItemIdentity
     }
-  | { clientMessageId: string; outcome: 'rejected'; reason: SubmissionRejectionReason }
   | { clientMessageId: string; outcome: 'unknown'; reason: SubmissionUnknownReason }
-
-export type SubmissionRejectionReason = 'not_delivered'
 
 export type SubmissionUnknownReason =
   | 'history_boundary_inconsistent'
   | 'turn_in_flight'
   | 'ambiguous_match'
+  | 'unmatched'
 
 /**
  * Resolve every unsettled submission against provider history.
@@ -192,11 +190,12 @@ function resolveOne(
       reason: 'turn_in_flight'
     }
   }
-  // Absent from a history we can trust the boundary of, with nothing running:
-  // the provider never took it.
+  // Absent from the window. That is NOT evidence the provider never took it:
+  // history can omit a delivered message for reasons this pass cannot see, and
+  // the one state that would license a re-send is the one we must never infer.
   return {
     clientMessageId: submission.clientMessageId,
-    outcome: 'rejected',
-    reason: 'not_delivered'
+    outcome: 'unknown',
+    reason: 'unmatched'
   }
 }

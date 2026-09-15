@@ -553,7 +553,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     expect(retryParams?.retryUnknown).toBeUndefined()
   })
 
-  it('rotates a history-rejected unknown head so the queued tail can advance', async () => {
+  it('rotates a first-hand rejected head so the queued tail can advance', async () => {
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -597,7 +597,9 @@ describe('useStructuredAgentSessionOutbox', () => {
           payloadFingerprint: 'fingerprint',
           dispatchState: 'rejected',
           providerItemId: null,
-          reason: 'not_delivered',
+          // First-hand: the frame provably never reached the provider, which is
+          // the only shape that may be re-sent under a fresh id.
+          reason: 'provider_write_failed',
           submittedAt: 10,
           resolvedAt: 10
         }

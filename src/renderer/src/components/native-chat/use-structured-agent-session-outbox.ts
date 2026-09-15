@@ -275,12 +275,13 @@ export function useStructuredAgentSessionOutbox(args: {
       (candidate) => candidate.clientMessageId === clientMessageId
     )
     const current = outboxRef.current.find((entry) => entry.clientMessageId === clientMessageId)
-    // A provider-history reconciliation can settle an earlier unknown as
-    // rejected before the user presses Retry. Reusing that operation id only
-    // replays the settled rejection forever, so rotate the id for a safe resend.
+    // Rotation is safe ONLY for a first-hand rejection, where the frame provably
+    // never reached the provider. A `recovered` one was inferred by a restart
+    // pass and may name a message the model already acted on, so it keeps its id
+    // and stays unconfirmed rather than becoming a second delivery.
     if (
       current &&
-      (submission?.dispatchState === 'rejected' ||
+      ((submission?.dispatchState === 'rejected' && submission.recovered !== true) ||
         retryWithFreshClientMessageIdRef.current === clientMessageId)
     ) {
       retryWithFreshClientMessageIdRef.current = null

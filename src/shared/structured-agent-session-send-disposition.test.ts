@@ -122,6 +122,35 @@ describe('ambiguous operation refusals', () => {
     expect(disposition.blockedClientMessageId).toBe(entry.clientMessageId)
   })
 
+  it('never rotates a recovered rejection, so a second-hand verdict cannot resend', () => {
+    // `not_delivered` is a legacy value: a shipped build inferred it from an
+    // empty history window, and no producer emits it any more. Such a row is
+    // still on disk, and rotating its id is exactly what turned an unprovable
+    // read into a duplicate delivery.
+    const result = rejectedWith('not_delivered')
+    if (!result.ok) {
+      throw new Error('expected a send result')
+    }
+    result.value.submission = { ...result.value.submission, recovered: true }
+
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [entry],
+      entry,
+      blockedClientMessageId: null,
+      result,
+      createOperationId: () => 'fresh-id'
+    })
+
+    expect(disposition.retryWithFreshClientMessageId).toBeNull()
+    expect(disposition.entries).toMatchObject([
+      {
+        clientMessageId: entry.clientMessageId,
+        state: 'unconfirmed',
+        retryAfterUnknownSubmittedAt: -1
+      }
+    ])
+  })
+
   it('parks a recovered missing submission without polling forever', () => {
     const result = rejectedWith(null)
     if (!result.ok) {

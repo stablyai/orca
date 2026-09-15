@@ -145,15 +145,15 @@ export function disposeStructuredAgentSessionSendResult(
       retryWithFreshClientMessageId: null
     }
   }
-  if (submission.dispatchState === 'rejected') {
-    return {
-      entries: replaceEntryState(input, 'queued'),
-      error: structuredAgentSessionRejectionNotice(submission.reason),
-      blockedClientMessageId: input.entry.clientMessageId,
-      retryWithFreshClientMessageId: input.entry.clientMessageId
-    }
-  }
-  if (submission.dispatchState === 'unknown' && submission.recovered) {
+  // A `recovered` settlement is second-hand: a restart pass wrote it, not the
+  // provider refusing this frame. It must never rotate the id — that is exactly
+  // how an unprovable verdict becomes a second delivery. Parks as unconfirmed,
+  // which is what it honestly is. Covers rows a shipped build already latched
+  // `rejected` from a history read.
+  if (
+    submission.recovered &&
+    (submission.dispatchState === 'rejected' || submission.dispatchState === 'unknown')
+  ) {
     return {
       entries: input.entries.map((candidate) =>
         candidate.clientMessageId === input.entry.clientMessageId
@@ -163,6 +163,14 @@ export function disposeStructuredAgentSessionSendResult(
       error: null,
       blockedClientMessageId: input.blockedClientMessageId,
       retryWithFreshClientMessageId: null
+    }
+  }
+  if (submission.dispatchState === 'rejected') {
+    return {
+      entries: replaceEntryState(input, 'queued'),
+      error: structuredAgentSessionRejectionNotice(submission.reason),
+      blockedClientMessageId: input.entry.clientMessageId,
+      retryWithFreshClientMessageId: input.entry.clientMessageId
     }
   }
   // `pending` is the host saying the message was written and is awaiting the
