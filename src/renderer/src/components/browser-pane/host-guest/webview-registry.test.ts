@@ -55,6 +55,7 @@ describe('webview registry drag listeners', () => {
           removedListeners.push({ type, listener, options })
         }
       ),
+      dispatchEvent: vi.fn(),
       focus: vi.fn(),
       api: {
         browser: {
@@ -78,6 +79,34 @@ describe('webview registry drag listeners', () => {
 
     expect(addedListeners.map((entry) => entry.type)).toEqual(['dragstart', 'dragend', 'drop'])
   })
+
+  it.each(['webview', 'address-bar', null] as const)(
+    'retries only a pending guest focus request on dom-ready (%s)',
+    async (target) => {
+      const { registerPersistentWebview } = await import('./webview-registry')
+      const { queueBrowserFocusRequest, consumeBrowserFocusRequest } =
+        await import('./browser-focus')
+      const webview = createWebview()
+      registerPersistentWebview('page-1', webview)
+      if (target) {
+        queueBrowserFocusRequest({ pageId: 'page-1', target })
+      }
+
+      webview.dispatchEvent(new Event('dom-ready'))
+
+      if (target === 'webview') {
+        expect(window.dispatchEvent).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            type: 'orca:browser-focus-request',
+            detail: { pageId: 'page-1', target: 'webview' }
+          })
+        )
+      } else {
+        expect(window.dispatchEvent).not.toHaveBeenCalled()
+      }
+      consumeBrowserFocusRequest('page-1')
+    }
+  )
 
   it('removes drag listeners after the last webview is destroyed', async () => {
     const { destroyPersistentWebview, registerPersistentWebview } =
