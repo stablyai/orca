@@ -36,6 +36,7 @@ const HostedAddRepoDialog = lazyWithRetry(() => import('@/components/sidebar/Add
 
 type ComposerModalData = {
   prefilledName?: string
+  prefilledPrompt?: string
   initialRepoId?: string
   initialEphemeralVmRecipeId?: string
   initialProjectGroupId?: string
@@ -122,14 +123,13 @@ function QuickTabBody({
     composerRef,
     onComposerNodeChange,
     nameInputRef,
+    promptTextareaRef,
     submitQuick,
     createDisabled,
     selectAddedProjectRepo
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
-    // Why: the modal is quick-create only now, so prompt-prefill state is
-    // intentionally ignored even if older callers still send it.
-    initialPrompt: '',
+    initialPrompt: modalData.prefilledPrompt ?? '',
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
@@ -299,6 +299,7 @@ function QuickTabBody({
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
+        promptTextareaRef={promptTextareaRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
