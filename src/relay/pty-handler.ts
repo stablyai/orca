@@ -645,7 +645,14 @@ export class PtyHandler {
 
   /** Where the relay's own node-pty lives — the deployed bundle dir, never cwd. */
   private relayNodePtyDir(): string {
-    return join(__dirname, 'node_modules', 'node-pty')
+    // Packaged relays live under Resources/relay while runtime dependencies are
+    // copied to the sibling Resources/node_modules directory. Development
+    // bundles keep node_modules beside the relay output, so retain that path as
+    // the fallback.
+    const packagedRoot = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+    const packagedDir = packagedRoot ? join(packagedRoot, 'node_modules', 'node-pty') : ''
+    const localDir = join(__dirname, 'node_modules', 'node-pty')
+    return packagedDir && existsSync(packagedDir) ? packagedDir : localDir
   }
 
   /**

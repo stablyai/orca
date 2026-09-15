@@ -1,0 +1,371 @@
+{
+  "operation": "tasks.task-list-linear",
+  "family": "tasks.task-list-linear",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "216ddbf8cb71481d179563d8b033d7dc6cd71bface049e83073b977909776fc9",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2e036e81354d": {
+      "name": "loading",
+      "value": true
+    },
+    "3edde845aed1": {
+      "error": "",
+      "items": [
+        {
+          "key": "linear:linear-workspace:issue-2",
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-2",
+            "identifier": "ENG-2",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A found issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          },
+          "status": "Todo",
+          "subtitle": "ENG-2 · Engineering",
+          "title": "A found issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ],
+      "loading": false,
+      "refreshing": false
+    },
+    "5494ca4c103e": {
+      "name": "linear.searchIssues#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.searchIssues"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "query": "bug",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "description": "",
+              "id": "issue-2",
+              "identifier": "ENG-2",
+              "labels": [],
+              "priority": 0,
+              "state": {
+                "color": "#000",
+                "name": "Todo",
+                "type": "unstarted"
+              },
+              "team": {
+                "id": "team-1",
+                "key": "ENG",
+                "name": "Engineering"
+              },
+              "title": "A found issue",
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "url": "",
+              "workspaceId": "linear-workspace"
+            }
+          ]
+        }
+      }
+    },
+    "5b8a2e3e390d": {
+      "name": "linear.listIssues#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "8080efdd19df": {
+      "name": "items",
+      "value": [
+        {
+          "key": "linear:linear-workspace:issue-2",
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-2",
+            "identifier": "ENG-2",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A found issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          },
+          "status": "Todo",
+          "subtitle": "ENG-2 · Engineering",
+          "title": "A found issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "82cd71d524c8": {
+      "name": "error",
+      "value": ""
+    },
+    "86aeb72f48eb": {
+      "name": "linear.listIssues#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.listIssues"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filter": "all",
+            "limit": 50,
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "description": "",
+                "id": "issue-1",
+                "identifier": "ENG-1",
+                "labels": [],
+                "priority": 0,
+                "state": {
+                  "color": "#000",
+                  "name": "Todo",
+                  "type": "unstarted"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "title": "A Linear issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": "",
+                "workspaceId": "linear-workspace"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "8780e3ee6661": {
+      "name": "linear.searchIssues#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "94f44b229d7d": {
+      "error": "",
+      "items": [
+        {
+          "key": "linear:linear-workspace:issue-1",
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A Linear issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          },
+          "status": "Todo",
+          "subtitle": "ENG-1 · Engineering",
+          "title": "A Linear issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ],
+      "loading": false,
+      "refreshing": false
+    },
+    "9fd1c1fdaba4": {
+      "name": "loading",
+      "value": false
+    },
+    "a807b2cced19": {
+      "name": "items",
+      "value": [
+        {
+          "key": "linear:linear-workspace:issue-1",
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A Linear issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          },
+          "status": "Todo",
+          "subtitle": "ENG-1 · Engineering",
+          "title": "A Linear issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "b8cb056c2851": {
+      "name": "refreshing",
+      "value": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tk-list-linear",
+    "checkpoints": [
+      {
+        "id": "load-settled",
+        "observation": {
+          "sender": ["86aeb72f48eb"],
+          "payloads": ["5b8a2e3e390d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "94f44b229d7d",
+          "effects": [
+            "82cd71d524c8",
+            "2e036e81354d",
+            "a807b2cced19",
+            "9fd1c1fdaba4",
+            "b8cb056c2851"
+          ]
+        }
+      },
+      {
+        "id": "set-query-done",
+        "observation": {
+          "sender": ["86aeb72f48eb"],
+          "payloads": ["5b8a2e3e390d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a",
+            "set-query-1": "eb79a9b3682a"
+          },
+          "state": "94f44b229d7d",
+          "effects": [
+            "82cd71d524c8",
+            "2e036e81354d",
+            "a807b2cced19",
+            "9fd1c1fdaba4",
+            "b8cb056c2851"
+          ]
+        }
+      },
+      {
+        "id": "load-settled",
+        "observation": {
+          "sender": ["86aeb72f48eb", "5494ca4c103e"],
+          "payloads": ["5b8a2e3e390d", "8780e3ee6661"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a",
+            "set-query-1": "eb79a9b3682a",
+            "load-2": "eb79a9b3682a"
+          },
+          "state": "3edde845aed1",
+          "effects": [
+            "82cd71d524c8",
+            "2e036e81354d",
+            "a807b2cced19",
+            "9fd1c1fdaba4",
+            "b8cb056c2851",
+            "82cd71d524c8",
+            "2e036e81354d",
+            "8080efdd19df",
+            "9fd1c1fdaba4",
+            "b8cb056c2851"
+          ]
+        }
+      }
+    ]
+  }
+}

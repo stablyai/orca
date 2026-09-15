@@ -17270,6 +17270,11 @@
         "skip": "Skip",
         "sending": "Sending…"
       },
+      "ask": {
+        "awaiting": "Awaiting user input:",
+        "asked": "Asked:",
+        "questionCount": "{{value0}} questions"
+      },
       "approval": {
         "title": "Allow {{value0}}?",
         "allow": "Allow",

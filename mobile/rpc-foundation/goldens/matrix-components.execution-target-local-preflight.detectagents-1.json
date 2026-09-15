@@ -1,0 +1,605 @@
+{
+  "operation": "components.execution-target-local",
+  "family": "components.execution-target-local",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
+  "scenarioSha256": "f88ee2f5d19b19cc53dca5180a9b5936a13a00a82e8a4636a5e895262b669dec",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "00d70c40c34c": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "0846bea730cf": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "1317fc33bdbe": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "163b91b6fe9c": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "1e4520fe6576": {
+      "detected": {
+        "$rpc": "null"
+      },
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "327b46fb8bef": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "3579737ce1a6": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "365a6864b043": {
+      "detected": [],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "6806cee7c59f": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["claude"]
+        }
+      }
+    },
+    "6e5fcf24648d": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "70d128c20ae4": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "87d7d24a30d2": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "986a776213e8": {
+      "detected": ["claude"],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "cf32edc950ac": {
+      "name": "preflight.detectAgents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fb640b2bca4c": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "fbb9eef78275": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-components.execution-target-local-preflight.detectagents-1",
+    "checkpoints": [
+      {
+        "id": "components-target-local.prelude:detect-pending",
+        "observation": {
+          "sender": ["3579737ce1a6"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "1e4520fe6576",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.normal:settled",
+        "observation": {
+          "sender": ["6806cee7c59f"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "986a776213e8",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.result-absent:settled",
+        "observation": {
+          "sender": ["6e5fcf24648d"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.result-null:settled",
+        "observation": {
+          "sender": ["1317fc33bdbe"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["327b46fb8bef"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["0846bea730cf"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["00d70c40c34c"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.outer-refused:settled",
+        "observation": {
+          "sender": ["fb640b2bca4c"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["163b91b6fe9c"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.method-not-found:settled",
+        "observation": {
+          "sender": ["87d7d24a30d2"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.transport-rejection:settled",
+        "observation": {
+          "sender": ["fbb9eef78275"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-local.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["70d128c20ae4"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "365a6864b043",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

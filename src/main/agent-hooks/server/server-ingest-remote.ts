@@ -17,6 +17,11 @@ import {
 import { launchTokenHash } from '../../../shared/agent-hook-spool'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import {
+  AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
+  canAdmitLegacyAgentStatus,
+  olderPeerAgentStatusLegacyMode
+} from '../../../shared/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import { AgentHookServerIngestStructured } from './server-ingest-structured'
 
@@ -47,10 +52,23 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       /** Payload fields the relay dropped to fit an oversized frame; validated below. */
       shedFields?: unknown
       claudeRunningNonAgentTask?: unknown
+      /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
+      advertisedAgentStatusCapabilities?: readonly string[]
       payload: unknown
     },
     connectionId: string | null
   ): void {
+    if (
+      !canAdmitLegacyAgentStatus(
+        'main-status-update',
+        olderPeerAgentStatusLegacyMode(
+          envelope?.advertisedAgentStatusCapabilities ??
+            AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES
+        )
+      )
+    ) {
+      return
+    }
     // Why: wire crosses a trust boundary — re-check/trim so an empty connectionId can't poison caches.
     if (connectionId !== null && typeof connectionId !== 'string') {
       return

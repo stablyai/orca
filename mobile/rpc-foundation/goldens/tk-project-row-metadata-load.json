@@ -1,0 +1,277 @@
+{
+  "operation": "tasks.project-row-metadata-load",
+  "family": "tasks.project-row-metadata-load",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
+  "scenarioSha256": "60ea389fe16734fb53db01101f1feb4496653a99faa09e4309b3790a50d558d7",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0ec535506ef6": {
+      "name": "projectIssueTypesLoading",
+      "value": true
+    },
+    "13110f6c348f": {
+      "name": "projectAvailableLabels",
+      "value": ["bug"]
+    },
+    "15a2c52c35d3": {
+      "name": "projectAvailableLabels",
+      "value": []
+    },
+    "1ea80133c336": {
+      "name": "projectAssignableUsers",
+      "value": [
+        {
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ]
+    },
+    "3d9f892630c2": {
+      "name": "projectAssignableUsersLoading",
+      "value": false
+    },
+    "3f5d8df504de": {
+      "name": "github.project.listLabelsBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listLabelsBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "labels": ["bug"],
+            "ok": true
+          }
+        }
+      }
+    },
+    "4532c39efcc5": {
+      "name": "projectLabelsLoading",
+      "value": false
+    },
+    "7b69f54a8a5a": {
+      "name": "projectAssignableUsers",
+      "value": []
+    },
+    "822c655b8d01": {
+      "name": "projectLabelsError",
+      "value": ""
+    },
+    "83bfe2deb7bf": {
+      "name": "projectAssignableUsersError",
+      "value": ""
+    },
+    "83c1f676e233": {
+      "name": "projectIssueTypes",
+      "value": []
+    },
+    "84c3fb2868bd": {
+      "name": "github.project.listIssueTypesBySlug#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listIssueTypesBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"}}"
+    },
+    "8d8599f1ba0f": {
+      "name": "projectIssueTypesError",
+      "value": ""
+    },
+    "8fbb806f8730": {
+      "name": "github.project.listIssueTypesBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listIssueTypesBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "types": [
+              {
+                "id": "type-1",
+                "name": "Bug"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "9a8068985c26": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listAssignableUsersBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"seedLogins\":[\"octocat\"]}}"
+    },
+    "a149427e545f": {
+      "name": "projectLabelsLoading",
+      "value": true
+    },
+    "a1ecaf05ee5c": {
+      "name": "projectIssueTypesLoading",
+      "value": false
+    },
+    "b65199d523ec": {
+      "name": "projectIssueTypes",
+      "value": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ]
+    },
+    "d5d91d8a5bac": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [
+        {
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": ""
+    },
+    "d6be96273c26": {
+      "name": "projectAssignableUsersLoading",
+      "value": true
+    },
+    "da36de1a5410": {
+      "name": "github.project.listLabelsBySlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listLabelsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ef507c348d21": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "users": [
+              {
+                "login": "octocat",
+                "name": "Octo"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tk-project-row-metadata-load",
+    "checkpoints": [
+      {
+        "id": "mounted",
+        "observation": {
+          "sender": ["3f5d8df504de", "ef507c348d21", "8fbb806f8730"],
+          "payloads": ["da36de1a5410", "9a8068985c26", "84c3fb2868bd"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d5d91d8a5bac",
+          "effects": [
+            "15a2c52c35d3",
+            "822c655b8d01",
+            "a149427e545f",
+            "7b69f54a8a5a",
+            "83bfe2deb7bf",
+            "d6be96273c26",
+            "83c1f676e233",
+            "8d8599f1ba0f",
+            "0ec535506ef6",
+            "13110f6c348f",
+            "4532c39efcc5",
+            "1ea80133c336",
+            "3d9f892630c2",
+            "b65199d523ec",
+            "a1ecaf05ee5c"
+          ]
+        }
+      }
+    ]
+  }
+}

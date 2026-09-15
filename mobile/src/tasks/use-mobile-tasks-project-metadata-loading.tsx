@@ -3,9 +3,13 @@ import { useEffect } from './mobile-tasks-dependencies'
 import {
   type GitHubAssignableUser,
   type GitHubIssueType,
-  isSuccess,
   splitRepositorySlug
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubProjectAssignableUserListRead,
+  githubProjectIssueTypeListRead,
+  githubProjectLabelListRead
+} from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoadingModel) {
   const {
@@ -38,9 +42,9 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectAvailableLabels([])
     setProjectLabelsError('')
     setProjectLabelsLoading(true)
-    void client
-      .sendRequest(
-        'github.project.listLabelsBySlug',
+    void githubProjectLabelListRead
+      .request(
+        client,
         { owner: slug.owner, repo: slug.repo, host: activeGitHubProjectHost },
         { timeoutMs: 30_000 }
       )
@@ -48,10 +52,8 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubProjectLabelListRead.interpret(response) as
           | { ok: true; labels?: string[] }
           | { ok: false; error?: { message?: string } }
         if (!result.ok) {
@@ -88,9 +90,9 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectAssignableUsers([])
     setProjectAssignableUsersError('')
     setProjectAssignableUsersLoading(true)
-    void client
-      .sendRequest(
-        'github.project.listAssignableUsersBySlug',
+    void githubProjectAssignableUserListRead
+      .request(
+        client,
         {
           owner: slug.owner,
           repo: slug.repo,
@@ -103,10 +105,8 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubProjectAssignableUserListRead.interpret(response) as
           | { ok: true; users?: GitHubAssignableUser[] }
           | { ok: false; error?: { message?: string } }
         if (!result.ok) {
@@ -151,9 +151,9 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectIssueTypes([])
     setProjectIssueTypesError('')
     setProjectIssueTypesLoading(true)
-    void client
-      .sendRequest(
-        'github.project.listIssueTypesBySlug',
+    void githubProjectIssueTypeListRead
+      .request(
+        client,
         { owner: slug.owner, repo: slug.repo, host: activeGitHubProjectHost },
         { timeoutMs: 30_000 }
       )
@@ -161,10 +161,8 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = githubProjectIssueTypeListRead.interpret(response) as
           | { ok: true; types?: GitHubIssueType[] }
           | { ok: false; error?: { message?: string } }
         if (!result.ok) {

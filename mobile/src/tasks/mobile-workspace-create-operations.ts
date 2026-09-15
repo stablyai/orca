@@ -46,9 +46,9 @@ export const worktreeMrBaseResolve = bindDeferredRpcOperation(
 )
 
 /**
- * status.get read for create-time capabilities, the second of two policies on this method.
+ * status.get read for create-time capabilities, with its own policy on that method.
  *
- * Both policies named because the two callers disagree about what a refused status means: the
+ * Separately named because the callers disagree about what a refused status means: the
  * Tasks screen cannot hydrate without it and surfaces the host's message (`taskRuntimeStatusRead`),
  * while create-time capability probing degrades to "no capabilities" and creates anyway, so here a
  * refusal is a skip. One reader serves both — the payload is unchecked in each.

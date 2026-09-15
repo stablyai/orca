@@ -1,0 +1,133 @@
+{
+  "operation": "home.host-stats",
+  "family": "home.host-stats",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "a9e0780298a1443664e7ae02056168aa34d67556c9c056d51a82c7b4a73ad35b",
+  "scenarioSha256": "bd5f4e5f24a29d96c4c98950691c6571918332f71ebb1f29ee97a9abc857ac29",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0632d58191fb": {
+      "name": "stats",
+      "value": {
+        "host-1": {
+          "activeWorktrees": 1,
+          "totalWorktrees": 3
+        }
+      }
+    },
+    "0ebcc6f6a4cb": {
+      "name": "stats.summary#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "activeWorktrees": 1,
+            "totalWorktrees": 3
+          }
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "7bf81b1e94c5": {
+      "name": "stats.summary#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"stats.summary\"}"
+    },
+    "9a84a7559023": {
+      "host-1": {
+        "activeWorktrees": 1,
+        "totalWorktrees": 3
+      }
+    },
+    "a392ac528c2b": {
+      "name": "stats.summary#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "home-host-stats",
+    "checkpoints": [
+      {
+        "id": "stats-pending",
+        "observation": {
+          "sender": ["a392ac528c2b"],
+          "payloads": ["7bf81b1e94c5"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["0ebcc6f6a4cb"],
+          "payloads": ["7bf81b1e94c5"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "9a84a7559023",
+          "effects": ["0632d58191fb"]
+        }
+      }
+    ]
+  }
+}

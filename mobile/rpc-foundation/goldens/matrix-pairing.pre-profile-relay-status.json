@@ -1,0 +1,799 @@
+{
+  "operation": "pairing.pre-profile",
+  "family": "pairing.pre-profile",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
+  "scenarioSha256": "14931cc23cd0e6d850f596c880014c606834898acbeee4abff3dc83a94b0c6c0",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0193ae4dbb38": {
+      "name": "candidate-closed",
+      "value": "relay"
+    },
+    "0799d165f56e": {
+      "name": "journal-saved",
+      "value": "pair-fixture-1"
+    },
+    "088babc6e1f7": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "18654b1dc666": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "1da0bf924e75": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      }
+    },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "1f4d3b93dbcb": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-l99UBPM71AZiC1ghz2glnA\"}}"
+    },
+    "26f802fad080": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "3c9308d9b7be": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "authorizationMode": "authenticated-direct",
+            "currentVersion": 4,
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA",
+            "resumeExpiresAt": 1767830400000,
+            "v": 1
+          }
+        }
+      }
+    },
+    "3d89f7592b95": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "4030a59932c1": {
+      "name": "journal-updated",
+      "value": "pair-fixture-1"
+    },
+    "53412dd89894": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}"
+    },
+    "56266d1e7340": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-l99UBPM71AZiC1ghz2glnA",
+              "result": {
+                "authorizationMode": "authenticated-direct",
+                "currentVersion": 4,
+                "reqId": "install-l99UBPM71AZiC1ghz2glnA",
+                "resumeExpiresAt": 1767830400000,
+                "v": 1
+              },
+              "state": "committed",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "624a629f1833": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "64f57e43ef2a": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "6a19478ef955": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "6cb74a535419": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "72578f116416": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "9b50435fa2f8": {
+      "outcome": "host-1",
+      "savedHost": "relay-host-0001x",
+      "timedOut": false
+    },
+    "a7eb3507d2eb": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "a920731a050a": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "b8549409f4a9": {
+      "name": "journal-cleared",
+      "value": "pair-fixture-1"
+    },
+    "bc627d34e0d0": {
+      "name": "host-saved",
+      "value": "relay-host-0001x"
+    },
+    "c0c86e67c300": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "cf2b86e124ae": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d1b2eddf66f4": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "hostId": "host-1"
+      }
+    },
+    "f203320e31e9": {
+      "name": "candidate-closed",
+      "value": "direct"
+    }
+  },
+  "recording": {
+    "scenario": "matrix-pairing.pre-profile-relay-status",
+    "checkpoints": [
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.normal:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.result-absent:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "72578f116416", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.result-null:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "18654b1dc666", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.inner-ok-missing:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "3d89f7592b95", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.inner-false-string-error:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "64f57e43ef2a", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.inner-false-object-error:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6a19478ef955", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.outer-refused:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "a920731a050a", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.outer-refused-no-message:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "624a629f1833", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.method-not-found:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "a7eb3507d2eb", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.transport-rejection:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "088babc6e1f7", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.transport-rejection-no-message:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "cf2b86e124ae", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      }
+    ]
+  }
+}

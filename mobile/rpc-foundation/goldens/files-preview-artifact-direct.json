@@ -1,0 +1,96 @@
+{
+  "operation": "files.preview-load",
+  "family": "files.preview-load",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
+  "scenarioSha256": "dd8b7a0916a84c7d763a163759c02210ae99f8fbccfccaa98796b8610c5da97c",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "194fabd9b9d8": {
+      "name": "files.readTerminalArtifact#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifact"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/run.txt",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "byteLength": 5,
+            "content": "hello",
+            "truncated": false
+          }
+        }
+      }
+    },
+    "500d95d47092": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "byteLength": 5,
+        "content": "hello",
+        "kind": "text",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "784ea351e5b2": {
+      "preview": {
+        "byteLength": 5,
+        "content": "hello",
+        "kind": "text",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "e0401d205ea2": {
+      "name": "files.readTerminalArtifact#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "files-preview-artifact-direct",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["194fabd9b9d8"],
+          "payloads": ["e0401d205ea2"],
+          "settlements": {
+            "load": "500d95d47092"
+          },
+          "state": "784ea351e5b2",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "operation": "transport.pairing-race",
+  "family": "transport.pairing-race",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
+  "scenarioSha256": "a34ffec446f9bbc465bd3f7d0a43166c9bc221a6ece8714e0b5717169625cf43",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "36caf183b988": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "416024b9c436": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "relay"
+    },
+    "4b5a09699ceb": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "unauthorized",
+            "message": "direct refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "a7d5becc0aed": {
+      "outcome": "relay"
+    },
+    "c0c86e67c300": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "f203320e31e9": {
+      "name": "candidate-closed",
+      "value": "direct"
+    }
+  },
+  "recording": {
+    "scenario": "transport-pairing-race-relay-wins-when-direct-refused",
+    "checkpoints": [
+      {
+        "id": "relay-wins",
+        "observation": {
+          "sender": ["4b5a09699ceb", "36caf183b988"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300"],
+          "settlements": {
+            "race": "416024b9c436"
+          },
+          "state": "a7d5becc0aed",
+          "effects": ["f203320e31e9"]
+        }
+      }
+    ]
+  }
+}

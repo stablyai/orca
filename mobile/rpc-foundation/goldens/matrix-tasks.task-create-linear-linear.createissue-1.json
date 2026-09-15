@@ -1,0 +1,781 @@
+{
+  "operation": "tasks.task-create-linear",
+  "family": "tasks.task-create-linear",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "cb4c10cc6401e5b68340bd1fa09381c973348b6e0c7ffef563cde92080c57a15",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "05ff43854493": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "11915dfdb24a": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "id": "issue-3",
+            "identifier": "ENG-3",
+            "ok": true,
+            "title": "A sub-issue",
+            "url": ""
+          }
+        }
+      }
+    },
+    "15105be3c6cd": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "186f44bc465a": {
+      "name": "error",
+      "value": "Unknown method"
+    },
+    "233381f915af": {
+      "composer": true,
+      "creating": false,
+      "error": "refused",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "2924a6b4c745": {
+      "composer": true,
+      "creating": false,
+      "error": "[object Object]",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "2d711d96f190": {
+      "name": "error",
+      "value": "Cannot read properties of null (reading 'ok')"
+    },
+    "3e610f908f29": {
+      "name": "showCreateTask",
+      "value": false
+    },
+    "449fcef41ecc": {
+      "composer": true,
+      "creating": false,
+      "error": "outer refused",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "4a66cf72bc8f": {
+      "name": "creatingTask",
+      "value": false
+    },
+    "4ed047d2b01f": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "563438e5621b": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "56ac6af35c46": {
+      "composer": true,
+      "creating": false,
+      "error": "Cannot read properties of undefined (reading 'ok')",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "5b8e3a96030e": {
+      "name": "createBody",
+      "value": ""
+    },
+    "5d4c402302e6": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "5d540849ade8": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "6105e77e3945": {
+      "name": "linear.createIssue#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A new task\",\"description\":\"a body\",\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "61b2cb7e4313": {
+      "composer": false,
+      "creating": false,
+      "error": "",
+      "item": {
+        "key": "linear:linear-workspace:issue-3",
+        "provider": "linear",
+        "source": {
+          "description": "a body",
+          "id": "issue-3",
+          "identifier": "ENG-3",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#3b82f6",
+            "name": "Open",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A sub-issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "status": "Open",
+        "subtitle": "ENG-3 · undefined",
+        "title": "A sub-issue",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "791f05938c43": {
+      "name": "creatingTask",
+      "value": true
+    },
+    "79d6e6aa0201": {
+      "name": "error",
+      "value": "refused"
+    },
+    "7db197060e39": {
+      "composer": true,
+      "creating": false,
+      "error": "",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "82cd71d524c8": {
+      "name": "error",
+      "value": ""
+    },
+    "871b62dd230b": {
+      "name": "createTitle",
+      "value": ""
+    },
+    "945ea389c1ef": {
+      "name": "error",
+      "value": "transport failure"
+    },
+    "9f7828134fd2": {
+      "name": "actionItem",
+      "value": {
+        "key": "linear:linear-workspace:issue-3",
+        "provider": "linear",
+        "source": {
+          "description": "a body",
+          "id": "issue-3",
+          "identifier": "ENG-3",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#3b82f6",
+            "name": "Open",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A sub-issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "status": "Open",
+        "subtitle": "ENG-3 · undefined",
+        "title": "A sub-issue",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "a85b3f376be7": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "ae5be7de2632": {
+      "name": "error",
+      "value": "Cannot read properties of undefined (reading 'ok')"
+    },
+    "ba65a7abe43b": {
+      "name": "error",
+      "value": "outer refused"
+    },
+    "c008e85e2d06": {
+      "name": "error",
+      "value": "inner refused"
+    },
+    "c140f66eca23": {
+      "composer": true,
+      "creating": false,
+      "error": "transport failure",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "c35f2a9a380e": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "cba26069f155": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "d24a112e43bf": {
+      "composer": true,
+      "creating": false,
+      "error": "Unknown method",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "d9c763f911ff": {
+      "name": "linear.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ecc1b4e0914f": {
+      "name": "error",
+      "value": "[object Object]"
+    },
+    "f3ba4c9e02fb": {
+      "composer": true,
+      "creating": false,
+      "error": "Cannot read properties of null (reading 'ok')",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "fdd487d7c0f5": {
+      "composer": true,
+      "creating": false,
+      "error": "inner refused",
+      "item": {
+        "$rpc": "null"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.task-create-linear-linear.createissue-1",
+    "checkpoints": [
+      {
+        "id": "tk-create-linear.normal:create-settled",
+        "observation": {
+          "sender": ["11915dfdb24a"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "61b2cb7e4313",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "9f7828134fd2",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-linear.result-absent:create-settled",
+        "observation": {
+          "sender": ["a85b3f376be7"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "56ac6af35c46",
+          "effects": ["791f05938c43", "82cd71d524c8", "ae5be7de2632", "4a66cf72bc8f"]
+        }
+      },
+      {
+        "id": "tk-create-linear.result-null:create-settled",
+        "observation": {
+          "sender": ["cba26069f155"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "f3ba4c9e02fb",
+          "effects": ["791f05938c43", "82cd71d524c8", "2d711d96f190", "4a66cf72bc8f"]
+        }
+      },
+      {
+        "id": "tk-create-linear.inner-ok-missing:create-settled",
+        "observation": {
+          "sender": ["d9c763f911ff"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "233381f915af",
+          "effects": ["791f05938c43", "82cd71d524c8", "79d6e6aa0201", "4a66cf72bc8f"]
+        }
+      },
+      {
+        "id": "tk-create-linear.inner-false-string-error:create-settled",
+        "observation": {
+          "sender": ["563438e5621b"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "fdd487d7c0f5",
+          "effects": ["791f05938c43", "82cd71d524c8", "c008e85e2d06", "4a66cf72bc8f"]
+        }
+      },
+      {
+        "id": "tk-create-linear.inner-false-object-error:create-settled",
+        "observation": {
+          "sender": ["5d540849ade8"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "2924a6b4c745",
+          "effects": ["791f05938c43", "82cd71d524c8", "ecc1b4e0914f", "4a66cf72bc8f"]
+        }
+      },
+      {
+        "id": "tk-create-linear.outer-refused:create-settled",
+        "observation": {
+          "sender": ["4ed047d2b01f"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "449fcef41ecc",
+          "effects": ["791f05938c43", "82cd71d524c8", "ba65a7abe43b", "4a66cf72bc8f"]
+        }
+      },
+      {
+        "id": "tk-create-linear.outer-refused-no-message:create-settled",
+        "observation": {
+          "sender": ["05ff43854493"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "7db197060e39",
+          "effects": ["791f05938c43", "82cd71d524c8", "82cd71d524c8", "4a66cf72bc8f"]
+        }
+      },
+      {
+        "id": "tk-create-linear.method-not-found:create-settled",
+        "observation": {
+          "sender": ["5d4c402302e6"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "d24a112e43bf",
+          "effects": ["791f05938c43", "82cd71d524c8", "186f44bc465a", "4a66cf72bc8f"]
+        }
+      },
+      {
+        "id": "tk-create-linear.transport-rejection:create-settled",
+        "observation": {
+          "sender": ["c35f2a9a380e"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "c140f66eca23",
+          "effects": ["791f05938c43", "82cd71d524c8", "945ea389c1ef", "4a66cf72bc8f"]
+        }
+      },
+      {
+        "id": "tk-create-linear.transport-rejection-no-message:create-settled",
+        "observation": {
+          "sender": ["15105be3c6cd"],
+          "payloads": ["6105e77e3945"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "7db197060e39",
+          "effects": ["791f05938c43", "82cd71d524c8", "82cd71d524c8", "4a66cf72bc8f"]
+        }
+      }
+    ]
+  }
+}

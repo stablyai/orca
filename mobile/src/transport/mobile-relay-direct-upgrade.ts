@@ -20,12 +20,13 @@ import {
   writeMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
 } from './mobile-relay-direct-upgrade-journal'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 import type { RpcClient } from './rpc-client'
 import type { HostProfile } from './types'
-import {
-  isMethodNotFoundRefusal,
-  requireRpcResultOrThrowCodedError
-} from './rpc-acceptance-policies'
+import { isMethodNotFoundRefusal } from './rpc-acceptance-policies'
 
 export type MobileRelayDirectUpgradeResult = {
   host: HostProfile
@@ -79,16 +80,16 @@ export async function upgradeDirectMobileRelay(args: {
     throw new Error('relay endpoint unavailable for direct pairing upgrade')
   }
 
-  const provisionResponse = await args.client.sendRequest('pairing.provisionRelay', {
+  const provisionReply = await relayCredentialProvision.request(args.client, {
     reqId: journal.reqId,
     newResumeTokenHash: journal.pendingResumeTokenHash
   })
-  if (isMethodNotFoundRefusal(provisionResponse)) {
+  if (isMethodNotFoundRefusal(provisionReply)) {
     await dependencies.clearJournal(args.host.id)
     return null
   }
   const installed = DeviceCredentialInstalledSchema.parse(
-    requireRpcResultOrThrowCodedError(provisionResponse)
+    relayCredentialProvision.interpret(provisionReply)
   )
   assertDirectInstall(journal, installed)
   const reconciled = await getEndpoints(args.client, journal.reqId)
@@ -141,11 +142,11 @@ async function getEndpoints(
   client: RpcClient,
   installReqId: string
 ): Promise<PairingGetEndpointsResult | 'method-not-found'> {
-  const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
-  if (isMethodNotFoundRefusal(response)) {
+  const reply = await relayPairingEndpointsRead.request(client, { installReqId })
+  if (isMethodNotFoundRefusal(reply)) {
     return 'method-not-found'
   }
-  return PairingGetEndpointsResultSchema.parse(requireRpcResultOrThrowCodedError(response))
+  return PairingGetEndpointsResultSchema.parse(relayPairingEndpointsRead.interpret(reply))
 }
 
 function assertDirectInstall(

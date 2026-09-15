@@ -1,0 +1,141 @@
+{
+  "operation": "speech.desktop-start",
+  "family": "speech.dictation-start",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
+  "scenarioSha256": "75b8d1b7ed98b2bf7420986958d0a36222b007c535f85c1308b534301241ec2d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "17d9ffdaaf04": {
+      "name": "rollback-recording",
+      "value": {}
+    },
+    "1cf8d4be517f": {
+      "activeId": {
+        "$rpc": "null"
+      },
+      "idle": true,
+      "started": "unstarted"
+    },
+    "58ed4d5abdf0": {
+      "name": "speech.dictation.cancel#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "cancelled": true
+          }
+        }
+      }
+    },
+    "76026c7189a2": {
+      "name": "keep-awake-acquire",
+      "value": {
+        "id": "dictation-1"
+      }
+    },
+    "7a657475cacc": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Failed to start microphone recording",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "90cdfbb42957": {
+      "name": "keep-awake-release",
+      "value": {
+        "id": "dictation-1"
+      }
+    },
+    "a78a87e09f05": {
+      "name": "speech.dictation.cancel#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"dictation-1\"}}"
+    },
+    "bbe508ab7f95": {
+      "name": "speech.dictation.start#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.start"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "started": true
+          }
+        }
+      }
+    },
+    "e1538fe51a1e": {
+      "name": "speech.dictation.start#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"dictation-1\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "speech-desktop-start-recording-failed",
+    "checkpoints": [
+      {
+        "id": "rolled-back",
+        "observation": {
+          "sender": ["bbe508ab7f95", "58ed4d5abdf0"],
+          "payloads": ["e1538fe51a1e", "a78a87e09f05"],
+          "settlements": {
+            "start": "7a657475cacc"
+          },
+          "state": "1cf8d4be517f",
+          "effects": ["76026c7189a2", "17d9ffdaaf04", "90cdfbb42957"]
+        }
+      }
+    ]
+  }
+}

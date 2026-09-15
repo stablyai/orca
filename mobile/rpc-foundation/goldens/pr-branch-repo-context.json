@@ -1,0 +1,87 @@
+{
+  "operation": "session.pr-branch-context",
+  "family": "session.pr-branch-context",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
+  "scenarioSha256": "bd715681a856254e0c374b504cece07e5df4c9a75fa2b97c35498df12210fbab",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2638b3063bb1": {
+      "name": "github.repoSlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "host": "github.com",
+            "owner": "orca",
+            "repo": "orca"
+          }
+        }
+      }
+    },
+    "364d823c309f": {
+      "identity": "unread",
+      "repoContext": {
+        "isGithubRepo": true
+      }
+    },
+    "79c69a644fe2": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "isGithubRepo": true
+      }
+    },
+    "eb6a2b2f507e": {
+      "name": "github.repoSlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-9\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "pr-branch-repo-context",
+    "checkpoints": [
+      {
+        "id": "repo-context",
+        "observation": {
+          "sender": ["2638b3063bb1"],
+          "payloads": ["eb6a2b2f507e"],
+          "settlements": {
+            "repo-context": "79c69a644fe2"
+          },
+          "state": "364d823c309f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

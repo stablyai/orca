@@ -1,7 +1,7 @@
 import type { GitHistoryItem, GitHistoryResult } from '../../../src/shared/git-history-types'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { gitHistoryRead } from './mobile-git-read-operations'
-import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 export type MobileCommitRow = {
   id: string
@@ -58,7 +58,7 @@ export function mapMobileCommitRows(result: GitHistoryResult, nowMs: number): Mo
 }
 
 export async function fetchMobileGitHistory(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   limit = 50
 ): Promise<GitHistoryResult> {

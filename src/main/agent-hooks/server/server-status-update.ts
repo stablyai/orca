@@ -10,6 +10,8 @@ import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
+import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import {
   attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
@@ -70,7 +72,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
-      this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+      this.writeLegacyStatusRow(enriched)
       this.commitStatusRowMutation(rowBefore, enriched)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
@@ -123,7 +125,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (boundaryReconciledPrevious !== previous) {
       previous = boundaryReconciledPrevious
       if (previous) {
-        this.state.lastStatusByPaneKey.set(previous.paneKey, previous)
+        this.writeLegacyStatusRow(previous)
         this.scheduleStatusPersist()
       }
     }
@@ -222,7 +224,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     } else {
       this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     }
-    this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+    this.writeLegacyStatusRow(enriched)
     this.commitStatusRowMutation(rowBefore, enriched)
     // Why skipped for structured rows: the serializer drops them, so the whole walk and stringify
     // can only ever reproduce the last file — once per debounce window for a streaming chat.
@@ -264,7 +266,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     }
     const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(refreshed.paneKey)
     this.runtimeObservedStatusPaneKeys.add(refreshed.paneKey)
-    this.state.lastStatusByPaneKey.set(refreshed.paneKey, refreshed)
+    this.writeLegacyStatusRow(refreshed)
     this.commitStatusRowMutation(mutationBefore ?? previous, refreshed)
     this.scheduleStatusPersist()
     // A dismissed row may retain only provider resume identity. Its preserved payload can still
@@ -300,5 +302,14 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         console.error('[agent-hooks] enriched status listener threw', err)
       }
     }
+  }
+
+  private writeLegacyStatusRow(entry: EnrichedAgentHookEventPayload): void {
+    admitLegacyAgentStatus(
+      this.state,
+      'main-status-update',
+      entry,
+      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+    )
   }
 }

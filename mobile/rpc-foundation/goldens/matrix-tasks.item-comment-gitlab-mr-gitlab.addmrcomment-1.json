@@ -1,0 +1,1025 @@
+{
+  "operation": "tasks.item-comment-gitlab-mr",
+  "family": "tasks.item-comment-gitlab-mr",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
+  "scenarioSha256": "ae07579881829263a2b5590249d4119f5d9f4ef3877149ac3b780ad985413f00",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "01a6101342a9": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "02a9b21b0da8": {
+      "name": "gitlab.addMRComment#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addMRComment\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}"
+    },
+    "066ce15717c8": {
+      "name": "mutatingStatus",
+      "value": true
+    },
+    "0846de0f949a": {
+      "draft": "a comment",
+      "error": "transport failure",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "186f44bc465a": {
+      "name": "error",
+      "value": "Unknown method"
+    },
+    "20abdda2b770": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "2d711d96f190": {
+      "name": "error",
+      "value": "Cannot read properties of null (reading 'ok')"
+    },
+    "3b3dd5281511": {
+      "draft": "a comment",
+      "error": "Unknown method",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "3e5facf48993": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "4f6907510e35": {
+      "draft": "a comment",
+      "error": "Cannot read properties of undefined (reading 'ok')",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "564d9b281404": {
+      "draft": "a comment",
+      "error": "outer refused",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "60cf785513ee": {
+      "draft": "a comment",
+      "error": "[object Object]",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "6c49f5e0f2ca": {
+      "draft": "",
+      "error": "",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 905
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "7f2697ace03b": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "82cd71d524c8": {
+      "name": "error",
+      "value": ""
+    },
+    "85f672c0515f": {
+      "draft": "",
+      "error": "",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "local-1767225600000"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "945ea389c1ef": {
+      "name": "error",
+      "value": "transport failure"
+    },
+    "9fbb0c0c00a3": {
+      "draft": "a comment",
+      "error": "Cannot read properties of null (reading 'ok')",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "a36b80f7b048": {
+      "name": "itemCommentDraft",
+      "value": ""
+    },
+    "ad694b26e210": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "ae5917f96fbd": {
+      "draft": "a comment",
+      "error": "",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "ae5be7de2632": {
+      "name": "error",
+      "value": "Cannot read properties of undefined (reading 'ok')"
+    },
+    "ba65a7abe43b": {
+      "name": "error",
+      "value": "outer refused"
+    },
+    "bb90b36099bc": {
+      "draft": "a comment",
+      "error": "inner refused",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "c008e85e2d06": {
+      "name": "error",
+      "value": "inner refused"
+    },
+    "c6b7aaa4bd08": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "comment": {
+              "author": "You",
+              "body": "a comment",
+              "createdAt": "2020-01-01T00:00:00.000Z",
+              "id": 905
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "c89ea6e7700c": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "d447b467c652": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "d8a0bdf0682e": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "e07e078ae271": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "e0e1142aee10": {
+      "name": "gitlab.addMRComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addMRComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "iid": 7,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e25faf755127": {
+      "name": "detailPayload",
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 905
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ecc1b4e0914f": {
+      "name": "error",
+      "value": "[object Object]"
+    },
+    "f02550278f6a": {
+      "name": "mutatingStatus",
+      "value": false
+    },
+    "ffa3e217cfc9": {
+      "name": "detailPayload",
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "local-1767225600000"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.item-comment-gitlab-mr-gitlab.addmrcomment-1",
+    "checkpoints": [
+      {
+        "id": "tk-item-comment-gitlab-mr.normal:comment-settled",
+        "observation": {
+          "sender": ["c6b7aaa4bd08"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "6c49f5e0f2ca",
+          "effects": [
+            "066ce15717c8",
+            "82cd71d524c8",
+            "a36b80f7b048",
+            "e25faf755127",
+            "f02550278f6a"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.result-absent:comment-settled",
+        "observation": {
+          "sender": ["20abdda2b770"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "4f6907510e35",
+          "effects": ["066ce15717c8", "82cd71d524c8", "ae5be7de2632", "f02550278f6a"]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.result-null:comment-settled",
+        "observation": {
+          "sender": ["c89ea6e7700c"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "9fbb0c0c00a3",
+          "effects": ["066ce15717c8", "82cd71d524c8", "2d711d96f190", "f02550278f6a"]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.inner-ok-missing:comment-settled",
+        "observation": {
+          "sender": ["d8a0bdf0682e"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "85f672c0515f",
+          "effects": [
+            "066ce15717c8",
+            "82cd71d524c8",
+            "a36b80f7b048",
+            "ffa3e217cfc9",
+            "f02550278f6a"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.inner-false-string-error:comment-settled",
+        "observation": {
+          "sender": ["e0e1142aee10"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "bb90b36099bc",
+          "effects": ["066ce15717c8", "82cd71d524c8", "c008e85e2d06", "f02550278f6a"]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.inner-false-object-error:comment-settled",
+        "observation": {
+          "sender": ["d447b467c652"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "60cf785513ee",
+          "effects": ["066ce15717c8", "82cd71d524c8", "ecc1b4e0914f", "f02550278f6a"]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.outer-refused:comment-settled",
+        "observation": {
+          "sender": ["3e5facf48993"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "564d9b281404",
+          "effects": ["066ce15717c8", "82cd71d524c8", "ba65a7abe43b", "f02550278f6a"]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.outer-refused-no-message:comment-settled",
+        "observation": {
+          "sender": ["7f2697ace03b"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "ae5917f96fbd",
+          "effects": ["066ce15717c8", "82cd71d524c8", "82cd71d524c8", "f02550278f6a"]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.method-not-found:comment-settled",
+        "observation": {
+          "sender": ["ad694b26e210"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "3b3dd5281511",
+          "effects": ["066ce15717c8", "82cd71d524c8", "186f44bc465a", "f02550278f6a"]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.transport-rejection:comment-settled",
+        "observation": {
+          "sender": ["01a6101342a9"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "0846de0f949a",
+          "effects": ["066ce15717c8", "82cd71d524c8", "945ea389c1ef", "f02550278f6a"]
+        }
+      },
+      {
+        "id": "tk-item-comment-gitlab-mr.transport-rejection-no-message:comment-settled",
+        "observation": {
+          "sender": ["e07e078ae271"],
+          "payloads": ["02a9b21b0da8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "ae5917f96fbd",
+          "effects": ["066ce15717c8", "82cd71d524c8", "82cd71d524c8", "f02550278f6a"]
+        }
+      }
+    ]
+  }
+}

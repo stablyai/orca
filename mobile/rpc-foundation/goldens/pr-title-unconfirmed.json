@@ -1,0 +1,154 @@
+{
+  "operation": "session.pr-mutations",
+  "family": "github.pr-title-mutation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
+  "scenarioSha256": "669260c675021b37252dc5023a7a78e4e90536c2f35d9a5da3e53778e6a0cf52",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0400bbb4177c": {
+      "title": {
+        "error": "Request failed: github.updatePRTitle",
+        "ok": false
+      }
+    },
+    "2a122cfe29f9": {
+      "name": "github.updatePRTitle#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}"
+    },
+    "41c5cf93e77f": {
+      "name": "github.updatePRTitle#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRTitle\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"title\":\"Recorded title\"}}"
+    },
+    "5ff779cd8c84": {
+      "title": {
+        "error": "Failed to update title.",
+        "ok": false
+      }
+    },
+    "6e9fb05124f5": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Failed to update title.",
+        "ok": false
+      }
+    },
+    "73a201bf0d92": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Request failed: github.updatePRTitle",
+        "ok": false
+      }
+    },
+    "91e54f9a137c": {
+      "name": "github.updatePRTitle#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": false
+        }
+      }
+    },
+    "ccb426fd8467": {
+      "name": "github.updatePRTitle#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRTitle"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "title": "Recorded title"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "pr-title-unconfirmed",
+    "checkpoints": [
+      {
+        "id": "explicit-false",
+        "observation": {
+          "sender": ["91e54f9a137c"],
+          "payloads": ["2a122cfe29f9"],
+          "settlements": {
+            "explicit-false": "6e9fb05124f5"
+          },
+          "state": "5ff779cd8c84",
+          "effects": []
+        }
+      },
+      {
+        "id": "refused",
+        "observation": {
+          "sender": ["91e54f9a137c", "ccb426fd8467"],
+          "payloads": ["2a122cfe29f9", "41c5cf93e77f"],
+          "settlements": {
+            "explicit-false": "6e9fb05124f5",
+            "refused": "73a201bf0d92"
+          },
+          "state": "0400bbb4177c",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

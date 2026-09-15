@@ -1,0 +1,142 @@
+{
+  "operation": "components.execution-target-local",
+  "family": "components.execution-target-local",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
+  "scenarioSha256": "2e0d3021621698b63117e250dd5e9762b5bfb3dc1911e27c510e9539bd2ee6c9",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1e4520fe6576": {
+      "detected": {
+        "$rpc": "null"
+      },
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "3579737ce1a6": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "6806cee7c59f": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["claude"]
+        }
+      }
+    },
+    "986a776213e8": {
+      "detected": ["claude"],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "cf32edc950ac": {
+      "name": "preflight.detectAgents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "components-target-local",
+    "checkpoints": [
+      {
+        "id": "detect-pending",
+        "observation": {
+          "sender": ["3579737ce1a6"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "1e4520fe6576",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["6806cee7c59f"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "986a776213e8",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

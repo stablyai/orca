@@ -1,0 +1,224 @@
+{
+  "operation": "tasks.project-row-detail",
+  "family": "tasks.project-row-detail",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
+  "scenarioSha256": "f572b37cfd15f41f283e5f96b772a1055670f80e68064ac81477d9b768fc971a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "057a0b5a420b": {
+      "name": "projectRowDetailError",
+      "value": ""
+    },
+    "086a41047c19": {
+      "name": "projectCommentDraft",
+      "value": ""
+    },
+    "0c85499cb425": {
+      "name": "prFileLoadingPath",
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "1057be813592": {
+      "name": "expandedPrFilePath",
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "1782d901730e": {
+      "name": "projectEditingCommentDraft",
+      "value": ""
+    },
+    "188585c3859c": {
+      "name": "projectFieldDrafts",
+      "value": {}
+    },
+    "1ca3c6b62543": {
+      "name": "projectRowDetailLoading",
+      "value": true
+    },
+    "347cc433c473": {
+      "name": "projectRowDetail",
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "3befcdf8b535": {
+      "name": "projectReviewersDraft",
+      "value": ""
+    },
+    "4f9b2f35c45f": {
+      "name": "projectRowDetail",
+      "value": {
+        "assignees": [],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": [],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "undefined"
+        },
+        "reviewRequests": []
+      }
+    },
+    "5e884949c856": {
+      "name": "prFileCommentDrafts",
+      "value": {}
+    },
+    "6918d0b7aab9": {
+      "name": "prFileContents",
+      "value": {}
+    },
+    "8f0c8ca9f6fc": {
+      "name": "projectBodyDraft",
+      "value": ""
+    },
+    "9348720697e0": {
+      "name": "projectTitleDraft",
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "b2a01ad6d4fe": {
+      "detail": {
+        "assignees": [],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": [],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "undefined"
+        },
+        "reviewRequests": []
+      },
+      "error": "",
+      "loading": false
+    },
+    "d1f95449bb04": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.workItemDetailsBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo",
+            "type": "issue"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "details": {
+              "assignees": [],
+              "baseSha": "base-sha",
+              "body": "body",
+              "checks": [],
+              "comments": [],
+              "files": [],
+              "headSha": "head-sha",
+              "item": {
+                "labels": []
+              },
+              "pullRequestId": "PR_kwDO"
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "d33f5097e2ec": {
+      "name": "projectEditingCommentId",
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "e27d1a246a98": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f78c32654fc4": {
+      "name": "projectRowDetailLoading",
+      "value": false
+    }
+  },
+  "recording": {
+    "scenario": "tk-project-row-detail",
+    "checkpoints": [
+      {
+        "id": "mounted",
+        "observation": {
+          "sender": ["d1f95449bb04"],
+          "payloads": ["e27d1a246a98"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "b2a01ad6d4fe",
+          "effects": [
+            "9348720697e0",
+            "8f0c8ca9f6fc",
+            "086a41047c19",
+            "d33f5097e2ec",
+            "1782d901730e",
+            "3befcdf8b535",
+            "1057be813592",
+            "6918d0b7aab9",
+            "0c85499cb425",
+            "5e884949c856",
+            "188585c3859c",
+            "347cc433c473",
+            "057a0b5a420b",
+            "1ca3c6b62543",
+            "4f9b2f35c45f",
+            "f78c32654fc4"
+          ]
+        }
+      }
+    ]
+  }
+}

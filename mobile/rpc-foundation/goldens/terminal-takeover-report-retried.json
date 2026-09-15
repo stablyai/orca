@@ -1,0 +1,122 @@
+{
+  "operation": "terminal.takeover-report",
+  "family": "terminal.takeover-report",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
+  "scenarioSha256": "8ad436ca6c3de8b0b3148326337acce18a8a4cf3c514acad1a4530a001f28c75",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "002261d201ea": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "44136fa355b3": {},
+    "797d27f8307a": {
+      "name": "orchestration.workerTerminalUserInput#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "db9815351ccf": {
+      "name": "orchestration.workerTerminalUserInput#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 250,
+        "settledAt": 250,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "changed": 1
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f3349fb58cad": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "busy"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "terminal-takeover-report-retried",
+    "checkpoints": [
+      {
+        "id": "reported-on-retry",
+        "observation": {
+          "sender": ["f3349fb58cad", "db9815351ccf"],
+          "payloads": ["002261d201ea", "797d27f8307a"],
+          "settlements": {
+            "report": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

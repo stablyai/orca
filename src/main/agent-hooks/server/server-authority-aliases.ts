@@ -1,4 +1,8 @@
-import { movePaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
+import {
+  admitLegacyAgentStatus,
+  movePaneCacheState
+} from '../../../shared/agent-hook-listener/listener-state'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from '../../../shared/pane-key-alias'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { PANE_KEY_ALIASES_MAX } from './server-constants'
@@ -152,11 +156,16 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       | undefined
     if (movedStatus) {
       const owner = parsePaneKey(toPaneKey)
-      this.state.lastStatusByPaneKey.set(toPaneKey, {
-        ...movedStatus,
-        paneKey: toPaneKey,
-        tabId: owner?.tabId
-      })
+      admitLegacyAgentStatus(
+        this.state,
+        'main-pane-alias-transfer',
+        {
+          ...movedStatus,
+          paneKey: toPaneKey,
+          tabId: owner?.tabId
+        },
+        AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+      )
     }
     const transferredStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
       | EnrichedAgentHookEventPayload

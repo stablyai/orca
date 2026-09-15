@@ -1,0 +1,216 @@
+{
+  "operation": "files.mutation-ownership",
+  "family": "files.mutation-ownership",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
+  "scenarioSha256": "4cd0be3a1c338b4b68211c717fd10738653c553fdb3b072db6706ff8175a8bd1",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "29bfbe94cca9": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "expectedExecutionHostId": "ssh:target-1",
+        "expectedSshConnectionGeneration": 3,
+        "expectedSshTargetId": "target-1"
+      }
+    },
+    "518ec57c381a": {
+      "ownership": "uncaptured"
+    },
+    "6116946241ca": {
+      "name": "ssh.getState#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "target-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "state": {
+              "connectionGeneration": 3,
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "target-1"
+            }
+          }
+        }
+      }
+    },
+    "6ef43f81f7e3": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "hostId": "ssh:target-1"
+            }
+          }
+        }
+      }
+    },
+    "9199aee60486": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a0341e6a5d84": {
+      "name": "ssh.getState#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"target-1\"}}"
+    },
+    "a56852d6836b": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["files.mutation-ownership.v1"]
+          }
+        }
+      }
+    },
+    "bc119660f0c1": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "bd84dadd27c7": {
+      "ownership": {
+        "expectedExecutionHostId": "ssh:target-1",
+        "expectedSshConnectionGeneration": 3,
+        "expectedSshTargetId": "target-1"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "files-ownership-ssh",
+    "checkpoints": [
+      {
+        "id": "status-pending",
+        "observation": {
+          "sender": ["bc119660f0c1"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "9270aeb7d9c6"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["a56852d6836b", "6ef43f81f7e3", "6116946241ca"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "a0341e6a5d84"],
+          "settlements": {
+            "capture": "29bfbe94cca9"
+          },
+          "state": "bd84dadd27c7",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

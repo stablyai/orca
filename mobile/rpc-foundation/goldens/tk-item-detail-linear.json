@@ -1,0 +1,315 @@
+{
+  "operation": "tasks.item-detail-linear",
+  "family": "tasks.item-detail-linear",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "c0ef16b959002e4a3c5347114a0844b95670e274ef010d910b6671ac5f49e783",
+  "scenarioSha256": "f0407adc774b29553bdd177885e8ea9047127c4ebe8298de160a421fb4c1fe67",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "078876b4148c": {
+      "name": "detailPayload",
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-1",
+            "user": {
+              "displayName": "Octo"
+            }
+          }
+        ],
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "1764e3c48b18": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "body": "a comment",
+              "createdAt": "2020-01-01T00:00:00.000Z",
+              "id": "comment-1",
+              "user": {
+                "displayName": "Octo"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "3b01c25bcd45": {
+      "name": "detailError",
+      "value": ""
+    },
+    "47f3ae87c00a": {
+      "name": "linear.getIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.getIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "id": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "description": "a description",
+            "id": "issue-2",
+            "identifier": "ENG-2",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A sub-issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          }
+        }
+      }
+    },
+    "7d21147e56c1": {
+      "name": "detailLoading",
+      "value": true
+    },
+    "7d341b2cb946": {
+      "name": "detailPayload",
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "91a1c8142e23": {
+      "name": "detailLoading",
+      "value": false
+    },
+    "a2e20872c3f2": {
+      "error": "",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "items": [
+        {
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "project": {
+              "$rpc": "null"
+            },
+            "state": {
+              "color": "#000000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            },
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A Linear issue"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-1",
+            "user": {
+              "displayName": "Octo"
+            }
+          }
+        ],
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "bb215a1eb59b": {
+      "name": "linear.getIssue#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "c051440f1f05": {
+      "name": "actionItem",
+      "value": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      }
+    },
+    "e7f73629d075": {
+      "name": "linear.issueComments#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tk-item-detail-linear",
+    "checkpoints": [
+      {
+        "id": "mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "1764e3c48b18"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "a2e20872c3f2",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "078876b4148c",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      }
+    ]
+  }
+}

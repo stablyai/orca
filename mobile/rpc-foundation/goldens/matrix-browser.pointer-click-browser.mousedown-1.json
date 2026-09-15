@@ -1,0 +1,696 @@
+{
+  "operation": "browser.page-commands",
+  "family": "browser.pointer-click",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
+  "scenarioSha256": "db84000f262c6812db55b5f735ab7fe32c914e9ab52b9a7ccc0c21386b782298",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0ba3061956e5": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "1961908d1da1": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "down": true
+          }
+        }
+      }
+    },
+    "1ca524430075": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "1e463da3d358": {
+      "name": "browser.mouseClick#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseClick\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80,\"button\":\"left\",\"modifiers\":[],\"radius\":14}}"
+    },
+    "1f12c04c7775": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "226c752bd1ca": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "278a20085af8": {
+      "name": "browser.mouseMove#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}"
+    },
+    "3ba11435b34e": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true
+        }
+      }
+    },
+    "41b41cc39e88": {
+      "name": "browser.mouseUp#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseUp"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "up": true
+          }
+        }
+      }
+    },
+    "6852541b6089": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "89e7c0ea8d33": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "9855d4ec3415": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "hello",
+      "pointerModifiers": []
+    },
+    "98781daac6f5": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "ad7da1632835": {
+      "name": "browser.mouseDown#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseDown\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"button\":\"left\"}}"
+    },
+    "b3273afd3ec2": {
+      "name": "browser.mouseMove#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseMove"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "moved": true
+          }
+        }
+      }
+    },
+    "bb3551a9d839": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "c7797ce9e235": {
+      "name": "browser.mouseDown#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "cf9ea7b52a57": {
+      "name": "browser.mouseClick#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "selector_not_found"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "eaa436587fe0": {
+      "name": "browser.mouseUp#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseUp\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"button\":\"left\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-browser.pointer-click-browser.mousedown-1",
+    "checkpoints": [
+      {
+        "id": "browser-pointer-click-fallback.normal:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1961908d1da1", "41b41cc39e88"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835", "eaa436587fe0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.result-absent:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "3ba11435b34e", "41b41cc39e88"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835", "eaa436587fe0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.result-null:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "0ba3061956e5", "41b41cc39e88"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835", "eaa436587fe0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.inner-ok-missing:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1ca524430075", "41b41cc39e88"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835", "eaa436587fe0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.inner-false-string-error:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "226c752bd1ca", "41b41cc39e88"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835", "eaa436587fe0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.inner-false-object-error:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "6852541b6089", "41b41cc39e88"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835", "eaa436587fe0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.outer-refused:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "98781daac6f5"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.outer-refused-no-message:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "1f12c04c7775"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.method-not-found:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "bb3551a9d839"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.transport-rejection:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "89e7c0ea8d33"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.transport-rejection-no-message:clicked-by-fallback",
+        "observation": {
+          "sender": ["cf9ea7b52a57", "b3273afd3ec2", "c7797ce9e235"],
+          "payloads": ["1e463da3d358", "278a20085af8", "ad7da1632835"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

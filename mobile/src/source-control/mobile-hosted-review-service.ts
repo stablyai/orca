@@ -15,7 +15,7 @@ import {
 } from './mobile-hosted-review-operations'
 import { pushMobileHostedReviewBranch } from './mobile-hosted-review-git-preparation'
 import { linkMobileHostedReview } from './mobile-pr-link'
-import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 // The mobile worktree id is `${repoId}::${path}`; hosted-review RPCs expect the
 // repo selector separately, matching the desktop/runtime hosted-review service.
@@ -37,7 +37,7 @@ export type MobileHostedReviewEligibilityInput = {
 }
 
 export async function fetchMobileHostedReviewEligibility(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   input: MobileHostedReviewEligibilityInput
 ): Promise<HostedReviewCreationEligibility | null> {
@@ -78,7 +78,7 @@ export type MobileHostedReviewPrefill = {
 // service desktop uses. If eligibility is unavailable, return a blocked prefill
 // instead of inventing a provider/base locally.
 export async function resolveMobileHostedReviewPrefill(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   args: {
     branch: string | undefined
@@ -182,7 +182,7 @@ const PUSH_BEFORE_CREATE_ERROR = 'Push failed. Resolve the push error, then try 
 // Why the host's own message is discarded here: the compose form shows one actionable line for
 // every push failure, refusal and transport drop alike.
 async function pushMobileBranchBeforeCreate(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const pushed = await pushMobileHostedReviewBranch(
@@ -209,7 +209,7 @@ function formatMobileHostedReviewCreateError(
 }
 
 async function finishMobileHostedReviewCreateSuccess(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   input: MobileHostedReviewCreateInput,
   result: { number: number; url: string },
@@ -231,7 +231,7 @@ async function finishMobileHostedReviewCreateSuccess(
 }
 
 export async function createMobileHostedReview(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string,
   input: MobileHostedReviewCreateInput
 ): Promise<MobileHostedReviewCreateOutcome> {

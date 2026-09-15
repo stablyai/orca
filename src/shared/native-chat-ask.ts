@@ -95,6 +95,18 @@ export function parseAskFromStatus(
   }
 }
 
+/** Parse a question tool call's own input, through the same registered-parser
+ *  dispatch live status uses. Codex delivers arguments as a JSON string, so a
+ *  string input is decoded rather than treated as prose. */
+export function parseAskFromToolInput(
+  toolName: string | undefined,
+  input: unknown
+): AskPrompt | null {
+  return typeof input === 'string'
+    ? parseAskFromStatus(input, toolName)
+    : parseToolInput(toolName, input)
+}
+
 /** Resolve the newest question tool that has not received its FIFO tool result.
  *  Transcript replay parses each tool-call through the same registered-parser +
  *  canonical-shape fallback as live status, so a question tool that rendered

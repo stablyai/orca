@@ -1,0 +1,986 @@
+{
+  "operation": "tasks.task-create-github",
+  "family": "tasks.task-create-github",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "9efe74e5a1b0d92f674e6044edfd534693c15b0a153bcb2c0e283a6cd53fa61b",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "06e1643ed0af": {
+      "name": "github.createIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "github.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "number": 11,
+            "ok": true,
+            "url": "https://github.com/owner/repo/issues/11"
+          }
+        }
+      }
+    },
+    "0916041d412c": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "1561684e8ae9": {
+      "name": "github.createIssue#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}"
+    },
+    "186f44bc465a": {
+      "name": "error",
+      "value": "Unknown method"
+    },
+    "3e610f908f29": {
+      "name": "showCreateTask",
+      "value": false
+    },
+    "4a66cf72bc8f": {
+      "name": "creatingTask",
+      "value": false
+    },
+    "5ab5b62983be": {
+      "composer": false,
+      "creating": false,
+      "error": "",
+      "item": {
+        "key": "github:repo-1:issue:11",
+        "provider": "github",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:11",
+          "labels": [],
+          "number": 11,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "open",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://github.com/owner/repo/issues/11"
+        },
+        "status": "Open",
+        "subtitle": "Repo #11",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "5b8e3a96030e": {
+      "name": "createBody",
+      "value": ""
+    },
+    "686238f6a684": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "791f05938c43": {
+      "name": "creatingTask",
+      "value": true
+    },
+    "7e23e14f7a3d": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "80dc3e1dd1b7": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "82cd71d524c8": {
+      "name": "error",
+      "value": ""
+    },
+    "8690f0cd8ed3": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "871b62dd230b": {
+      "name": "createTitle",
+      "value": ""
+    },
+    "945ea389c1ef": {
+      "name": "error",
+      "value": "transport failure"
+    },
+    "9546ab40f414": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "96a2fa7faef4": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "98e33157a9f2": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "9f82f10075a3": {
+      "name": "error",
+      "value": "Connection closed"
+    },
+    "a10650cc438b": {
+      "name": "actionItem",
+      "value": {
+        "key": "github:repo-1:issue:11",
+        "provider": "github",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:11",
+          "labels": [],
+          "number": 11,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "open",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://github.com/owner/repo/issues/11"
+        },
+        "status": "Open",
+        "subtitle": "Repo #11",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "a795619b2c90": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "ba65a7abe43b": {
+      "name": "error",
+      "value": "outer refused"
+    },
+    "c41296ee02f7": {
+      "name": "repo.update#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.update\",\"params\":{\"repo\":\"id:repo-1\",\"updates\":{\"issueSourcePreference\":\"upstream\"}}}"
+    },
+    "c7d97f6f2602": {
+      "composer": false,
+      "creating": false,
+      "error": "outer refused",
+      "item": {
+        "key": "github:repo-1:issue:11",
+        "provider": "github",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:11",
+          "labels": [],
+          "number": 11,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "open",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://github.com/owner/repo/issues/11"
+        },
+        "status": "Open",
+        "subtitle": "Repo #11",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "ce7357abb281": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "d7dccc1f4a58": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d98907f962cc": {
+      "composer": false,
+      "creating": false,
+      "error": "transport failure",
+      "item": {
+        "key": "github:repo-1:issue:11",
+        "provider": "github",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:11",
+          "labels": [],
+          "number": 11,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "open",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://github.com/owner/repo/issues/11"
+        },
+        "status": "Open",
+        "subtitle": "Repo #11",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "e590ae2d0a40": {
+      "composer": false,
+      "creating": false,
+      "error": "Unknown method",
+      "item": {
+        "key": "github:repo-1:issue:11",
+        "provider": "github",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:11",
+          "labels": [],
+          "number": 11,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "open",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://github.com/owner/repo/issues/11"
+        },
+        "status": "Open",
+        "subtitle": "Repo #11",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "e9b75be275af": {
+      "name": "repo.update#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1",
+            "updates": {
+              "issueSourcePreference": "upstream"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.task-create-github-repo.update-1",
+    "checkpoints": [
+      {
+        "id": "tk-create-github.prelude:create-settled",
+        "observation": {
+          "sender": ["06e1643ed0af"],
+          "payloads": ["1561684e8ae9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.prelude:cleanup",
+        "observation": {
+          "sender": ["06e1643ed0af", "686238f6a684"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8",
+            "9f82f10075a3"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.normal:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "98e33157a9f2"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.result-absent:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "ce7357abb281"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.result-null:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "8690f0cd8ed3"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.inner-ok-missing:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "0916041d412c"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.inner-false-string-error:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "e9b75be275af"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.inner-false-object-error:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "a795619b2c90"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.outer-refused:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "80dc3e1dd1b7"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "c7d97f6f2602",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8",
+            "ba65a7abe43b"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.outer-refused-no-message:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "9546ab40f414"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8",
+            "82cd71d524c8"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.method-not-found:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "96a2fa7faef4"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "e590ae2d0a40",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8",
+            "186f44bc465a"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.transport-rejection:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "7e23e14f7a3d"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "d98907f962cc",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8",
+            "945ea389c1ef"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-github.transport-rejection-no-message:issue-source-settled",
+        "observation": {
+          "sender": ["06e1643ed0af", "d7dccc1f4a58"],
+          "payloads": ["1561684e8ae9", "c41296ee02f7"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a",
+            "issue-source-1": "eb79a9b3682a"
+          },
+          "state": "5ab5b62983be",
+          "effects": [
+            "791f05938c43",
+            "82cd71d524c8",
+            "a10650cc438b",
+            "3e610f908f29",
+            "871b62dd230b",
+            "5b8e3a96030e",
+            "4a66cf72bc8f",
+            "82cd71d524c8",
+            "82cd71d524c8"
+          ]
+        }
+      }
+    ]
+  }
+}

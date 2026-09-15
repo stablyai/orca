@@ -1,0 +1,174 @@
+{
+  "operation": "tasks.item-comment-gitlab",
+  "family": "tasks.item-comment-gitlab",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
+  "scenarioSha256": "d993b9f74cf8c5d7af8d31a73cf19d97141c54f6fcf009e98ca5b9106f3ba35b",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "066ce15717c8": {
+      "name": "mutatingStatus",
+      "value": true
+    },
+    "1f27ffccd3c3": {
+      "name": "gitlab.addIssueComment#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a comment",
+            "number": 4,
+            "projectRef": "group/project",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "comment": {
+              "author": "You",
+              "body": "a comment",
+              "createdAt": "2020-01-01T00:00:00.000Z",
+              "id": 904
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "48a9b4deaa5b": {
+      "draft": "",
+      "error": "",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:issue:4",
+          "labels": ["bug"],
+          "number": 4,
+          "projectRef": "group/project",
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "issue"
+        },
+        "title": "A GitLab issue"
+      },
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 904
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "7251019fd224": {
+      "name": "gitlab.addIssueComment#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":4,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}"
+    },
+    "82cd71d524c8": {
+      "name": "error",
+      "value": ""
+    },
+    "92ea6ed9109e": {
+      "name": "detailPayload",
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 904
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "a36b80f7b048": {
+      "name": "itemCommentDraft",
+      "value": ""
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f02550278f6a": {
+      "name": "mutatingStatus",
+      "value": false
+    }
+  },
+  "recording": {
+    "scenario": "tk-item-comment-gitlab",
+    "checkpoints": [
+      {
+        "id": "comment-settled",
+        "observation": {
+          "sender": ["1f27ffccd3c3"],
+          "payloads": ["7251019fd224"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "comment-0": "eb79a9b3682a"
+          },
+          "state": "48a9b4deaa5b",
+          "effects": [
+            "066ce15717c8",
+            "82cd71d524c8",
+            "a36b80f7b048",
+            "92ea6ed9109e",
+            "f02550278f6a"
+          ]
+        }
+      }
+    ]
+  }
+}

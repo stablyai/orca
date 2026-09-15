@@ -1,0 +1,1001 @@
+{
+  "operation": "speech.setup-sheet",
+  "family": "speech.setup-sheet",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
+  "scenarioSha256": "140ede79a9ee0c02bedbfe67551060ef85692b6cb71968a48a1c41fcb4863804",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0629aa17065f": {
+      "configure": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      },
+      "delete": {
+        "error": {
+          "message": "inner refused"
+        },
+        "ok": false
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "0b2ffa0243d3": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "0ea7d26d0706": {
+      "name": "speech.dictation.setup#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.setup\",\"params\":{\"enabled\":true,\"modelId\":\"whisper-small\"}}"
+    },
+    "1117d44df3f8": {
+      "configure": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      },
+      "delete": "started",
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "1f67869c3be1": {
+      "configure": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "301151228fa3": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "refused"
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "374a424a4fcb": {
+      "name": "speech.dictation.setup#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.setup"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "enabled": true,
+            "models": [
+              {
+                "id": "whisper-small",
+                "name": "Small",
+                "status": "ready"
+              }
+            ],
+            "selectedModelId": "whisper-small"
+          }
+        }
+      }
+    },
+    "3eac8959f5ab": {
+      "configure": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      },
+      "delete": {
+        "$rpc": "null"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "4670310cd94e": {
+      "name": "speech.models.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "enabled": true,
+            "models": [
+              {
+                "id": "whisper-small",
+                "name": "Small",
+                "status": "ready"
+              }
+            ],
+            "selectedModelId": "whisper-small"
+          }
+        }
+      }
+    },
+    "50d91aa16b10": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "57573810dae3": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "722a26526fad": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "7c5b27891a8f": {
+      "configure": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      },
+      "delete": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "8496b8c738aa": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "9f00dd54ba64": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "inner refused",
+        "ok": false
+      }
+    },
+    "a2879fd6371d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "a3cb3bb824dc": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "aa1c9059345a": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Failed to delete model",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "ab2c55671644": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "ad8a954e879d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "message": "inner refused"
+        },
+        "ok": false
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c41375ac7391": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "enabled": true,
+            "models": [],
+            "selectedModelId": "whisper-small"
+          }
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d0708dcdf365": {
+      "name": "speech.models.download#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.download"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "started": true
+          }
+        }
+      }
+    },
+    "d32fe9752c54": {
+      "configure": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      },
+      "delete": {
+        "error": "refused"
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "d5a1b3479c34": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "e2401fd120ea": {
+      "configure": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      },
+      "delete": {
+        "error": "inner refused",
+        "ok": false
+      },
+      "download": "started",
+      "list": {
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "name": "Small",
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "whisper-small"
+      }
+    },
+    "e8d746fbfb7a": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "ea8cab25bcf2": {
+      "name": "speech.models.delete#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.delete"
+        },
+        {
+          "name": "params",
+          "value": {
+            "modelId": "whisper-small"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ee20a1dc39e7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "f14b5bb0c614": {
+      "name": "speech.models.delete#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.delete\",\"params\":{\"modelId\":\"whisper-small\"}}"
+    },
+    "f7594a980fe2": {
+      "name": "speech.models.download#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.download\",\"params\":{\"modelId\":\"whisper-small\"}}"
+    },
+    "f7f1557b866b": {
+      "name": "speech.models.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}"
+    },
+    "fc5fb77f49bb": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "enabled": true,
+        "models": [],
+        "selectedModelId": "whisper-small"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-speech.setup-sheet-speech.models.delete-1",
+    "checkpoints": [
+      {
+        "id": "speech-setup-sheet-fulfilled.normal:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "c41375ac7391", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "fc5fb77f49bb",
+            "configure": "a2879fd6371d"
+          },
+          "state": "7c5b27891a8f",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.result-absent:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "ea8cab25bcf2", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "eb79a9b3682a",
+            "configure": "a2879fd6371d"
+          },
+          "state": "1117d44df3f8",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.result-null:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "ab2c55671644", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "ee20a1dc39e7",
+            "configure": "a2879fd6371d"
+          },
+          "state": "3eac8959f5ab",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "a3cb3bb824dc", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "301151228fa3",
+            "configure": "a2879fd6371d"
+          },
+          "state": "d32fe9752c54",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "722a26526fad", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "9f00dd54ba64",
+            "configure": "a2879fd6371d"
+          },
+          "state": "e2401fd120ea",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "50d91aa16b10", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "ad8a954e879d",
+            "configure": "a2879fd6371d"
+          },
+          "state": "0629aa17065f",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.outer-refused:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "e8d746fbfb7a", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "32a7c0ae7918",
+            "configure": "a2879fd6371d"
+          },
+          "state": "1f67869c3be1",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "d5a1b3479c34", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "aa1c9059345a",
+            "configure": "a2879fd6371d"
+          },
+          "state": "1f67869c3be1",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.method-not-found:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "0b2ffa0243d3", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "b948e8307e81",
+            "configure": "a2879fd6371d"
+          },
+          "state": "1f67869c3be1",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.transport-rejection:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "8496b8c738aa", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "a947768bc0ed",
+            "configure": "a2879fd6371d"
+          },
+          "state": "1f67869c3be1",
+          "effects": []
+        }
+      },
+      {
+        "id": "speech-setup-sheet-fulfilled.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["4670310cd94e", "d0708dcdf365", "57573810dae3", "374a424a4fcb"],
+          "payloads": ["f7f1557b866b", "f7594a980fe2", "f14b5bb0c614", "0ea7d26d0706"],
+          "settlements": {
+            "list": "a2879fd6371d",
+            "download": "eb79a9b3682a",
+            "delete": "c7584e82c72f",
+            "configure": "a2879fd6371d"
+          },
+          "state": "1f67869c3be1",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

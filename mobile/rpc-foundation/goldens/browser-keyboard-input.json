@@ -1,0 +1,139 @@
+{
+  "operation": "browser.page-commands",
+  "family": "browser.keyboard",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
+  "scenarioSha256": "eb2294c30af70ebc2bac092dc5105249ae8cf1941f750406622f7ff6dd70cc1b",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "04ae34c3208f": {
+      "name": "browser.keypress#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keypress\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"key\":\"Enter\"}}"
+    },
+    "37ef5fe93769": {
+      "name": "browser.keyboardInsertText#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.keyboardInsertText\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"text\":\"hello\"}}"
+    },
+    "770254847b6a": {
+      "name": "browser.keyboardInsertText#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.keyboardInsertText"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "text": "hello",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "inserted": true
+          }
+        }
+      }
+    },
+    "8160e8872519": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "",
+      "pointerModifiers": []
+    },
+    "c20546e0857f": {
+      "name": "toast",
+      "value": {
+        "message": "Sent"
+      }
+    },
+    "c532c7fdcc69": {
+      "name": "browser.keypress#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.keypress"
+        },
+        {
+          "name": "params",
+          "value": {
+            "key": "Enter",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "pressed": true
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "browser-keyboard-input",
+    "checkpoints": [
+      {
+        "id": "typed",
+        "observation": {
+          "sender": ["770254847b6a", "c532c7fdcc69"],
+          "payloads": ["37ef5fe93769", "04ae34c3208f"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "text": "eb79a9b3682a",
+            "keypress": "eb79a9b3682a"
+          },
+          "state": "8160e8872519",
+          "effects": ["c20546e0857f"]
+        }
+      }
+    ]
+  }
+}

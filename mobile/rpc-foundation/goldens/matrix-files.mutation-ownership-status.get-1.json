@@ -1,0 +1,746 @@
+{
+  "operation": "files.mutation-ownership",
+  "family": "files.mutation-ownership",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
+  "scenarioSha256": "b9cfb187224a4b42efe8ccfcd96145833730d135c4fffa345716f95991a4700f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0b7588536afb": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "0d163aa89099": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "29bfbe94cca9": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "expectedExecutionHostId": "ssh:target-1",
+        "expectedSshConnectionGeneration": 3,
+        "expectedSshTargetId": "target-1"
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "48e2bdc38094": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "4b0fb2833d76": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "518ec57c381a": {
+      "ownership": "uncaptured"
+    },
+    "6116946241ca": {
+      "name": "ssh.getState#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "target-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "state": {
+              "connectionGeneration": 3,
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "target-1"
+            }
+          }
+        }
+      }
+    },
+    "68ce4d376250": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of null (reading 'capabilities')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "6ef43f81f7e3": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "hostId": "ssh:target-1"
+            }
+          }
+        }
+      }
+    },
+    "74a9cdb3c227": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "753f8f2aac3b": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "848eaee9cd6a": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "TypeError",
+        "message": "Cannot read properties of undefined (reading 'capabilities')",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "90817e8c47cb": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "9199aee60486": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9ce0c7923c41": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Remote file changes require a newer Orca server. Update the HUB and try again.",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "a0341e6a5d84": {
+      "name": "ssh.getState#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"target-1\"}}"
+    },
+    "a56852d6836b": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["files.mutation-ownership.v1"]
+          }
+        }
+      }
+    },
+    "a8d9f204690e": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "bc119660f0c1": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "bd84dadd27c7": {
+      "ownership": {
+        "expectedExecutionHostId": "ssh:target-1",
+        "expectedSshConnectionGeneration": 3,
+        "expectedSshTargetId": "target-1"
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "f2a2b92aa73c": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "f68f9c806fb2": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-files.mutation-ownership-status.get-1",
+    "checkpoints": [
+      {
+        "id": "files-ownership-ssh.prelude:status-pending",
+        "observation": {
+          "sender": ["bc119660f0c1"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "9270aeb7d9c6"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.normal:settled",
+        "observation": {
+          "sender": ["a56852d6836b", "6ef43f81f7e3", "6116946241ca"],
+          "payloads": ["1e5b32902af7", "9199aee60486", "a0341e6a5d84"],
+          "settlements": {
+            "capture": "29bfbe94cca9"
+          },
+          "state": "bd84dadd27c7",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.result-absent:settled",
+        "observation": {
+          "sender": ["90817e8c47cb"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "848eaee9cd6a"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.result-null:settled",
+        "observation": {
+          "sender": ["0d163aa89099"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "68ce4d376250"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["48e2bdc38094"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "9ce0c7923c41"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["f2a2b92aa73c"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "9ce0c7923c41"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["f68f9c806fb2"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "9ce0c7923c41"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.outer-refused:settled",
+        "observation": {
+          "sender": ["0b7588536afb"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "32a7c0ae7918"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["a8d9f204690e"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "f3b516f62081"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.method-not-found:settled",
+        "observation": {
+          "sender": ["753f8f2aac3b"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "b948e8307e81"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.transport-rejection:settled",
+        "observation": {
+          "sender": ["4b0fb2833d76"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "a947768bc0ed"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-ownership-ssh.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["74a9cdb3c227"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "capture": "c7584e82c72f"
+          },
+          "state": "518ec57c381a",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,224 @@
+{
+  "operation": "host.view-settings",
+  "family": "host.view-settings",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "a9e0780298a1443664e7ae02056168aa34d67556c9c056d51a82c7b4a73ad35b",
+  "scenarioSha256": "1ee6031227fa3efd5b36841afa60f7b2264eacdd9c6126e5851d5acb39ffaadd",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "292b632037a0": {
+      "name": "ui.set#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"sortBy\":\"name\"}}"
+    },
+    "3059ce80d86a": {
+      "name": "collapsedGroups",
+      "value": []
+    },
+    "34925f64c9a6": {
+      "name": "sortMode",
+      "value": "name"
+    },
+    "5907841fc56d": {
+      "name": "ui.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
+    },
+    "5fbdd64c75bc": {
+      "name": "ui.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "78f2fbcd0185": {
+      "name": "ui.set#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "sortBy": "name"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "7eaddd04bcdd": {
+      "name": "workspaceStatuses",
+      "value": []
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9527461faeb1": {
+      "name": "filters",
+      "value": {
+        "alwaysShowDefaultBranch": true,
+        "filterRepoIds": [],
+        "hideDefaultBranch": false,
+        "hideSleeping": true
+      }
+    },
+    "a424515cabc9": {
+      "name": "ui.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ui": {
+              "groupBy": "repo",
+              "hideSleepingWorkspaces": true,
+              "sortBy": "name"
+            }
+          }
+        }
+      }
+    },
+    "ba2035345a68": {
+      "collapsed": [],
+      "filters": {
+        "alwaysShowDefaultBranch": true,
+        "filterRepoIds": [],
+        "hideDefaultBranch": false,
+        "hideSleeping": true
+      },
+      "groupMode": "repo",
+      "sortMode": "name",
+      "statuses": []
+    },
+    "bbdab1a7d122": {
+      "collapsed": [],
+      "filters": {
+        "alwaysShowDefaultBranch": true,
+        "filterRepoIds": [],
+        "hideDefaultBranch": false,
+        "hideSleeping": false
+      },
+      "groupMode": "none",
+      "sortMode": "recent",
+      "statuses": []
+    },
+    "e9a3acf203c6": {
+      "name": "groupMode",
+      "value": "repo"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "host-view-settings-sync",
+    "checkpoints": [
+      {
+        "id": "ui-pending",
+        "observation": {
+          "sender": ["5fbdd64c75bc"],
+          "payloads": ["5907841fc56d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6"
+          },
+          "state": "bbdab1a7d122",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["a424515cabc9", "78f2fbcd0185"],
+          "payloads": ["5907841fc56d", "292b632037a0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "eb79a9b3682a",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "ba2035345a68",
+          "effects": [
+            "e9a3acf203c6",
+            "34925f64c9a6",
+            "7eaddd04bcdd",
+            "3059ce80d86a",
+            "9527461faeb1",
+            "e9a3acf203c6",
+            "34925f64c9a6",
+            "7eaddd04bcdd",
+            "3059ce80d86a",
+            "9527461faeb1"
+          ]
+        }
+      }
+    ]
+  }
+}

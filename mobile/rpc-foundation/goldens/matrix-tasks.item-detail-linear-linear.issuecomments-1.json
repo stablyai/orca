@@ -1,0 +1,1385 @@
+{
+  "operation": "tasks.item-detail-linear",
+  "family": "tasks.item-detail-linear",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "c0ef16b959002e4a3c5347114a0844b95670e274ef010d910b6671ac5f49e783",
+  "scenarioSha256": "06b06c84f4b8a1ee8e5159d8ada2656da4d7096729759c76601ad4e251310924",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "078876b4148c": {
+      "name": "detailPayload",
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-1",
+            "user": {
+              "displayName": "Octo"
+            }
+          }
+        ],
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "07d97c9cd880": {
+      "error": "",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "items": [
+        {
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "project": {
+              "$rpc": "null"
+            },
+            "state": {
+              "color": "#000000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            },
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A Linear issue"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": {
+          "error": "inner refused",
+          "ok": false
+        },
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "11f17c8f7e6d": {
+      "name": "detailPayload",
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": {
+          "error": "refused"
+        },
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "16e0cc3237e8": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "1764e3c48b18": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "body": "a comment",
+              "createdAt": "2020-01-01T00:00:00.000Z",
+              "id": "comment-1",
+              "user": {
+                "displayName": "Octo"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "3276e1a41446": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "388d0ceb3385": {
+      "error": "",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "items": [
+        {
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "project": {
+              "$rpc": "null"
+            },
+            "state": {
+              "color": "#000000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            },
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A Linear issue"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [],
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "3b01c25bcd45": {
+      "name": "detailError",
+      "value": ""
+    },
+    "3bb04fc55c1a": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "3df3437aa9b4": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "4343eb3c5159": {
+      "name": "detailPayload",
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [],
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "468cc28b676c": {
+      "name": "detailError",
+      "value": "transport failure"
+    },
+    "47f3ae87c00a": {
+      "name": "linear.getIssue#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.getIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "id": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "description": "a description",
+            "id": "issue-2",
+            "identifier": "ENG-2",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A sub-issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          }
+        }
+      }
+    },
+    "4861b36f5d5c": {
+      "error": "transport failure",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "items": [
+        {
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "project": {
+              "$rpc": "null"
+            },
+            "state": {
+              "color": "#000000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            },
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A Linear issue"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    },
+    "68be69c559a1": {
+      "name": "detailPayload",
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": {
+          "error": "inner refused",
+          "ok": false
+        },
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "7d21147e56c1": {
+      "name": "detailLoading",
+      "value": true
+    },
+    "7d341b2cb946": {
+      "name": "detailPayload",
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "91a1c8142e23": {
+      "name": "detailLoading",
+      "value": false
+    },
+    "9f8c9f7294a0": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "a08c3f9a0d9e": {
+      "error": "",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "items": [
+        {
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "project": {
+              "$rpc": "null"
+            },
+            "state": {
+              "color": "#000000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            },
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A Linear issue"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    },
+    "a2450a300ddf": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "a2e20872c3f2": {
+      "error": "",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "items": [
+        {
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "project": {
+              "$rpc": "null"
+            },
+            "state": {
+              "color": "#000000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            },
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A Linear issue"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-1",
+            "user": {
+              "displayName": "Octo"
+            }
+          }
+        ],
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "a387bb127ac0": {
+      "error": "",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "items": [
+        {
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "project": {
+              "$rpc": "null"
+            },
+            "state": {
+              "color": "#000000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            },
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A Linear issue"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        },
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "b45bc63e632d": {
+      "name": "detailPayload",
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        },
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "bb215a1eb59b": {
+      "name": "linear.getIssue#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "c051440f1f05": {
+      "name": "actionItem",
+      "value": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      }
+    },
+    "c360db88accd": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "c92234b1167b": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e7f73629d075": {
+      "name": "linear.issueComments#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ecb0f6b35964": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "ee7d19abed68": {
+      "error": "",
+      "item": {
+        "provider": "linear",
+        "source": {
+          "description": "",
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "project": {
+            "$rpc": "null"
+          },
+          "state": {
+            "color": "#000000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "subIssues": [],
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering",
+            "workspaceId": "linear-workspace"
+          },
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "title": "A Linear issue"
+      },
+      "items": [
+        {
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "project": {
+              "$rpc": "null"
+            },
+            "state": {
+              "color": "#000000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            },
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A Linear issue"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": {
+          "error": "refused"
+        },
+        "description": "a description",
+        "labels": [],
+        "project": {
+          "$rpc": "undefined"
+        },
+        "provider": "linear"
+      }
+    },
+    "f60c595d990e": {
+      "name": "linear.issueComments#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.issueComments"
+        },
+        {
+          "name": "params",
+          "value": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.item-detail-linear-linear.issuecomments-1",
+    "checkpoints": [
+      {
+        "id": "tk-item-detail-linear.normal:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "1764e3c48b18"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "a2e20872c3f2",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "078876b4148c",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.result-absent:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "16e0cc3237e8"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "388d0ceb3385",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "4343eb3c5159",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.result-null:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "f60c595d990e"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "388d0ceb3385",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "4343eb3c5159",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.inner-ok-missing:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "c360db88accd"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "ee7d19abed68",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "11f17c8f7e6d",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.inner-false-string-error:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "c92234b1167b"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "07d97c9cd880",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "68be69c559a1",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.inner-false-object-error:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "3276e1a41446"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "a387bb127ac0",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "b45bc63e632d",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.outer-refused:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "a2450a300ddf"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "388d0ceb3385",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "4343eb3c5159",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.outer-refused-no-message:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "9f8c9f7294a0"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "388d0ceb3385",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "4343eb3c5159",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.method-not-found:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "3bb04fc55c1a"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "388d0ceb3385",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "4343eb3c5159",
+            "c051440f1f05",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.transport-rejection:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "ecb0f6b35964"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "4861b36f5d5c",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "468cc28b676c",
+            "91a1c8142e23"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-linear.transport-rejection-no-message:mounted",
+        "observation": {
+          "sender": ["47f3ae87c00a", "3df3437aa9b4"],
+          "payloads": ["bb215a1eb59b", "e7f73629d075"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "a08c3f9a0d9e",
+          "effects": [
+            "7d341b2cb946",
+            "3b01c25bcd45",
+            "7d21147e56c1",
+            "3b01c25bcd45",
+            "91a1c8142e23"
+          ]
+        }
+      }
+    ]
+  }
+}

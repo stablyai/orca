@@ -1,0 +1,718 @@
+{
+  "operation": "session.pr-triage-launch",
+  "family": "session.pr-triage",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
+  "scenarioSha256": "0d06d27000a8f6ad66480a16c7b84e8464f4b6e1d775326aeae005926e134cb4",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0c54b1949d2e": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "13d5b62d9335": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "30ec57518c05": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Failed to create terminal",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "43aa948e3918": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "4aada9ff077b": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "681fc4d59b92": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Created terminal response was invalid",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9bf5a66636e8": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "a4273b38df83": {
+      "launched": "unlaunched"
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b5eced0566fb": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d0f04fba35ce": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tab": {
+              "id": "tab-1",
+              "terminal": "term-1",
+              "title": "Agent",
+              "type": "terminal"
+            }
+          }
+        }
+      }
+    },
+    "d3b1c8acd1dd": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    },
+    "e15e98b4502f": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "edecb88c17e4": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "ef42ebed8204": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f3199cb6db52": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}"
+    },
+    "f3edde9dd385": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "f8822a0cc5c3": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "fc9c768a4e5b": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "fe1fe746e77a": {
+      "launched": "sent"
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.pr-triage-session.tabs.createterminal-1",
+    "checkpoints": [
+      {
+        "id": "pr-triage-launch.prelude:pending",
+        "observation": {
+          "sender": ["b5eced0566fb"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "9270aeb7d9c6"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.normal:launched",
+        "observation": {
+          "sender": ["d0f04fba35ce", "43aa948e3918"],
+          "payloads": ["d3b1c8acd1dd", "f3199cb6db52"],
+          "settlements": {
+            "launch": "eb79a9b3682a"
+          },
+          "state": "fe1fe746e77a",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.result-absent:launched",
+        "observation": {
+          "sender": ["e15e98b4502f"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "681fc4d59b92"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.result-null:launched",
+        "observation": {
+          "sender": ["13d5b62d9335"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "681fc4d59b92"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.inner-ok-missing:launched",
+        "observation": {
+          "sender": ["9bf5a66636e8"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "681fc4d59b92"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.inner-false-string-error:launched",
+        "observation": {
+          "sender": ["f3edde9dd385"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "681fc4d59b92"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.inner-false-object-error:launched",
+        "observation": {
+          "sender": ["fc9c768a4e5b"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "681fc4d59b92"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.outer-refused:launched",
+        "observation": {
+          "sender": ["0c54b1949d2e"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "32a7c0ae7918"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.outer-refused-no-message:launched",
+        "observation": {
+          "sender": ["ef42ebed8204"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "30ec57518c05"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.method-not-found:launched",
+        "observation": {
+          "sender": ["edecb88c17e4"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "b948e8307e81"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.transport-rejection:launched",
+        "observation": {
+          "sender": ["f8822a0cc5c3"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "a947768bc0ed"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-triage-launch.transport-rejection-no-message:launched",
+        "observation": {
+          "sender": ["4aada9ff077b"],
+          "payloads": ["d3b1c8acd1dd"],
+          "settlements": {
+            "launch": "c7584e82c72f"
+          },
+          "state": "a4273b38df83",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

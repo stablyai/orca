@@ -29,7 +29,8 @@ export const gitStatusHostPayloadRead = bindDeferredRpcOperation(
   })
 )
 
-const gitStatusProjectionReader: RpcCompatibleReader<
+/** Shared with the session's branch-context read, which wants the same projection under a skip. */
+export const gitStatusProjectionReader: RpcCompatibleReader<
   unknown,
   'normalized-status',
   MobileGitStatusResult | null

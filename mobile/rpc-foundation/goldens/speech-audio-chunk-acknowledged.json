@@ -1,0 +1,90 @@
+{
+  "operation": "speech.audio-chunk",
+  "family": "speech.dictation-chunk",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
+  "scenarioSha256": "08b583790d858a4cb7cf7377126818b6d05766c02587343ec89a167f94094082",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "02cebe6f0062": {
+      "failures": [],
+      "pending": 0
+    },
+    "90af24dc404f": {
+      "name": "speech.dictation.chunk#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.chunk\",\"params\":{\"dictationId\":\"dictation-1\",\"audioBase64\":\"ACVKb5S53gM=\",\"sampleRate\":16000}}"
+    },
+    "bc459c132276": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "status": "fulfilled",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ]
+    },
+    "c0d15d1b2941": {
+      "name": "speech.dictation.chunk#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.chunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "audioBase64": "ACVKb5S53gM=",
+            "dictationId": "dictation-1",
+            "sampleRate": 16000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "received": true
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "speech-audio-chunk-acknowledged",
+    "checkpoints": [
+      {
+        "id": "acknowledged",
+        "observation": {
+          "sender": ["c0d15d1b2941"],
+          "payloads": ["90af24dc404f"],
+          "settlements": {
+            "chunk": "bc459c132276"
+          },
+          "state": "02cebe6f0062",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

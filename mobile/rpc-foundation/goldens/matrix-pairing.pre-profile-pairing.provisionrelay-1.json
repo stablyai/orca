@@ -1,0 +1,926 @@
+{
+  "operation": "pairing.pre-profile",
+  "family": "pairing.pre-profile",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "e044443e01f282566a5e0eff110d0861d2a1047ca8d8696a2e7ff914f51957f3",
+  "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
+  "scenarioSha256": "399fa8b85d9c2fc341ea2284a54aed278fd1a5b19a84cc9284c29d5a583bc519",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0193ae4dbb38": {
+      "name": "candidate-closed",
+      "value": "relay"
+    },
+    "0539a34c02a8": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "06dee54a3689": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "ZodError",
+        "message": "[\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received null\"\n  }\n]",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "0799d165f56e": {
+      "name": "journal-saved",
+      "value": "pair-fixture-1"
+    },
+    "139fb7a92eac": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "1da0bf924e75": {
+      "name": "bundle-written",
+      "value": {
+        "version": 4
+      }
+    },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "1f4d3b93dbcb": {
+      "name": "pairing.getEndpoints#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-l99UBPM71AZiC1ghz2glnA\"}}"
+    },
+    "26f802fad080": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "3c9308d9b7be": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "authorizationMode": "authenticated-direct",
+            "currentVersion": 4,
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA",
+            "resumeExpiresAt": 1767830400000,
+            "v": 1
+          }
+        }
+      }
+    },
+    "4030a59932c1": {
+      "name": "journal-updated",
+      "value": "pair-fixture-1"
+    },
+    "44341dbd8021": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "4a54bf2090c8": {
+      "outcome": "host-1",
+      "savedHost": "direct-only",
+      "timedOut": false
+    },
+    "4e3b57d795cb": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "refused: outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "4e5a56d00e5e": {
+      "outcome": "failed: refused: outer refused",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "5099f8914209": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "ZodError",
+        "message": "[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reqId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  },\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"relay-basis\",\n      \"authenticated-direct\"\n    ],\n    \"path\": [\n      \"authorizationMode\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"relay-basis\\\"|\\\"authenticated-direct\\\"\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"currentVersion\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"resumeExpiresAt\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"ok\",\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized keys: \\\"ok\\\", \\\"error\\\"\"\n  }\n]",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "53412dd89894": {
+      "name": "pairing.provisionRelay#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}"
+    },
+    "540f41097a17": {
+      "name": "host-saved",
+      "value": "direct-only"
+    },
+    "56266d1e7340": {
+      "name": "pairing.getEndpoints#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-l99UBPM71AZiC1ghz2glnA",
+              "result": {
+                "authorizationMode": "authenticated-direct",
+                "currentVersion": 4,
+                "reqId": "install-l99UBPM71AZiC1ghz2glnA",
+                "resumeExpiresAt": 1767830400000,
+                "v": 1
+              },
+              "state": "committed",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "6cb74a535419": {
+      "name": "status.get#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "765407131fe4": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "77d3c0d012b7": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7b9574d1b723": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "818e73b19334": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true
+        }
+      }
+    },
+    "8cfbee11e6cb": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "ZodError",
+        "message": "[\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  }\n]",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "9b50435fa2f8": {
+      "outcome": "host-1",
+      "savedHost": "relay-host-0001x",
+      "timedOut": false
+    },
+    "9dec5db5203d": {
+      "outcome": "failed: transport failure",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "afe249bdfa5f": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "b8549409f4a9": {
+      "name": "journal-cleared",
+      "value": "pair-fixture-1"
+    },
+    "bc627d34e0d0": {
+      "name": "host-saved",
+      "value": "relay-host-0001x"
+    },
+    "c0c86e67c300": {
+      "name": "status.get#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "c3bd958eef0c": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ccde11a35347": {
+      "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received null\"\n  }\n]",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "d1b2eddf66f4": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "hostId": "host-1"
+      }
+    },
+    "d56bfdbce702": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "refused: ",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "d7f4c8d8decc": {
+      "outcome": "failed: ",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "d99ec237c33f": {
+      "outcome": "failed: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reqId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  },\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"relay-basis\",\n      \"authenticated-direct\"\n    ],\n    \"path\": [\n      \"authorizationMode\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"relay-basis\\\"|\\\"authenticated-direct\\\"\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"currentVersion\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"resumeExpiresAt\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"ok\",\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized keys: \\\"ok\\\", \\\"error\\\"\"\n  }\n]",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "e45af0b65cfb": {
+      "outcome": "failed: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reqId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  },\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"relay-basis\",\n      \"authenticated-direct\"\n    ],\n    \"path\": [\n      \"authorizationMode\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"relay-basis\\\"|\\\"authenticated-direct\\\"\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"currentVersion\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"resumeExpiresAt\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key: \\\"error\\\"\"\n  }\n]",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "e625529b1cd8": {
+      "outcome": "failed: refused: ",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "f19ff6c94d68": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "ZodError",
+        "message": "[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reqId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  },\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"relay-basis\",\n      \"authenticated-direct\"\n    ],\n    \"path\": [\n      \"authorizationMode\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"relay-basis\\\"|\\\"authenticated-direct\\\"\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"currentVersion\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"expected\": \"number\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"resumeExpiresAt\"\n    ],\n    \"message\": \"Invalid input: expected number, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key: \\\"error\\\"\"\n  }\n]",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "f203320e31e9": {
+      "name": "candidate-closed",
+      "value": "direct"
+    },
+    "f413abdb830a": {
+      "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  }\n]",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "f4797c8e8b5e": {
+      "name": "pairing.provisionRelay#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-pairing.pre-profile-pairing.provisionrelay-1",
+    "checkpoints": [
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.normal:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "3c9308d9b7be", "56266d1e7340"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894", "1f4d3b93dbcb"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "1da0bf924e75",
+            "bc627d34e0d0",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.result-absent:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "818e73b19334"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "8cfbee11e6cb"
+          },
+          "state": "f413abdb830a",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.result-null:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "7b9574d1b723"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "06dee54a3689"
+          },
+          "state": "ccde11a35347",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.inner-ok-missing:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "44341dbd8021"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "f19ff6c94d68"
+          },
+          "state": "e45af0b65cfb",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.inner-false-string-error:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "765407131fe4"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "5099f8914209"
+          },
+          "state": "d99ec237c33f",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.inner-false-object-error:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "139fb7a92eac"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "5099f8914209"
+          },
+          "state": "d99ec237c33f",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.outer-refused:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "c3bd958eef0c"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "4e3b57d795cb"
+          },
+          "state": "4e5a56d00e5e",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.outer-refused-no-message:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "f4797c8e8b5e"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "d56bfdbce702"
+          },
+          "state": "e625529b1cd8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.method-not-found:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "afe249bdfa5f"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "4a54bf2090c8",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "540f41097a17",
+            "b8549409f4a9",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.transport-rejection:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "77d3c0d012b7"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "a947768bc0ed"
+          },
+          "state": "9dec5db5203d",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      },
+      {
+        "id": "pairing-pre-profile-direct-wins-and-provisions.transport-rejection-no-message:paired-over-direct",
+        "observation": {
+          "sender": ["26f802fad080", "6cb74a535419", "0539a34c02a8"],
+          "payloads": ["1e5b32902af7", "c0c86e67c300", "53412dd89894"],
+          "settlements": {
+            "pair": "c7584e82c72f"
+          },
+          "state": "d7f4c8d8decc",
+          "effects": [
+            "0799d165f56e",
+            "0193ae4dbb38",
+            "4030a59932c1",
+            "f203320e31e9",
+            "0193ae4dbb38"
+          ]
+        }
+      }
+    ]
+  }
+}

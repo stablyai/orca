@@ -1,4 +1,12 @@
 import type { AgentStatusState } from '../agent-status-types'
+import {
+  AGENT_STATUS_2A_CURRENT_PRODUCER_MODE,
+  createAgentStatusLegacyAdapter,
+  type AgentStatusLegacyAdapter,
+  type AgentStatusLegacyAdapterOptions,
+  type AgentStatusLegacyAdmissionMode
+} from '../agent-status-legacy-adapter'
+import type { AgentStatusLegacyIngressCaller } from '../agent-status-legacy-ingress-manifest'
 import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
 import type { CodexSubagentRoster } from '../codex-subagent-roster'
 import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
@@ -10,7 +18,8 @@ export type HookListenerState = {
   warnedEnvs: Set<string>
   lastPromptByPaneKey: Map<string, string>
   lastToolByPaneKey: Map<string, ToolSnapshot>
-  lastStatusByPaneKey: Map<string, AgentHookEventPayload>
+  /** Read-only compatibility view. All writes pass through the isolated legacy adapter. */
+  lastStatusByPaneKey: ReadonlyMap<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
   ampCompletedCacheKeys: Set<string>
   /** Live subagents/teammates per Claude pane; survives turn boundaries since background children outlive the lead turn. */
@@ -62,13 +71,26 @@ export type CodexLeadTurnState = {
   model?: string
 }
 
-export function createHookListenerState(): HookListenerState {
-  return {
+const legacyStatusAdapterByState = new WeakMap<HookListenerState, AgentStatusLegacyAdapter>()
+
+function legacyStatusAdapter(state: HookListenerState): AgentStatusLegacyAdapter {
+  const adapter = legacyStatusAdapterByState.get(state)
+  if (!adapter) {
+    throw new Error('Hook listener state has no legacy agent-status adapter')
+  }
+  return adapter
+}
+
+export function createHookListenerState(
+  options: AgentStatusLegacyAdapterOptions = {}
+): HookListenerState {
+  const adapter = createAgentStatusLegacyAdapter(options)
+  const state: HookListenerState = {
     warnedVersions: new Set(),
     warnedEnvs: new Set(),
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
-    lastStatusByPaneKey: new Map(),
+    lastStatusByPaneKey: adapter.view,
     antigravityCompletedTranscriptByPaneKey: new Map(),
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
@@ -83,12 +105,69 @@ export function createHookListenerState(): HookListenerState {
     codexLeadStateByPaneKey: new Map(),
     grokActiveTurnByPaneKey: new Map()
   }
+  legacyStatusAdapterByState.set(state, adapter)
+  return state
+}
+
+export function admitLegacyAgentStatus(
+  state: HookListenerState,
+  caller: AgentStatusLegacyIngressCaller,
+  entry: AgentHookEventPayload,
+  mode: AgentStatusLegacyAdmissionMode,
+  options?: { moveToEnd?: boolean }
+): boolean {
+  return legacyStatusAdapter(state).admit(caller, mode, entry, options)
+}
+
+export function deleteLegacyAgentStatus(state: HookListenerState, paneKey: string): boolean {
+  return legacyStatusAdapter(state).delete(paneKey)
+}
+
+export function clearLegacyAgentStatuses(state: HookListenerState): void {
+  legacyStatusAdapter(state).clear()
+}
+
+export function moveLegacyAgentStatuses(
+  state: HookListenerState,
+  fromPaneKey: string,
+  toPaneKey: string
+): void {
+  legacyStatusAdapter(state).move(fromPaneKey, toPaneKey)
+}
+
+export function getLegacyStatusListingOrder(
+  state: HookListenerState,
+  paneKey: string
+): number | undefined {
+  return legacyStatusAdapter(state).listingOrder(paneKey)
+}
+
+/** Test harnesses seed the same compatibility region without exposing a mutable Map. */
+export function seedLegacyAgentStatusForTests(
+  state: HookListenerState,
+  entry: AgentHookEventPayload
+): void {
+  if (
+    !admitLegacyAgentStatus(
+      state,
+      'main-status-update',
+      entry,
+      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+    )
+  ) {
+    throw new Error('Test legacy agent-status seed was refused')
+  }
 }
 
 export function clearPaneCacheState(state: HookListenerState, paneKey: string): void {
   deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
-  deletePaneScopedCacheEntry(state.lastStatusByPaneKey, paneKey)
+  deleteLegacyAgentStatus(state, paneKey)
+  for (const key of state.lastStatusByPaneKey.keys()) {
+    if (key.startsWith(`${paneKey}\0`)) {
+      deleteLegacyAgentStatus(state, key)
+    }
+  }
   deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   deletePaneScopedCacheEntry(state.claudeConsumedCompactPromptIdByPaneKey, paneKey)
@@ -162,7 +241,7 @@ export function movePaneCacheState(
   }
   movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.lastStatusByPaneKey, fromPaneKey, toPaneKey)
+  moveLegacyAgentStatuses(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeConsumedCompactPromptIdByPaneKey, fromPaneKey, toPaneKey)
@@ -209,7 +288,7 @@ export function deletePaneScopedSetEntry(set: Set<string>, paneKey: string): voi
 export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
-  state.lastStatusByPaneKey.clear()
+  clearLegacyAgentStatuses(state)
   state.antigravityCompletedTranscriptByPaneKey.clear()
   state.ampCompletedCacheKeys.clear()
   state.claudeConsumedCompactPromptIdByPaneKey.clear()

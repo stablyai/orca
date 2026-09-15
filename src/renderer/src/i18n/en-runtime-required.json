@@ -2618,8 +2618,10 @@
   },
   "components": {
     "native-chat": {
-      "approval": {
-        "cancel": "Cancel"
+      "ask": {
+        "asked": "Asked:",
+        "awaiting": "Awaiting user input:",
+        "questionCount": "{{value0}} questions"
       },
       "composer": {
         "effort": "Effort"
