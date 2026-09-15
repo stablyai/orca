@@ -33,6 +33,26 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
+  it('passes an opaque Qwen Code model through its --model launch flag', () => {
+    expect(resolveWorkerLaunchPreferences({ agent: 'qwen-code', model: 'qwen3.5:9b' })).toEqual({
+      preferences: { model: 'qwen3.5:9b' },
+      receipt: {
+        requested: { agent: 'qwen-code', model: 'qwen3.5:9b', effort: null },
+        effective: { agent: 'qwen-code', model: 'qwen3.5:9b', effort: null }
+      }
+    })
+  })
+
+  it('rejects an effort for Qwen Code because its CLI exposes no effort flag', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'qwen-code',
+        model: 'qwen3.5:9b',
+        effort: 'high'
+      })
+    ).toThrow('does not support effort high')
+  })
+
   it.each([
     {
       model: 'gpt-5.6-sol',

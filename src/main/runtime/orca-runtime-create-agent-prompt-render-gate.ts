@@ -1,9 +1,9 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './orca-runtime-write-terminal-agent-prompt'
 import {
-  CLAUDE_AGENT_PROMPT_RENDER_MARKER,
-  CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS,
-  CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS
+  AGENT_PROMPT_RENDER_MARKER,
+  AGENT_PROMPT_RENDER_QUIET_MS,
+  AGENT_PROMPT_RENDER_TIMEOUT_MS
 } from './orca-runtime-core'
 import type { RuntimeTerminalWait, RuntimeTerminalWaitCondition } from '../../shared/runtime-types'
 
@@ -17,7 +17,9 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
     dispose: () => void
   } | null {
     const pty = this.ptysById.get(ptyId)
-    if (!['claude', 'codex'].includes(pty?.launchAgent ?? pty?.foregroundAgent ?? '')) {
+    if (
+      !['claude', 'codex', 'qwen-code'].includes(pty?.launchAgent ?? pty?.foregroundAgent ?? '')
+    ) {
       return null
     }
     let armed = false
@@ -67,7 +69,7 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
       if (quietTimer) {
         clearTimeout(quietTimer)
       }
-      quietTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS)
+      quietTimer = setTimeout(finish, AGENT_PROMPT_RENDER_QUIET_MS)
     }
     const armHardTimer = (): void => {
       if (hardTimer) {
@@ -75,7 +77,7 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
       }
       hardTimer = setTimeout(
         finish,
-        CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - Date.now())
+        AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - Date.now())
       )
     }
     const armIngestTimer = (): void => {
@@ -99,8 +101,8 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
       }
       if (!observedMarker) {
         const combined = markerCarry + data
-        markerCarry = combined.slice(-(CLAUDE_AGENT_PROMPT_RENDER_MARKER.length - 1))
-        if (!combined.includes(CLAUDE_AGENT_PROMPT_RENDER_MARKER)) {
+        markerCarry = combined.slice(-(AGENT_PROMPT_RENDER_MARKER.length - 1))
+        if (!combined.includes(AGENT_PROMPT_RENDER_MARKER)) {
           return
         }
         observedMarker = true

@@ -1,4 +1,4 @@
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
+import { resolveTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -12,6 +12,7 @@ import type { WorkerStartInput } from './worker-start-schema'
 
 type WorkerStartLaunch = ReturnType<typeof resolveWorkerLaunchPreferences>
 
+/** Validate home-side placement before creating a federated Dispatch. */
 export function validateFederatedWorkerStartPlacement(
   params: WorkerStartInput,
   createsWorktree: boolean
@@ -40,7 +41,7 @@ export function validateFederatedWorkerStartPlacement(
       '--terminal reuses an existing agent and cannot combine with --agent.'
     )
   }
-  if (!params.terminal && (!params.agent || !isTuiAgent(params.agent))) {
+  if (!params.terminal && !resolveTuiAgent(params.agent)) {
     throw new OrchestrationError(
       'agent_unconfigured',
       'A configured --agent is required when remote worker-start creates a terminal.'
@@ -48,6 +49,7 @@ export function validateFederatedWorkerStartPlacement(
   }
 }
 
+/** Resolve and validate the agent launch requested for a local worker. */
 export function prepareLocalWorkerStart(args: {
   params: WorkerStartInput
   createsWorktree: boolean
@@ -86,6 +88,7 @@ export function prepareLocalWorkerStart(args: {
   })
 }
 
+/** Resolve and validate launch options on the worker execution host. */
 export function prepareFederationAttachmentWorkerStart(args: {
   params: FederationAttachStartInput
   createsWorktree: boolean
@@ -139,10 +142,10 @@ function resolveWorkerStartAgent(args: {
   effort?: string
   missingAgentMessage: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
-  if (!args.terminal && (!args.agent || !isTuiAgent(args.agent))) {
+  const agent = resolveTuiAgent(args.agent)
+  if (!args.terminal && !agent) {
     throw new OrchestrationError('agent_unconfigured', args.missingAgentMessage)
   }
-  const agent = args.agent as TuiAgent | undefined
   if (agent) {
     args.runtime.validateOrchestrationAgentLauncher(agent)
     return {

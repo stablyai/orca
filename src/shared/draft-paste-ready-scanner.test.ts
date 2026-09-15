@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  createDraftPasteReadyScanner,
+  waitForDraftPasteReadySignal
+} from './draft-paste-ready-scanner'
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const SHOW_CURSOR = '\x1b[?25h'
@@ -11,6 +14,78 @@ const ALT_SCREEN_LEAVE = '\x1b[?1049l'
 const GROK_ALT_SCREEN_ENTER = '\x1b[?1049h\x1b[?2004h\x1b[?25l'
 const GROK_ALT_SCREEN_LEAVE = '\x1b[?1049l\x1b[?25h'
 const GROK_COMPOSER_FRAME = '\x1b[38;2;80;80;88m│\x1b[38;2;200;200;200m❯ \x1b[0m'
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+describe('waitForDraftPasteReadySignal', () => {
+  it('recognizes buffered readiness and releases its subscription', async () => {
+    const unsubscribe = vi.fn()
+
+    await expect(
+      waitForDraftPasteReadySignal({
+        readySignal: 'render-cursor-after-bracketed-paste',
+        subscribe: () => unsubscribe,
+        readRecentOutput: () => `${DECSET_BRACKETED_PASTE}${SHOW_CURSOR}`,
+        timeoutMs: 1_000,
+        quietMs: 100
+      })
+    ).resolves.toBe(true)
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it('accepts a recurring cursor after a same-process anchor was already verified', async () => {
+    const unsubscribe = vi.fn()
+
+    await expect(
+      waitForDraftPasteReadySignal({
+        readySignal: 'render-cursor-after-bracketed-paste',
+        subscribe: () => unsubscribe,
+        readRecentOutput: () => SHOW_CURSOR,
+        timeoutMs: 1_000,
+        quietMs: 100,
+        markerAnchorWasObserved: true
+      })
+    ).resolves.toBe(true)
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it('resolves false at the hard deadline when no signal arrives', async () => {
+    vi.useFakeTimers()
+    const unsubscribe = vi.fn()
+    const waiting = waitForDraftPasteReadySignal({
+      readySignal: 'render-cursor-after-bracketed-paste',
+      subscribe: () => unsubscribe,
+      readRecentOutput: () => undefined,
+      timeoutMs: 1_000,
+      quietMs: 100
+    })
+
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    await expect(waiting).resolves.toBe(false)
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it('cancels the wait and releases its subscription', async () => {
+    const controller = new AbortController()
+    const unsubscribe = vi.fn()
+    const waiting = waitForDraftPasteReadySignal({
+      readySignal: 'render-cursor-after-bracketed-paste',
+      subscribe: () => unsubscribe,
+      readRecentOutput: () => undefined,
+      timeoutMs: 1_000,
+      quietMs: 100,
+      signal: controller.signal
+    })
+
+    controller.abort()
+
+    await expect(waiting).resolves.toBe(false)
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+})
 
 describe('createDraftPasteReadyScanner', () => {
   describe('render-cursor-after-bracketed-paste (opencode / mimo-code)', () => {
@@ -95,6 +170,13 @@ describe('createDraftPasteReadyScanner', () => {
         ready: false,
         armQuietTimer: false
       })
+    })
+
+    it('uses a previously verified non-revocable anchor for a later cursor frame', () => {
+      const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste', {
+        markerAnchorWasObserved: true
+      })
+      expect(scanner.observe(SHOW_CURSOR)).toEqual({ ready: true, armQuietTimer: false })
     })
   })
 
