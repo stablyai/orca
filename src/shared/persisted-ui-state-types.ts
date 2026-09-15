@@ -46,6 +46,8 @@ export type PersistedUIState = {
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
   hideSleepingWorkspaces?: boolean
+  /** Host-qualified project identities whose sleeping workspaces this client hides. */
+  hideSleepingProjectKeys?: string[]
   /** Which execution hosts the sidebar shows; `all` = mixed view, specific IDs focus without tearing down other hosts' sessions. */
   workspaceHostScope?: WorkspaceHostScope
   /** Which execution hosts the sidebar shows; `null` = sticky all-hosts so new hosts appear automatically. */

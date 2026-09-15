@@ -15103,5 +15103,11 @@
       "stopped": "중지됨",
       "finished": "완료됨"
     }
+  },
+  "sidebar": {
+    "projectSleeping": {
+      "show": "슬립 작업트리 표시하기",
+      "hide": "슬립 작업트리 숨기기"
+    }
   }
 }
