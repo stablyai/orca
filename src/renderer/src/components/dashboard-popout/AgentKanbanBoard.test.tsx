@@ -19,12 +19,14 @@ vi.mock('./AgentKanbanCard', () => ({
     card,
     repoIcon,
     now,
-    onOpenTerminal
+    clickOpensWorktree,
+    onActivate
   }: {
     card: DashboardCard
     repoIcon?: RepoIcon | null
     now: number
-    onOpenTerminal: (card: DashboardCard) => void
+    clickOpensWorktree: boolean
+    onActivate: (card: DashboardCard, event: React.MouseEvent<HTMLButtonElement>) => void
   }) => (
     <div
       data-testid="card"
@@ -32,7 +34,8 @@ vi.mock('./AgentKanbanCard', () => ({
       data-unseen={card.unseen}
       data-now={now}
       data-repo-icon={repoIcon === null ? 'none' : JSON.stringify(repoIcon)}
-      onClick={() => onOpenTerminal(card)}
+      data-click-opens-worktree={clickOpensWorktree}
+      onClick={(event) => onActivate(card, event as unknown as React.MouseEvent<HTMLButtonElement>)}
     >
       {card.worktreeName}
     </div>
@@ -92,6 +95,12 @@ function renderBoard(
 }
 
 const ackAgent = vi.fn(async () => {})
+const revealAgent = vi.fn(async () => {})
+const originalUserAgent = navigator.userAgent
+
+function stubUserAgent(userAgent: string): void {
+  Object.defineProperty(navigator, 'userAgent', { configurable: true, value: userAgent })
+}
 
 describe('AgentKanbanBoard', () => {
   beforeEach(async () => {
@@ -101,8 +110,8 @@ describe('AgentKanbanBoard', () => {
       'matchMedia',
       vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
     )
-    // The board relays seen-acks through the dashboard preload API.
-    ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent } }
+    // The board relays seen-acks and reveals through the dashboard preload API.
+    ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent, revealAgent } }
   })
   afterEach(() => {
     cleanup()
@@ -110,6 +119,7 @@ describe('AgentKanbanBoard', () => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    stubUserAgent(originalUserAgent)
   })
 
   it('renders the three default columns in order', () => {
@@ -310,6 +320,61 @@ describe('AgentKanbanBoard', () => {
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
     expect(screen.getByTestId('terminal-dialog').dataset.ptyId).toBeUndefined()
+  })
+
+  it('previews on click and opens the worktree on modifier-click by default', () => {
+    stubUserAgent('Macintosh')
+    const agent = card({ paneKey: 'pk-open', tabId: 'tab-9', leafId: 'leaf-9' })
+    render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
+    expect(screen.getByTestId('card').dataset.clickOpensWorktree).toBe('false')
+
+    fireEvent.click(screen.getByTestId('card'), { metaKey: true })
+    expect(revealAgent).toHaveBeenCalledWith({
+      repoId: 'r1',
+      worktreeId: 'w1',
+      executionHostId: undefined,
+      tabId: 'tab-9',
+      leafId: 'leaf-9'
+    })
+    // Going to the agent counts as seeing it, exactly like opening its preview.
+    expect(ackAgent).toHaveBeenCalledWith('pk-open')
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
+
+    fireEvent.click(screen.getByTestId('card'))
+    expect(revealAgent).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
+  })
+
+  it('reads the platform modifier: Ctrl on non-Mac hosts, never Cmd', () => {
+    stubUserAgent('Windows NT 10.0')
+    render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [card({})] }} />)
+
+    fireEvent.click(screen.getByTestId('card'), { metaKey: true })
+    expect(revealAgent).not.toHaveBeenCalled()
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
+    fireEvent.click(screen.getByTestId('terminal-dialog-close'))
+
+    fireEvent.click(screen.getByTestId('card'), { ctrlKey: true })
+    expect(revealAgent).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
+  })
+
+  it('swaps the two actions when the snapshot says click opens the worktree', () => {
+    stubUserAgent('Macintosh')
+    render(
+      <AgentKanbanBoard
+        snapshot={{ generatedAt: 1, cards: [card({})], cardClickOpensWorktree: true }}
+      />
+    )
+    expect(screen.getByTestId('card').dataset.clickOpensWorktree).toBe('true')
+
+    fireEvent.click(screen.getByTestId('card'))
+    expect(revealAgent).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
+
+    fireEvent.click(screen.getByTestId('card'), { metaKey: true })
+    expect(revealAgent).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
   })
 
   it('relays a seen-ack when a dialog opens and when the open agent changes state', () => {
