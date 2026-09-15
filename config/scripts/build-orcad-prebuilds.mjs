@@ -51,7 +51,10 @@ export function detectLibc(platform = process.platform, header = readReportHeade
   if (platform !== 'linux') {
     return 'none'
   }
-  return header && typeof header === 'object' && 'glibcVersionRuntime' in header ? 'glibc' : 'musl'
+  if (!header || typeof header !== 'object') {
+    throw new Error('[orcad-prebuilds] cannot determine the build host libc from the Node report')
+  }
+  return 'glibcVersionRuntime' in header ? 'glibc' : 'musl'
 }
 
 function readReportHeader() {
@@ -85,6 +88,14 @@ export function assertNodePtyPatchApplied(nodePtyDir) {
   }
   if (!ptySource.includes('.symver openpty,openpty@')) {
     missing.push('src/unix/pty.cc is missing the .symver glibc pins')
+  }
+  // Why: glibc 2.42 re-versioned the baud-rate setters separately from the
+  // 2.32-2.34 libpthread/libutil merge, so the openpty pin alone does not prove
+  // a build on a 2.42+ host stays loadable on 2.31.
+  for (const symbol of ['cfsetispeed', 'cfsetospeed']) {
+    if (!ptySource.includes(`.symver ${symbol},${symbol}@`)) {
+      missing.push(`src/unix/pty.cc is missing the .symver ${symbol} pin (glibc 2.42)`)
+    }
   }
   if (missing.length > 0) {
     throw new Error(
@@ -190,9 +201,8 @@ function build() {
     console.log(`[orcad-prebuilds] stored ${slot}/spawn-helper`)
   }
 
-  // The static floor gate, applied to the artifact we are about to ship rather than only
-  // to the packaged desktop app. objdump is Linux-only, which is where the floor lives.
-  if (process.platform === 'linux') {
+  // Ubuntu's ABI floor applies only to glibc; a forced slot label must not bypass it.
+  if (process.platform === 'linux' && detectLibc() === 'glibc') {
     const { verifyLinuxGlibcFloor } = require('./verify-linux-glibc-floor.cjs')
     verifyLinuxGlibcFloor(slotDir)
   }
