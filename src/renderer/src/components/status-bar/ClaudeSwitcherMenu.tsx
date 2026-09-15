@@ -114,14 +114,20 @@ export function ClaudeSwitcherMenu({
     })
   }, [loadAccounts, claudeAccountSyncKey])
 
-  const handleOpenChange = useCallback((nextOpen: boolean): void => {
-    setOpen(nextOpen)
-    if (!nextOpen) {
-      setAccountsExpanded(false)
-    }
-  }, [])
+  // Why: the popover is where saved accounts get compared, so fill their usage on open, not only on
+  // "Switch to" expansion (#14833). The service debounces repeats; remote-owned accounts have no local cache to fill.
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean): void => {
+      setOpen(nextOpen)
+      if (!nextOpen) {
+        setAccountsExpanded(false)
+      } else if (!hasActiveRuntimeEnvironment) {
+        void fetchInactiveClaudeAccountUsage()
+      }
+    },
+    [fetchInactiveClaudeAccountUsage, hasActiveRuntimeEnvironment]
+  )
 
-  // Why: fetch inactive-account usage only on switcher expansion; remote-owned accounts have no local cache to fill.
   const handleAccountsExpandedToggle = useCallback((): void => {
     const nextExpanded = !accountsExpanded
     setAccountsExpanded(nextExpanded)
