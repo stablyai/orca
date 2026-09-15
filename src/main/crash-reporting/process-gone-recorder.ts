@@ -297,7 +297,10 @@ export function recordProcessGoneCrash(
     arch: process.arch,
     electronVersion: process.versions.electron ?? 'unknown',
     chromeVersion: process.versions.chrome ?? 'unknown',
-    details: crashDetails,
+    // Why: attachMinidumpSignature below is the only writer of minidumpStatus, so a session that
+    // ends before it settles left the field absent -- indistinguishable from a paired dump that
+    // found nothing. Seed the unresolved state so the report says which happened.
+    details: { ...crashDetails, minidumpStatus: 'pending' },
     breadcrumbs: reportBreadcrumbs
   })
   trackRendererSiblingAttribution(
