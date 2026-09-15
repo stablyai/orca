@@ -65,6 +65,7 @@ import { registerClaudeAccountHandlers } from '../claude-accounts'
 import { registerMiniMaxCredentialsHandlers } from '../minimax-credentials'
 import { registerGrokAccountHandlers } from '../grok-accounts'
 import { registerUpdaterHandlers } from '../../window/attach-main-window-services'
+import { registerSqliteDatabaseHandlers } from '../sqlite-database'
 import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
@@ -213,6 +214,7 @@ export function registerCoreHandlers(
     registerFilesystemHandlers(store)
   }
   registerFilesystemWatcherHandlers()
+  registerSqliteDatabaseHandlers(store)
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store, pluginService)
