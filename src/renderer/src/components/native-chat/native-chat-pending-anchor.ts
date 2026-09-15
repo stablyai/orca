@@ -1,10 +1,6 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { ANCHORED_PENDING_ID_PREFIX, type NativeChatPendingSend } from './native-chat-pending'
 
-/** Places the echo strictly after its anchor without reaching the next row: the
- *  list re-sorts by timestamp, and transcript rows carry whole milliseconds. */
-const ANCHOR_NUDGE_MS = 0.5
-
 /**
  * Render an optimistic echo after the row it was sent against, not at the tail.
  *
@@ -18,7 +14,9 @@ const ANCHOR_NUDGE_MS = 0.5
  * Position has to survive `orderNativeChatMessages`, which sorts by rank before
  * timestamp and pins every tail echo to rank 2 — array order alone never reaches
  * the DOM. So an anchored echo is re-minted under `pending-at:`, which the
- * assembler ranks as content, and takes its anchor's timestamp plus a nudge.
+ * assembler ranks as content, and carries its anchor's own timestamp; ties there
+ * keep placement order rather than breaking on id, so it stays beside the anchor
+ * even when the next row shares that millisecond.
  *
  * An echo still at the tail keeps `pending:` and rank 2, so the streaming preview
  * stays ahead of it — the tier `messageSortRank` exists to hold. Only an echo the
@@ -52,7 +50,7 @@ export function anchorPendingMessagesToSendBoundary(
     sharing.push({
       ...message,
       id: `${ANCHORED_PENDING_ID_PREFIX}${message.id.slice('pending:'.length)}`,
-      timestamp: anchor.timestamp + ANCHOR_NUDGE_MS * (sharing.length + 1)
+      timestamp: anchor.timestamp
     })
     anchored.set(anchor.id, sharing)
   }

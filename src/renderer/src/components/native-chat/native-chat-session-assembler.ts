@@ -126,6 +126,12 @@ export function compareMessages(a: NativeChatMessage, b: NativeChatMessage): num
   if (at !== bt) {
     return at - bt
   }
+  // An anchored echo carries its anchor's timestamp so it stays beside it. Ties
+  // must then keep the order it was placed in — breaking on id would sort it
+  // away from the row it was sent against. `sort` is stable, so 0 is enough.
+  if (isAnchoredPendingMessageId(a.id) || isAnchoredPendingMessageId(b.id)) {
+    return 0
+  }
   if (a.id < b.id) {
     return -1
   }

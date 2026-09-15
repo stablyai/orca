@@ -211,3 +211,41 @@ describe('anchoring does not cost the turn its content or its tiers', () => {
     ])
   })
 })
+
+// Review note from @coderabbitai: an anchored echo carries its anchor's
+// timestamp, so a following row can tie with it. Breaking that tie on id sorts
+// the echo away from the row it was sent against.
+describe('anchored echoes hold their place across timestamp ties', () => {
+  it('stays beside its anchor when the next row shares that millisecond', () => {
+    const messages = [
+      message('u1', 'user', 'first', 10),
+      message('a1', 'assistant', 'opened the turn', 20),
+      message('a2', 'assistant', 'same millisecond', 20)
+    ]
+    const pending = [send('p1', 'sent mid-turn', 'a1')]
+    const ordered = orderNativeChatMessages([
+      ...anchorPendingMessagesToSendBoundary(
+        messages,
+        pending,
+        pendingSendsAsMessages(pending, messages)
+      ).messages
+    ])
+    expect(ordered.map((row) => row.id)).toEqual(['u1', 'a1', 'pending-at:p1', 'a2'])
+  })
+
+  it('keeps send order among echoes sharing one anchor after sorting', () => {
+    const messages = [
+      message('a1', 'assistant', 'opened the turn', 20),
+      message('a2', 'assistant', 'later', 30)
+    ]
+    const pending = [send('p1', 'first send', 'a1'), send('p2', 'second send', 'a1')]
+    const ordered = orderNativeChatMessages([
+      ...anchorPendingMessagesToSendBoundary(
+        messages,
+        pending,
+        pendingSendsAsMessages(pending, messages)
+      ).messages
+    ])
+    expect(ordered.map((row) => row.id)).toEqual(['a1', 'pending-at:p1', 'pending-at:p2', 'a2'])
+  })
+})
