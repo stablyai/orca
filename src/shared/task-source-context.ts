@@ -20,6 +20,7 @@ import type { Repo } from './repo-types'
 export type {
   GitHubTaskProviderIdentity,
   GitLabTaskProviderIdentity,
+  HamTeamBoardTaskProviderIdentity,
   JiraTaskProviderIdentity,
   LinearTaskProviderIdentity,
   TaskProviderIdentity
@@ -208,6 +209,7 @@ function normalizeTaskProvider(value: unknown): TaskProvider | null {
     case 'gitlab':
     case 'linear':
     case 'jira':
+    case 'hamteamboard':
       return value
     default:
       return null
