@@ -161,6 +161,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'worktree create' && flag === 'parent-worktree') {
     return '--parent-worktree <selector> Parent selector such as identity:<identity>, active/current, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<worktreeId>'
   }
+  if (command === 'project-group import-nested' && flag === 'mode') {
+    return '--mode <mode>          Import mode: group or separate'
+  }
   if (command === 'orchestration task-create' && flag === 'task-title') {
     return '--task-title <text>  Concise title for the orchestration task'
   }
@@ -229,6 +232,8 @@ export function formatFlagHelp(flag: string): string {
     'parent-worktree':
       '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     path: '--path <path>          Path argument for the command',
+    'project-path': '--project-path <path> Repository path to import; repeat for several',
+    'group-name': '--group-name <name>    Group name; defaults to the scanned folder name',
     prompt: '--prompt <text>        Prompt text for agent-backed commands',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',

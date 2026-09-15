@@ -30,6 +30,7 @@ export {
   formatProjectHostSetupUpdateResult,
   formatProjectList
 } from './project-format'
+export { formatNestedRepoImport, formatNestedRepoScan } from './project-group-format'
 export {
   formatTerminalClose,
   formatTerminalCreate,

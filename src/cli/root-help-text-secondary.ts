@@ -73,6 +73,8 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]',
   '  orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]',
   '  orca project setup-delete --setup <setup-id> [--json]',
+  '  orca project-group scan-nested --path <folder> [--json]',
+  '  orca project-group import-nested --path <folder> --project-path <repo> [--project-path <repo>...] --mode group|separate [--group-name <name>] [--json]',
   '  orca repo list [--json]',
   '  orca repo add --path <path> [--json]',
   '  orca repo show --repo <selector> [--json]',

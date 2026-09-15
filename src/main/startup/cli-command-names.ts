@@ -48,6 +48,7 @@ export const CLI_COMMAND_NAMES = [
   'orchestration',
   'pdf',
   'project',
+  'project-group',
   'reload',
   'repo',
   'screenshot',
