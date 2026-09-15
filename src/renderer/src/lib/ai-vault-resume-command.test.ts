@@ -6,7 +6,7 @@ import {
   getAiVaultResumePlatform
 } from './ai-vault-resume-command'
 
-vi.mock('@/lib/new-workspace', () => ({
+vi.mock('@/lib/client-platform', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 

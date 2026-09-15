@@ -302,6 +302,11 @@ describe('quitAndInstall failure carries the updater cause', () => {
     const { quitAndInstall, getUpdateStatus } = await reachDownloaded()
     const home = os.homedir()
     const escape = String.fromCharCode(27)
+    // Why: a username that appears inside the updater cache path (e.g. a user named
+    // "orca") is redacted after the home directory, so the expected output must not
+    // assume the username stays visible in the path.
+    const userName = os.userInfo().username
+    const tail = `pending/${userName === 'orca' ? '<user>' : 'orca'}.deb'`
 
     autoUpdaterMock.quitAndInstall.mockImplementation(() => {
       autoUpdaterMock.emit(
@@ -319,7 +324,9 @@ describe('quitAndInstall failure carries the updater cause', () => {
     const message = status.state === 'error' ? status.message : ''
     expect(message).not.toContain(home)
     expect(message).not.toContain(escape)
-    expect(message).toContain("<home>/.cache/orca-updater/pending/orca.deb'")
+    expect(message).toContain(
+      `<home>/.cache/${userName === 'orca' ? '<user>' : 'orca'}-updater/${tail}`
+    )
   })
 
   it('carries the cause when quitAndInstall throws instead of dispatching an error event', async () => {

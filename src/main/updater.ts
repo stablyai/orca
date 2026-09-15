@@ -45,7 +45,9 @@ export function downloadRemoteServerUpdate(runtimeId: string): RemoteServerUpdat
   return updater.downloadRemoteServerUpdate(runtimeId)
 }
 
-export function installRemoteServerUpdate(runtimeId: string): RemoteServerUpdateInstallResult {
+export async function installRemoteServerUpdate(
+  runtimeId: string
+): Promise<RemoteServerUpdateInstallResult> {
   return updater.installRemoteServerUpdate(runtimeId)
 }
 
@@ -89,6 +91,28 @@ export function dismissAvailableUpdate(): void {
   updater.dismissAvailableUpdate()
 }
 
-export function setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
+export function setupAutoUpdater(
+  mainWindow: BrowserWindow | null,
+  opts?: UpdaterSetupOptions
+): void {
   updater.setupAutoUpdater(mainWindow, opts)
+}
+
+/** Binds the serve runtime id so the supervised install request can echo it to the helper. */
+export function setServeUpdateRuntimeId(runtimeId: string): void {
+  updater.setServeUpdateRuntimeId(runtimeId)
+}
+
+/** Installs the census gate consulted by the install RPC before restarting the server. */
+export function setServeUpdateCensusGate(
+  gate: Parameters<typeof updater.setServeUpdateCensusGate>[0] | null
+): void {
+  updater.setServeUpdateCensusGate(gate)
+}
+
+/** Arms the census-and-stop fence consulted just before the supervised install quits. */
+export function setServeUpdateCensusRuntime(
+  runtime: Parameters<typeof updater.setServeUpdateCensusRuntime>[0]
+): void {
+  updater.setServeUpdateCensusRuntime(runtime)
 }

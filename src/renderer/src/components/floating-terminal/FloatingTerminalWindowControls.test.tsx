@@ -55,6 +55,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'darwin'
 }))
+vi.mock('@/lib/client-platform', () => ({ CLIENT_PLATFORM: 'darwin' }))
 
 vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: () => 'claude'
