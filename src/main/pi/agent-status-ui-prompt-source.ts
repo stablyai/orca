@@ -7,14 +7,14 @@ export function getPiAgentStatusUiPromptHandlerSourceLines(kind: PiAgentKind): s
   }
 
   return [
-    "  pi.on('ui_prompt_start', () => {",
+    "  onStatus('ui_prompt_start', () => {",
     '    if (isOmpRuntime()) return',
     '    piUiPromptDepth++',
     '    if (piUiPromptDepth > 1) return',
     "    post('ui_prompt_start')",
     '  })',
     '',
-    "  pi.on('ui_prompt_end', (_event, ctx) => {",
+    "  onStatus('ui_prompt_end', (_event, ctx) => {",
     '    if (isOmpRuntime() || piUiPromptDepth === 0) return',
     '    piUiPromptDepth--',
     '    if (piUiPromptDepth > 0) return',
@@ -31,7 +31,7 @@ export function getPiAgentStatusUiPromptHandlerSourceLines(kind: PiAgentKind): s
     "    post('ui_prompt_end', { is_idle: isIdle })",
     '  })',
     '',
-    "  pi.on('session_shutdown', () => {",
+    "  onStatus('session_shutdown', () => {",
     '    if (isOmpRuntime()) return',
     '    // Why: pi tears an open dialog down through resetExtensionUI without resolving its',
     '    // promise, so a replaced session never emits the matching ui_prompt_end and the wait',
