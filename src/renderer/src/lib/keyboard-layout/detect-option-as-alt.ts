@@ -10,9 +10,11 @@
  * The only defensible default is the one that varies per layout. This
  * module fingerprints the active layout from Chromium's
  * navigator.keyboard.getLayoutMap() (ships in Chrome 69+, so every Electron
- * we could run). We match Ghostty's taxonomy: US / US-International map to
- * `true`; everything else — including Dvorak, Colemak, UK, every
- * international layout — maps to `false`.
+ * we could run). The base layer cannot separate US from US-International or
+ * ABC, so every US-shaped layout maps to `true` here and `input-source-id.ts`
+ * narrows that to plain US whenever macOS gives us the real input source ID.
+ * Everything else — Dvorak, Colemak, UK, every international layout — maps
+ * to `false`.
  *
  * Reference implementation in Ghostty:
  *   ~/projects/ghostty/src/input/keyboard.zig:25-57 (Layout enum + detectOptionAsAlt)
@@ -61,7 +63,8 @@ export type DetectedLayoutCategory =
  * Semicolon (`o` vs `;`). Dvorak fails KeyQ immediately. Both get classified
  * as `non-us` and default to `'false'`; users who want `'true'` flip the
  * explicit override. Matches Ghostty (Ghostty only whitelists
- * com.apple.keylayout.US and com.apple.keylayout.USInternational).
+ * com.apple.keylayout.US; see input-source-id.ts for why we drop
+ * USInternational-PC from that allowlist).
  */
 const US_FINGERPRINT: Record<string, string> = {
   KeyQ: 'q',
