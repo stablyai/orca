@@ -70,6 +70,8 @@ export function buildWindowApi(args: {
         onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
         replyTabCreate: () => {},
+        onRequestGraphResync: () => () => {},
+        replyGraphResync: () => {},
         onRequestTabClose: () => () => {},
         replyTabClose: () => {},
         onRequestTabSetProfile: () => () => {},
