@@ -12,7 +12,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['project', 'setups'],
     summary: 'List project host setups',
-    usage: 'orca project setups [--project <id>] [--host <host-id>] [--json]',
+    usage: 'orca project setups [--project <id>] [--host <host>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host'],
     notes: [
       'A setup means a project is available on a host at a concrete filesystem path.',
@@ -31,11 +31,11 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-existing-folder'],
     summary: 'Make a project available on a host by importing an existing folder',
     usage:
-      'orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]',
+      'orca project setup-existing-folder --project <id> --host <host> --path <path> [--kind git|folder] [--display-name <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'path', 'kind', 'display-name'],
     notes: [
       'For remote runtimes, --path must be an absolute path on the remote server.',
-      '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
@@ -47,11 +47,11 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-clone'],
     summary: 'Make a project available on a host by cloning a repository',
     usage:
-      'orca project setup-clone --project <id> --host <host-id> --url <clone-url> --destination <path> [--display-name <name>] [--json]',
+      'orca project setup-clone --project <id> --host <host> --url <clone-url> --destination <path> [--display-name <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'url', 'destination', 'display-name'],
     notes: [
       'For remote runtimes, --destination must be an absolute parent directory on the remote server.',
-      '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'SSH targets are cloned through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
@@ -63,7 +63,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-create'],
     summary: 'Create independent project host setup metadata',
     usage:
-      'orca project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]',
+      'orca project setup-create --project <id> --host <host> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'project',
@@ -79,7 +79,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Creates setup metadata without registering a repo compatibility record.',
-      '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'Use setup-existing-folder when Orca should import and manage an actual checkout path now.'
     ],
     examples: [
