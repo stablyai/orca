@@ -8,6 +8,7 @@ import { resolveWorktreeCreateRoute } from '../worktree-create-execution-host-ro
 import { ExecutionHostNotDispatchableError } from '../providers/execution-host-provider-dispatch'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
+import type { PreparationRearmHolder } from '../worktree-create-preparation'
 import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
@@ -17,9 +18,9 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     args: RuntimeManagedWorktreeCreateArgs
   ): Promise<CreateWorktreeResult> {
     // Why a holder fired in `finally`: consuming a prepared checkout empties a pool slot, so a
-    // create that fails after that point — setup hook, terminal startup — must still arm the
-    // replacement. On success it fires last, once the startup terminals are up.
-    const rearm: { fire: () => void } = { fire: () => {} }
+    // create that fails anywhere after that — include copy, push target, terminal startup — must
+    // still arm the replacement. On success it fires last, once the startup terminals are up.
+    const rearm: PreparationRearmHolder = { fire: () => {} }
     try {
       return await this.performManagedWorktreeCreate(args, rearm)
     } finally {
@@ -29,7 +30,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
 
   private async performManagedWorktreeCreate(
     args: RuntimeManagedWorktreeCreateArgs,
-    rearm: { fire: () => void }
+    rearm: PreparationRearmHolder
   ): Promise<CreateWorktreeResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -157,32 +158,25 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
           : {})
       }
     }
-    const {
-      worktree,
-      worktreePath,
-      includeCopyWarning,
-      created,
-      addResult,
-      metadataResult,
-      rearmPreparation
-    } = await createRuntimeLocalManagedWorktree({
-      request: args,
-      repo,
-      store: this.requireStore(),
-      createdWithAgent: effectiveCreatedWithAgent,
-      hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
-      resolveRemoteTrackingBase: (path, base, ...options) =>
-        this.resolveRemoteTrackingBase(path, base, ...options),
-      hasRemoteTrackingRef: (path, base, ...options) =>
-        this.hasRemoteTrackingRef(path, base, ...options),
-      refreshRemoteTrackingBase: (path, base, ...options) =>
-        this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
-      fetchRemote: (path, remote, ...options) =>
-        this.fetchRemoteWithCache(path, remote, ...options),
-      onWorktreeMetadataPersisted: (persistedWorktree) =>
-        this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
-    })
-    rearm.fire = rearmPreparation
+    const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
+      await createRuntimeLocalManagedWorktree({
+        request: args,
+        repo,
+        store: this.requireStore(),
+        createdWithAgent: effectiveCreatedWithAgent,
+        hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
+        resolveRemoteTrackingBase: (path, base, ...options) =>
+          this.resolveRemoteTrackingBase(path, base, ...options),
+        hasRemoteTrackingRef: (path, base, ...options) =>
+          this.hasRemoteTrackingRef(path, base, ...options),
+        refreshRemoteTrackingBase: (path, base, ...options) =>
+          this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
+        fetchRemote: (path, remote, ...options) =>
+          this.fetchRemoteWithCache(path, remote, ...options),
+        onWorktreeMetadataPersisted: (persistedWorktree) =>
+          this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution),
+        rearm
+      })
     const settings = createSettings
     const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
 

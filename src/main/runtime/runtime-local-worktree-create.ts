@@ -19,6 +19,7 @@ import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
 import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
 import { createRuntimeLocalGitWorktree } from './runtime-local-git-worktree-create'
 import { materializeRuntimeLocalWorktree } from './runtime-local-worktree-materialization'
+import type { PreparationRearmHolder } from '../worktree-create-preparation'
 
 type RuntimeLocalWorktreeCreateArgs<T> = {
   request: RuntimeManagedWorktreeCreateArgs
@@ -43,6 +44,7 @@ type RuntimeLocalWorktreeCreateArgs<T> = {
   ) => Promise<RemoteFetchResult>
   fetchRemote: (path: string, remote: string, options?: LocalGitExecOptions) => Promise<void>
   onWorktreeMetadataPersisted: (worktree: Worktree) => T
+  rearm: PreparationRearmHolder
 }
 
 export function createRuntimeLocalManagedWorktree<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {
@@ -113,10 +115,9 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
     resolveRemoteTrackingBase: args.resolveRemoteTrackingBase,
     hasRemoteTrackingRef: args.hasRemoteTrackingRef,
     refreshRemoteTrackingBase: args.refreshRemoteTrackingBase,
-    fetchRemote: args.fetchRemote
+    fetchRemote: args.fetchRemote,
+    rearm: args.rearm
   })
-  // Why fire on the way out: a failed materialization still consumed the pool slot, so the
-  // replacement has to be armed here rather than waiting for the next prefetch.
   const materialized = await materializeRuntimeLocalWorktree({
     request,
     repo,
@@ -136,16 +137,11 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
     effectiveCreatedWithAgent: args.createdWithAgent,
     localWorktreeGitOptions: worktreeGitOptions,
     onMetadataPersisted: args.onWorktreeMetadataPersisted
-  }).catch((error: unknown) => {
-    git.rearmPreparation()
-    throw error
   })
   return {
     ...materialized,
     worktreePath: candidate.worktreePath,
     created: git.created,
-    addResult: git.addResult,
-    // Re-arming is a full `reset --hard`; the caller still has terminals to launch.
-    rearmPreparation: git.rearmPreparation
+    addResult: git.addResult
   }
 }

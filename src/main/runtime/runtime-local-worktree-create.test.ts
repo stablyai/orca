@@ -80,8 +80,12 @@ vi.mock('../ipc/worktree-symlinks', () => ({
 }))
 
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
+import type { PreparationRearmHolder } from '../worktree-create-preparation'
 
-function createWorktree(request: Partial<RuntimeManagedWorktreeCreateArgs> = {}) {
+function createWorktree(
+  request: Partial<RuntimeManagedWorktreeCreateArgs> = {},
+  rearm: PreparationRearmHolder = { fire: () => {} }
+) {
   const store = {
     getSettings: () => ({
       workspaceDir: '/worktrees',
@@ -101,7 +105,8 @@ function createWorktree(request: Partial<RuntimeManagedWorktreeCreateArgs> = {})
     hasRemoteTrackingRef: mocks.hasRemoteRef,
     refreshRemoteTrackingBase: mocks.refresh,
     fetchRemote: mocks.fetch,
-    onWorktreeMetadataPersisted: () => undefined
+    onWorktreeMetadataPersisted: () => undefined,
+    rearm
   })
 }
 
@@ -137,7 +142,8 @@ beforeEach(() => {
 })
 
 describe('runtime prepared-worktree replenishment', () => {
-  it('hands the caller an unfired re-arm once materialization probes and include copies finish', async () => {
+  it('leaves the re-arm holder armed but unfired once probes and include copies finish', async () => {
+    const rearm: PreparationRearmHolder = { fire: () => {} }
     let finishProbe!: (paths: string[]) => void
     mocks.resolveShared.mockImplementation(
       () =>
@@ -152,24 +158,26 @@ describe('runtime prepared-worktree replenishment', () => {
           finishCopy = resolve
         })
     )
-    const creation = createWorktree()
+    const creation = createWorktree({}, rearm)
     await vi.waitFor(() => expect(mocks.resolveShared).toHaveBeenCalledOnce())
     expect(mocks.rearm).not.toHaveBeenCalled()
     finishProbe([])
     await vi.waitFor(() => expect(mocks.copyPaths).toHaveBeenCalledOnce())
     expect(mocks.rearm).not.toHaveBeenCalled()
     finishCopy([])
-    const result = await creation
+    await creation
     // The caller launches terminals before arming, so create must not fire it itself.
     expect(mocks.rearm).not.toHaveBeenCalled()
-    result.rearmPreparation()
+    rearm.fire()
     expect(mocks.rearm).toHaveBeenCalledOnce()
   })
 
-  it('arms the replacement itself when materialization fails', async () => {
+  it('arms the holder even when materialization fails', async () => {
     mocks.copyPaths.mockRejectedValue(new Error('copy failed'))
-    await expect(createWorktree()).rejects.toThrow('copy failed')
-    // The slot was consumed either way, so the pool must not be left one short.
+    const rearm: PreparationRearmHolder = { fire: () => {} }
+    await expect(createWorktree({}, rearm)).rejects.toThrow('copy failed')
+    // The slot was consumed before the failure, so the caller's `finally` must find a real thunk.
+    rearm.fire()
     expect(mocks.rearm).toHaveBeenCalledOnce()
   })
 })

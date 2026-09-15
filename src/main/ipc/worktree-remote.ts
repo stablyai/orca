@@ -32,7 +32,10 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import { consumePreparedWorktreeCreate } from '../worktree-create-preparation'
+import {
+  consumePreparedWorktreeCreate,
+  type PreparationRearmHolder
+} from '../worktree-create-preparation'
 import {
   getBranchConflictKind,
   resolveDefaultBaseRefViaExec,
@@ -2310,7 +2313,7 @@ export function createLocalWorktree(
   // Why a holder fired in `finally`: consuming a prepared checkout leaves the pool one short, so a
   // create that fails after that point — include copy, push target, terminal startup — must still
   // arm the replacement. Fires exactly once, after startup on the success path.
-  const rearm: { fire: () => void } = { fire: () => {} }
+  const rearm: PreparationRearmHolder = { fire: () => {} }
   return worktreeCreateGit
     .run(() => performLocalWorktreeCreate(args, repo, store, mainWindow, rearm, runtime))
     .finally(() => {
@@ -2323,7 +2326,7 @@ async function performLocalWorktreeCreate(
   repo: Repo,
   store: Store,
   mainWindow: BrowserWindow,
-  rearm: { fire: () => void },
+  rearm: PreparationRearmHolder,
   runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()

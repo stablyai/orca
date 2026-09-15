@@ -83,15 +83,17 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
     calls.order = []
     createLocalMock.mockReset()
     startTerminalsMock.mockReset()
-    createLocalMock.mockImplementation(async () => ({
-      worktree,
-      worktreePath: worktree.path,
-      includeCopyWarning: undefined,
-      created: { path: worktree.path, head: 'abc', branch: 'app' },
-      addResult: {},
-      metadataResult: { lineage: null, workspaceLineage: null, warnings: [] },
-      rearmPreparation: () => calls.order.push('rearm')
-    }))
+    createLocalMock.mockImplementation(async (args: { rearm: { fire: () => void } }) => {
+      args.rearm.fire = () => calls.order.push('rearm')
+      return {
+        worktree,
+        worktreePath: worktree.path,
+        includeCopyWarning: undefined,
+        created: { path: worktree.path, head: 'abc', branch: 'app' },
+        addResult: {},
+        metadataResult: { lineage: null, workspaceLineage: null, warnings: [] }
+      }
+    })
     startTerminalsMock.mockImplementation(async () => {
       calls.order.push('terminals')
       return {

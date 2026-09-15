@@ -44,6 +44,10 @@ export function hasPendingWorktreeCreatePreparations(): boolean {
   return hasPendingPreparations()
 }
 
+/** Carries the consumed slot's pending re-arm to the create's outermost `finally`, which fires it
+ *  once — after startup on success, and on any failure that follows the consume. */
+export type PreparationRearmHolder = { fire: () => void }
+
 export type PreparedWorktreeCreateAttempt =
   | {
       status: 'hit'
