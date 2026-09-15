@@ -31,8 +31,6 @@ vi.mock('./ssh-channel-multiplexer', () => ({
   }
 }))
 vi.mock('../providers/ssh-pty-provider', () => ({
-  isSshPtyNotFoundError: vi.fn(() => false),
-  isSshPtyIdentityMismatchError: vi.fn(() => false),
   SshPtyProvider: class MockSshPtyProvider {
     onData = vi.fn().mockReturnValue(() => {})
     onReplay = vi.fn().mockReturnValue(() => {})
