@@ -41,10 +41,12 @@ export async function runBrowserRouteEgressElectron(
     termination ??= terminateProcessTree(child)
     return termination
   }
+  // Why 60s: this bounds cold start plus the child's own watchdog, so the child's verdict wins the race. Startup
+  // alone reached ~26s under reproduced contention and the widest child watchdog is 25s, which 30s could not cover.
   const timeout = setTimeout(() => {
     timedOut = true
     void terminate()
-  }, 30_000)
+  }, 60_000)
   try {
     const output = await exit
     const rawResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'

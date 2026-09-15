@@ -17,5 +17,5 @@ describe('browser route TCP egress under Electron', () => {
     // Chromium may route an unrelated background request through the same proxy.
     // The target-host observation is the causal DNS/routing oracle for this fixture.
     expect(protectedSession.socksHosts).toContain('remote-browser.test')
-  }, 60_000)
+  }, 150_000)
 })
