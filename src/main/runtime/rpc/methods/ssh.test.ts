@@ -8,12 +8,28 @@ const {
   connectRegisteredSshTargetMock,
   getRegisteredSshStateMock,
   listRegisteredSshTargetsMock,
-  listRegisteredRemovedSshTargetLabelsMock
+  listRegisteredRemovedSshTargetLabelsMock,
+  findCoLocatedEnvironmentIdsMock,
+  listEnvironmentsMock
 } = vi.hoisted(() => ({
   connectRegisteredSshTargetMock: vi.fn(),
   getRegisteredSshStateMock: vi.fn(),
   listRegisteredSshTargetsMock: vi.fn(),
-  listRegisteredRemovedSshTargetLabelsMock: vi.fn()
+  listRegisteredRemovedSshTargetLabelsMock: vi.fn(),
+  findCoLocatedEnvironmentIdsMock: vi.fn(async () => new Map<string, string>()),
+  listEnvironmentsMock: vi.fn(() => [])
+}))
+
+vi.mock('../../../ssh/ssh-target-environment-colocation', () => ({
+  findCoLocatedEnvironmentIds: findCoLocatedEnvironmentIdsMock
+}))
+
+vi.mock('../../../../shared/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
+}))
+
+vi.mock('../../../../shared/app-environment', () => ({
+  getAppEnvironment: () => ({ getPath: () => '/tmp/orca-user-data' })
 }))
 
 vi.mock('../../../ssh/ssh-target-registry', () => ({
@@ -139,6 +155,42 @@ describe('ssh RPC methods', () => {
     expect(JSON.stringify(response)).not.toContain('dev.internal')
     expect(JSON.stringify(response)).not.toContain('/secret/key')
     expect(JSON.stringify(response)).not.toContain('bastion')
+  })
+
+  // The same box shows up as an SSH target and as a paired server; only the HUB can tell, and
+  // it must say so with ids alone.
+  it('names the paired server that shares the target machine without leaking its address', async () => {
+    listRegisteredSshTargetsMock.mockReturnValueOnce([
+      { id: 'ssh-1', label: 'vaish@mini', host: '100.71.10.60', port: 22, username: 'vaish' }
+    ])
+    getRegisteredSshStateMock.mockReturnValueOnce(undefined)
+    listEnvironmentsMock.mockReturnValueOnce([{ id: 'env-mini', name: 'mini' }])
+    findCoLocatedEnvironmentIdsMock.mockResolvedValueOnce(new Map([['ssh-1', 'env-mini']]))
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('ssh.listTargetSummaries'))
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { targets: [{ id: 'ssh-1', coLocatedEnvironmentId: 'env-mini' }] }
+    })
+    expect(JSON.stringify(response)).not.toContain('100.71.10.60')
+  })
+
+  it('lists targets even when the pairing store cannot be read', async () => {
+    listRegisteredSshTargetsMock.mockReturnValueOnce([{ id: 'ssh-1', label: 'Dev box' }])
+    getRegisteredSshStateMock.mockReturnValueOnce(undefined)
+    listEnvironmentsMock.mockImplementationOnce(() => {
+      throw new Error('no store')
+    })
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('ssh.listTargetSummaries'))
+
+    expect(response).toMatchObject({ ok: true, result: { targets: [{ id: 'ssh-1' }] } })
+    expect(JSON.stringify(response)).not.toContain('coLocatedEnvironmentId')
   })
 
   it('does not invent a platform before the SSH host has been detected', async () => {
