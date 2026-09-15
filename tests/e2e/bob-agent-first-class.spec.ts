@@ -117,7 +117,7 @@ test('IBM Bob launches from the New tab menu with its own identity', async ({
     .poll(
       () =>
         orcaPage.evaluate(() => {
-          const s = window.__store!.getState() as unknown as { detectedAgentIds?: string[] | null }
+          const s = window.__store!.getState()
           return JSON.stringify(s.detectedAgentIds ?? null)
         }),
       { timeout: 30_000 }
@@ -140,11 +140,7 @@ test('IBM Bob launches from the New tab menu with its own identity', async ({
   // Why: the bundled bob.png is inlined by the bundler, so assert icon presence plus the store's agent identity.
   await expect(activeTab.locator('img')).toHaveCount(1)
   const tabAgent = await orcaPage.evaluate(() => {
-    const s = window.__store!.getState() as unknown as {
-      activeTabId?: string | null
-      tabs?: Record<string, { launchAgent?: string | null; agent?: string | null }>
-      tabsByWorktree?: Record<string, { id: string; launchAgent?: string | null }[]>
-    }
+    const s = window.__store!.getState()
     const all = Object.values(s.tabsByWorktree ?? {}).flat()
     const active = all.find((t) => t.id === s.activeTabId)
     return active?.launchAgent ?? null
@@ -269,10 +265,7 @@ test('Settings › Agents lists IBM Bob as detected and default', async ({
   await enableBobAsDefault(orcaPage)
 
   await orcaPage.evaluate(() => {
-    const state = window.__store!.getState() as unknown as {
-      openSettingsTarget: (target: { pane: string; repoId: string | null }) => void
-      openSettingsPage: () => void
-    }
+    const state = window.__store!.getState()
     state.openSettingsTarget({ pane: 'agents', repoId: null })
     state.openSettingsPage()
   })
@@ -319,10 +312,7 @@ test('closing the IBM Bob pane stops its process', async ({ electronApp, orcaPag
 
   // Why: closeActiveTerminalPane only closes splits; a single-pane tab is closed via the store.
   await orcaPage.evaluate(() => {
-    const state = window.__store!.getState() as unknown as {
-      activeTabId?: string | null
-      closeTab: (tabId: string) => void
-    }
+    const state = window.__store!.getState()
     if (state.activeTabId) {
       state.closeTab(state.activeTabId)
     }

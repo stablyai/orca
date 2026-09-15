@@ -114,6 +114,7 @@ describe('default disabled agents on mobile', () => {
     for (const disabledTuiAgents of [null, 'bob', { bob: true }]) {
       expect(
         pickWorkspaceAgent(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Deliberately malformed host settings exercise the runtime fallback.
           { defaultTuiAgent: 'bob', disabledTuiAgents } as never,
           new Set(['bob', 'codex'])
         )

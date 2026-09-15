@@ -21,6 +21,7 @@ describe('Bob approval status ordering', () => {
       }
     })
     vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Protected runtime seam; vi.spyOn throws if the method is renamed.
       runtime as unknown as { resolveTerminalWorkspaceLaunchScope: () => Promise<unknown> },
       'resolveTerminalWorkspaceLaunchScope'
     ).mockResolvedValue({
