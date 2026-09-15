@@ -25,39 +25,39 @@ export type RelayLaunchOptions = {
 }
 
 export function parseRelayLaunchOptions(argv: string[]): RelayLaunchOptions {
+  const cliMarker = argv.indexOf('--orca-cli', 2)
+  const relayArgv = cliMarker === -1 ? argv : argv.slice(0, cliMarker)
   let graceTimeMs = DEFAULT_GRACE_MS
   let connectMode = false
   let detached = false
-  let cliMode = false
+  const cliMode = cliMarker !== -1
   let sockPath = ''
   let endpointDir: string | undefined
   let logFile: string | undefined
   let credentialFile: string | undefined
-  for (let i = 2; i < argv.length; i++) {
-    if (argv[i] === '--grace-time' && argv[i + 1]) {
-      const parsed = Number.parseInt(argv[i + 1], 10)
+  for (let i = 2; i < relayArgv.length; i++) {
+    if (relayArgv[i] === '--grace-time' && relayArgv[i + 1]) {
+      const parsed = Number.parseInt(relayArgv[i + 1], 10)
       // Why: flag is seconds (internally ms); 0 keeps the relay alive until explicitly terminated for synced workspaces.
       if (!Number.isNaN(parsed) && parsed >= 0) {
         graceTimeMs = parsed * 1000
       }
       i++
-    } else if (argv[i] === '--connect') {
+    } else if (relayArgv[i] === '--connect') {
       connectMode = true
-    } else if (argv[i] === '--orca-cli') {
-      cliMode = true
-    } else if (argv[i] === '--detached') {
+    } else if (relayArgv[i] === '--detached') {
       detached = true
-    } else if (argv[i] === '--sock-path' && argv[i + 1]) {
-      sockPath = argv[i + 1]
+    } else if (relayArgv[i] === '--sock-path' && relayArgv[i + 1]) {
+      sockPath = relayArgv[i + 1]
       i++
-    } else if (argv[i] === '--endpoint-dir' && argv[i + 1]) {
-      endpointDir = argv[i + 1]
+    } else if (relayArgv[i] === '--endpoint-dir' && relayArgv[i + 1]) {
+      endpointDir = relayArgv[i + 1]
       i++
-    } else if (argv[i] === '--log-file' && argv[i + 1]) {
-      logFile = argv[i + 1]
+    } else if (relayArgv[i] === '--log-file' && relayArgv[i + 1]) {
+      logFile = relayArgv[i + 1]
       i++
-    } else if (argv[i] === '--credential-file' && argv[i + 1]) {
-      credentialFile = argv[i + 1]
+    } else if (relayArgv[i] === '--credential-file' && relayArgv[i + 1]) {
+      credentialFile = relayArgv[i + 1]
       i++
     }
   }
