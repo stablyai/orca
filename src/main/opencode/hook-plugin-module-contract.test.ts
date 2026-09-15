@@ -18,11 +18,10 @@ import { _internals } from './hook-service'
 
 /**
  * OpenCode loads a plugin file either through a named factory export or through the
- * module default export. The default-export loader rejects the module outright unless
- * the default is an object exposing `server()` — verified against opencode 1.18.18,
- * which logs `failed to load plugin … must default export an object with server()` for
- * a default of `{ id, setup }` and accepts `{ id, server }`. These tests execute the
- * generated module so the shipped file is checked against both loaders, not a substring.
+ * module default export. The 1.18.x default-export loader accepts `{ id, server }` and
+ * rejects `server`-less shapes; the 2.x loader requires `{ id, setup }` (or `effect`).
+ * The default export must therefore expose both. These tests execute the generated
+ * module so the shipped file is checked against every loader, not a substring.
  */
 describe('OpenCode status plugin module contract', () => {
   type PluginHooks = {
@@ -30,7 +29,11 @@ describe('OpenCode status plugin module contract', () => {
     dispose?: () => Promise<void>
   }
   type PluginModule = {
-    default?: { id?: unknown; server?: (ctx: unknown) => Promise<PluginHooks> }
+    default?: {
+      id?: unknown
+      server?: (ctx: unknown) => Promise<PluginHooks>
+      setup?: (ctx: unknown) => Promise<(() => Promise<void> | void) | undefined>
+    }
     OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
   }
 
@@ -98,6 +101,14 @@ describe('OpenCode status plugin module contract', () => {
     // accepted, so a default export must never regress to it.
     expect(module.default).not.toBeUndefined()
     expect(Object.hasOwn(module.default ?? {}, 'server')).toBe(true)
+  })
+
+  it('exposes setup() so the OpenCode 2.x loader accepts the default export', async () => {
+    const module = await loadPluginModule()
+
+    // Why: OpenCode 2.x decodes the default export against `{ id, setup }` (or
+    // `{ id, effect }`) and drops the plugin when neither key is present.
+    expect(module.default?.setup).toBeTypeOf('function')
   })
 
   it('keeps the named factory export so the factory-based loader still resolves', async () => {
