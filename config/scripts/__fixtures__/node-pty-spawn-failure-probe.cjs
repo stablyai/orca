@@ -28,8 +28,25 @@ if (failure) {
   const state = addon.testSpawnState()
   assert.match(error?.message || '', /Could not set master fd/)
   assert.equal(state.masterClosed, true, 'failed spawn must close its master')
-  assert.equal(state.childReaped, true, 'failed spawn must terminate and reap its child')
-  assert.equal(state.kills, process.env.ORCA_PTY_TEST_REAPED ? 0 : 1)
+  const cleanupFailure = process.env.ORCA_PTY_TEST_CLEANUP_FAILURE
+  if (cleanupFailure && cleanupFailure !== 'KILL_ESRCH') {
+    assert.match(error.message, new RegExp(`PTY child ${state.pid} cleanup failed:`))
+    const reason =
+      cleanupFailure === 'KILL_EPERM' ? 'Operation not permitted' : 'Input/output error'
+    assert.ok(
+      error.message.endsWith(reason),
+      'spawn error must preserve the cleanup failure reason'
+    )
+    assert.equal(state.kills, cleanupFailure === 'WAIT_INITIAL' ? 0 : 1)
+    assert.equal(state.blockingWaits, cleanupFailure === 'WAIT_FINAL' ? 1 : 0)
+    if (cleanupFailure !== 'WAIT_FINAL') {
+      assert.equal(state.childReaped, false, 'denied cleanup must not claim the child was reaped')
+    }
+  } else {
+    assert.doesNotMatch(error.message, /cleanup failed/)
+    assert.equal(state.childReaped, true, 'failed spawn must terminate and reap its child')
+    assert.equal(state.kills, process.env.ORCA_PTY_TEST_REAPED ? 0 : 1)
+  }
   if (process.env.ORCA_PTY_TEST_EINTR) {
     assert.ok(state.waitInterrupts >= 2)
     assert.ok(state.blockingInterrupts >= 2)

@@ -75,14 +75,20 @@ it('keeps desktop and relay cleanup identical on both Unix spawn paths', () => {
   const relay = stageSource('relay').source
   const cleanup = (source) =>
     source.match(
-      /static void\npty_cleanup_failed_spawn\(int master, pid_t pid\) \{[\s\S]*?\n\}/
+      /static int\npty_cleanup_failed_spawn\(int master, pid_t pid\) \{[\s\S]*?\n\}/
     )?.[0]
   expect(cleanup(desktop)).toBeTruthy()
   expect(cleanup(desktop)).toBe(cleanup(relay))
+  const diagnostic = (source) =>
+    source.match(
+      /static Napi::Error\npty_failed_spawn_error\(Napi::Env env,[^\n]+\) \{[\s\S]*?\n\}/
+    )?.[0]
+  expect(diagnostic(desktop)).toBeTruthy()
+  expect(diagnostic(desktop)).toBe(diagnostic(relay))
   for (const source of [desktop, relay]) {
     for (const mode of ['nonblocking', 'close-on-exec']) {
       const pattern = new RegExp(
-        `pty_cleanup_failed_spawn\\(master, pid\\);\\n +throw Napi::Error::New\\(napiEnv, "Could not set master fd to ${mode}\\."\\)`,
+        `throw pty_failed_spawn_error\\(napiEnv, "Could not set master fd to ${mode}\\.", master, pid\\)`,
         'g'
       )
       expect([...source.matchAll(pattern)]).toHaveLength(2)
@@ -135,6 +141,21 @@ describe.skipIf(process.platform !== 'linux')('node-pty failed spawn resource ow
           probe(addon, { ORCA_PTY_TEST_FAILURE: failure })
         }
       )
+      it.each(['WAIT_INITIAL', 'WAIT_FINAL', 'KILL_EPERM'])(
+        'reports incomplete child cleanup after %s without blocking on an unsignalled child',
+        (failure) => {
+          probe(addon, {
+            ORCA_PTY_TEST_FAILURE: 'F_SETFD',
+            ORCA_PTY_TEST_CLEANUP_FAILURE: failure
+          })
+        }
+      )
+      it('reaps a child when its death races the termination signal', () => {
+        probe(addon, {
+          ORCA_PTY_TEST_FAILURE: 'F_SETFD',
+          ORCA_PTY_TEST_CLEANUP_FAILURE: 'KILL_ESRCH'
+        })
+      })
       it('retries interrupted waits', () => {
         probe(addon, { ORCA_PTY_TEST_FAILURE: 'F_SETFD', ORCA_PTY_TEST_EINTR: '1' })
       })

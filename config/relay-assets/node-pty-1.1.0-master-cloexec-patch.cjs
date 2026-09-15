@@ -49,7 +49,7 @@ const { dirname, join, resolve } = require('node:path')
 
 const EXPECTED_NODE_PTY_VERSION = '1.1.0'
 const ORIGINAL_SOURCE_SHA256 = '5e1005d6bdcfbe97b486ee415419fe7adae99035047f07340fbad36419e0bae6'
-const PATCHED_SOURCE_SHA256 = '9cf87b8acf2e454849213359249bfaed480226e6b4c0f8be5e150e2d35883ad5'
+const PATCHED_SOURCE_SHA256 = '7c44f2697f03f5394db87a7c7fce0cc0cc25dea0e8d84a5753d64b006fd716bf'
 
 const STATUS_PREFIX = 'ORCA-NPTY-CLOEXEC:'
 const SKIP_MARKER_FILENAME = '.node-pty-cloexec-skip'
@@ -58,9 +58,11 @@ const BACKUP_DIRNAME = '.orca-cloexec-prepatch-release'
 const REBUILD_TIMEOUT_MS = 200000
 const VERIFY_TIMEOUT_MS = 15000
 
+const STDIO_INCLUDE = ['#include <stdlib.h>\n', '#include <stdlib.h>\n#include <stdio.h>\n']
+
 const FORWARD_DECLARATION = [
   'static int\npty_nonblock(int);\n',
-  'static int\npty_nonblock(int);\n\nstatic int\npty_cloexec(int);\n\nstatic void\npty_cleanup_failed_spawn(int, pid_t);\n'
+  'static int\npty_nonblock(int);\n\nstatic int\npty_cloexec(int);\n\nstatic int\npty_cleanup_failed_spawn(int, pid_t);\n\nstatic Napi::Error\npty_failed_spawn_error(Napi::Env, const char *, int, pid_t);\n'
 ]
 
 const DEFINITION = [
@@ -95,19 +97,34 @@ pty_cloexec(int fd) {
   return fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
 }
 
-static void
+static int
 pty_cleanup_failed_spawn(int master, pid_t pid) {
   close(master);
-  if (pid <= 0) return;
+  if (pid <= 0) return 0;
   int status;
   pid_t waited;
   do {
     waited = waitpid(pid, &status, WNOHANG);
   } while (waited == -1 && errno == EINTR);
-  // Orca: a failed spawn never transfers ownership to SetupExitCallback.
-  if (waited != 0) return;
-  if (kill(pid, SIGKILL) == -1 && errno != ESRCH) return;
-  while (waitpid(pid, &status, 0) == -1 && errno == EINTR) {}
+  // Orca: ECHILD means there is no owned child to signal, even if its PID is reused.
+  if (waited == pid || (waited == -1 && errno == ECHILD)) return 0;
+  if (waited == -1) return errno;
+  // Orca: waiting after a denied signal could block the JS thread indefinitely.
+  if (kill(pid, SIGKILL) == -1 && errno != ESRCH) return errno;
+  do {
+    waited = waitpid(pid, &status, 0);
+  } while (waited == -1 && errno == EINTR);
+  return waited == -1 && errno != ECHILD ? errno : 0;
+}
+
+static Napi::Error
+pty_failed_spawn_error(Napi::Env env, const char *message, int master, pid_t pid) {
+  int cleanup_error = pty_cleanup_failed_spawn(master, pid);
+  if (cleanup_error == 0) return Napi::Error::New(env, message);
+  char detail[512];
+  snprintf(detail, sizeof(detail), "%s PTY child %ld cleanup failed: %s",
+      message, static_cast<long>(pid), strerror(cleanup_error));
+  return Napi::Error::New(env, detail);
 }
 `
 ]
@@ -121,12 +138,10 @@ const FORKPTY_CALL_SITE = [
 `,
   `    default:
       if (pty_nonblock(master) == -1) {
-        pty_cleanup_failed_spawn(master, pid);
-        throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
+        throw pty_failed_spawn_error(napiEnv, "Could not set master fd to nonblocking.", master, pid);
       }
       if (pty_cloexec(master) == -1) {
-        pty_cleanup_failed_spawn(master, pid);
-        throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
+        throw pty_failed_spawn_error(napiEnv, "Could not set master fd to close-on-exec.", master, pid);
       }
   }
 `
@@ -141,12 +156,10 @@ const POSIX_SPAWN_CALL_SITE = [
 #else
 `,
   `  if (pty_nonblock(master) == -1) {
-    pty_cleanup_failed_spawn(master, pid);
-    throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
+    throw pty_failed_spawn_error(napiEnv, "Could not set master fd to nonblocking.", master, pid);
   }
   if (pty_cloexec(master) == -1) {
-    pty_cleanup_failed_spawn(master, pid);
-    throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
+    throw pty_failed_spawn_error(napiEnv, "Could not set master fd to close-on-exec.", master, pid);
   }
 #else
 `
@@ -177,6 +190,7 @@ const LOW_FDS_CLEANUP = [
 ]
 
 const REPLACEMENTS = [
+  STDIO_INCLUDE,
   FORWARD_DECLARATION,
   DEFINITION,
   POSIX_SPAWN_CALL_SITE,

@@ -6,6 +6,7 @@ static pid_t test_pid = -1;
 static int test_wait_interrupts = 0;
 static int test_blocking_interrupts = 0;
 static int test_kills = 0;
+static int test_blocking_waits = 0;
 
 static int test_fcntl(int fd, int command, int argument = 0) {
   const char* failure = getenv("ORCA_PTY_TEST_FAILURE");
@@ -55,6 +56,13 @@ static pid_t test_forkpty(int* master, char* name, const termios* term, const wi
 }
 
 static pid_t test_waitpid(pid_t pid, int* status, int options) {
+  if (options == 0) test_blocking_waits++;
+  const char* failure = getenv("ORCA_PTY_TEST_CLEANUP_FAILURE");
+  if (failure && ((strcmp(failure, "WAIT_INITIAL") == 0 && options == WNOHANG) ||
+                  (strcmp(failure, "WAIT_FINAL") == 0 && options == 0))) {
+    errno = EIO;
+    return -1;
+  }
   if (getenv("ORCA_PTY_TEST_EINTR")) {
     int& interrupts = options == WNOHANG ? test_wait_interrupts : test_blocking_interrupts;
     if (interrupts++ < 2) {
@@ -67,7 +75,20 @@ static pid_t test_waitpid(pid_t pid, int* status, int options) {
 
 static int test_kill(pid_t pid, int signal) {
   test_kills++;
-  return kill(pid, signal);
+  const char* failure = getenv("ORCA_PTY_TEST_CLEANUP_FAILURE");
+  if (failure && strcmp(failure, "KILL_EPERM") == 0) {
+    errno = EPERM;
+    return -1;
+  }
+  int result = kill(pid, signal);
+  if (failure && strcmp(failure, "KILL_ESRCH") == 0 && result == 0) {
+    // Model death racing the signal without consuming the child's exit status.
+    siginfo_t info = {};
+    while (waitid(P_PID, pid, &info, WEXITED | WNOWAIT) == -1 && errno == EINTR) {}
+    errno = ESRCH;
+    return -1;
+  }
+  return result;
 }
 
 static Napi::Value TestSpawnState(const Napi::CallbackInfo& info) {
@@ -84,6 +105,8 @@ static Napi::Value TestSpawnState(const Napi::CallbackInfo& info) {
   state.Set("waitInterrupts", test_wait_interrupts);
   state.Set("blockingInterrupts", test_blocking_interrupts);
   state.Set("kills", test_kills);
+  state.Set("pid", test_pid);
+  state.Set("blockingWaits", test_blocking_waits);
   // Failed baseline tests must not strand the child or its master.
   if (getenv("ORCA_PTY_TEST_FAILURE")) {
     if (flags >= 0) close(test_master);
