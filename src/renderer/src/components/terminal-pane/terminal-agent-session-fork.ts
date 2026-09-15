@@ -16,6 +16,9 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { translate } from '@/i18n/i18n'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { settleStructuredAgentSurfaceProducer } from '@/lib/structured-agent-surface-production'
 
 type ForkAgentSessionFromPaneArgs = {
   pane: ManagedPane
@@ -239,29 +242,56 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     worktreePath: created.worktree.path,
     projectRuntime: sourceProjectRuntime
   })
-  const result = launchAgentInNewTab({
-    agent: fork.agent,
-    worktreeId: forkWorktreeId,
-    prompt: fork.prompt,
-    promptDelivery: 'draft',
-    launchSource: 'terminal_context_menu',
-    ...(launchPlatform ? { launchPlatform } : {})
+  const producer = registerWorkspaceSurfaceProducer({
+    workspaceKey: forkWorktreeId,
+    executionHostId: getExecutionHostIdForWorktree(useAppStore.getState(), forkWorktreeId)
   })
+  let result: ReturnType<typeof launchAgentInNewTab>
+  try {
+    result = launchAgentInNewTab({
+      agent: fork.agent,
+      worktreeId: forkWorktreeId,
+      prompt: fork.prompt,
+      promptDelivery: 'draft',
+      launchSource: 'terminal_context_menu',
+      ...(launchPlatform ? { launchPlatform } : {})
+    })
+  } catch (error) {
+    producer.failed(error)
+    throw error
+  }
   if (!result?.structuredSettlement) {
-    activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
+    try {
+      activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
+    } catch (error) {
+      producer.failed(error)
+      throw error
+    }
     if (!result) {
+      producer.failed('The agent launch did not start.')
       return copyAgentSessionForkContext(fork)
+    }
+    if (result.tabId) {
+      producer.materialized({ kind: 'tab', id: result.tabId })
+    } else {
+      producer.failed('The agent launch did not publish a surface.')
     }
     notifyForkOpened()
     return true
   }
   // Why: the fresh worktree has no tabs yet; without the opt-out activation seeds a shell beside
   // the structured tab that is still on its way.
-  activateAndRevealWorktree(forkWorktreeId, {
-    sidebarRevealBehavior: 'auto',
-    providesInitialSurface: true
-  })
-  const settlement = await result.structuredSettlement
+  let settlement: Awaited<typeof result.structuredSettlement>
+  try {
+    activateAndRevealWorktree(forkWorktreeId, {
+      sidebarRevealBehavior: 'auto'
+    })
+    settlement = await result.structuredSettlement
+  } catch (error) {
+    producer.failed(error)
+    throw error
+  }
+  settleStructuredAgentSurfaceProducer(producer, forkWorktreeId, settlement)
   // Why: a refusal whose terminal fallback opened nothing is the structured twin of a null launch.
   if (settlement.kind === 'refused-then-legacy' && settlement.primaryTabId === null) {
     return copyAgentSessionForkContext(fork)

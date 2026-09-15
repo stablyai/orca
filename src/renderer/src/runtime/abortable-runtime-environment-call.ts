@@ -6,6 +6,79 @@ export function createRuntimeRpcAbortError(): Error {
   return error
 }
 
+export function waitForAbortableRuntimeDependency<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  if (!signal) {
+    return promise
+  }
+  if (signal.aborted) {
+    return Promise.reject(createRuntimeRpcAbortError())
+  }
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => {
+      signal.removeEventListener('abort', onAbort)
+      reject(createRuntimeRpcAbortError())
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    void promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      }
+    )
+  })
+}
+
+export async function callAbortableLocalRuntime(
+  method: string,
+  params: unknown,
+  timeoutMs: number | undefined,
+  signal: AbortSignal
+): Promise<RuntimeRpcResponse<unknown>> {
+  if (signal.aborted) {
+    throw createRuntimeRpcAbortError()
+  }
+  return new Promise((resolve, reject) => {
+    let handle: { unsubscribe: () => void } | null = null
+    let settled = false
+    const deadline =
+      timeoutMs === undefined
+        ? null
+        : setTimeout(() => {
+            finish(() => reject(new Error(`Runtime request timed out before ${method} completed`)))
+          }, timeoutMs)
+    const finish = (complete: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (deadline !== null) {
+        clearTimeout(deadline)
+      }
+      signal.removeEventListener('abort', onAbort)
+      handle?.unsubscribe()
+      complete()
+    }
+    const onAbort = (): void => finish(() => reject(createRuntimeRpcAbortError()))
+    signal.addEventListener('abort', onAbort, { once: true })
+    void window.api.runtime
+      .subscribe({ method, params }, (response) => finish(() => resolve(response)))
+      .then((subscription) => {
+        handle = subscription
+        if (settled) {
+          subscription.unsubscribe()
+        }
+      })
+      .catch((error) => finish(() => reject(error)))
+  })
+}
+
 export async function callAbortableRuntimeEnvironment(
   environmentId: string,
   method: string,

@@ -1,4 +1,3 @@
-import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { detectLanguage } from '@/lib/language-detect'
@@ -19,6 +18,12 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  openTerminalHtmlFileInBrowser,
+  settleTerminalFileProducedTab
+} from './terminal-file-open-surface-production'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -30,19 +35,6 @@ type TerminalFileOpenDeps = {
 
 export function isHtmlFilePath(filePath: string): boolean {
   return /\.html?$/i.test(filePath)
-}
-
-function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
-  const store = useAppStore.getState()
-  if (worktreeId) {
-    // Why: following an HTML file link changes which worktree is foregrounded,
-    // so it must record a history visit before opening the browser tab — but the
-    // browser tab is the surface, so an emptied workspace must not gain a shell.
-    activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
-  }
-  const fileUrl = absolutePathToFileUri(filePath)
-  const title = filePath.split(/[/\\]/).pop() ?? filePath
-  store.createBrowserTab(worktreeId, fileUrl, { title, activate: true })
 }
 
 export function getTerminalFileContext(
@@ -201,15 +193,27 @@ export function openDetectedFilePath(
     // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
     if (isHtmlFilePath(mappedFilePath)) {
       if (shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)) {
-        openHtmlFileInBrowser(mappedFilePath, worktreeId)
+        openTerminalHtmlFileInBrowser(mappedFilePath, worktreeId)
         return
       }
       // Why: the same gesture renders remote HTML too, through the doc preview; only an
       // unsupported plan (e.g. a paired doc outside the worktree) falls back to source.
       const plan = getWorkspaceFilePreviewPlan(useAppStore.getState(), worktreeId, mappedFilePath)
       if (plan.status === 'doc-preview') {
-        activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
-        openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
+        const producer = registerWorkspaceSurfaceProducer({
+          workspaceKey: worktreeId,
+          executionHostId: getExecutionHostIdForWorktree(useAppStore.getState(), worktreeId)
+        })
+        try {
+          if (activateAndRevealWorktree(worktreeId) === false) {
+            producer.failed('The workspace is no longer available.')
+            return
+          }
+          openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
+          settleTerminalFileProducedTab(producer, worktreeId)
+        } catch (error) {
+          producer.failed(error)
+        }
         return
       }
     }
@@ -246,32 +250,65 @@ export function openDetectedFilePath(
     if (targetWorktreeId) {
       // Why: the route may name a folder-workspace key, and the same worktree id can exist
       // on several hosts — dispatch by workspace shape and keep the resolved host.
-      activateAndRevealWorkspace(targetWorktreeId, {
-        providesInitialSurface: true,
-        ...(targetExecutionHostId ? { executionHostId: targetExecutionHostId } : {})
+      const producer = registerWorkspaceSurfaceProducer({
+        workspaceKey: targetWorktreeId,
+        executionHostId:
+          targetExecutionHostId ?? getExecutionHostIdForWorktree(store, targetWorktreeId)
       })
+      try {
+        const activation = activateAndRevealWorkspace(
+          targetWorktreeId,
+          targetExecutionHostId ? { executionHostId: targetExecutionHostId } : {}
+        )
+        if (activation === false) {
+          producer.failed('The workspace is no longer available.')
+          return
+        }
+        const language = detectLanguage(mappedFilePath)
+        const surfaceId = store.openFile(
+          {
+            filePath: mappedFilePath,
+            relativePath,
+            worktreeId: targetWorktreeId || '',
+            language,
+            mode: 'edit',
+            runtimeEnvironmentId,
+            // Why: absolute SSH paths outside the worktree otherwise look identical
+            // to client-local external files when the editor reloads or restores.
+            ...(relativePath === filePath &&
+            !fileContext.settings?.activeRuntimeEnvironmentId?.trim() &&
+            fileContext.connectionId
+              ? { externalSshTargetId: fileContext.connectionId }
+              : {})
+          },
+          { forceContentReload: true }
+        )
+        settleTerminalFileProducedTab(producer, targetWorktreeId, surfaceId)
+      } catch (error) {
+        producer.failed(error)
+        return
+      }
+    } else {
+      const language = detectLanguage(mappedFilePath)
+      store.openFile(
+        {
+          filePath: mappedFilePath,
+          relativePath,
+          worktreeId: '',
+          language,
+          mode: 'edit',
+          runtimeEnvironmentId,
+          ...(relativePath === filePath &&
+          !fileContext.settings?.activeRuntimeEnvironmentId?.trim() &&
+          fileContext.connectionId
+            ? { externalSshTargetId: fileContext.connectionId }
+            : {})
+        },
+        { forceContentReload: true }
+      )
     }
 
     const language = detectLanguage(mappedFilePath)
-    store.openFile(
-      {
-        filePath: mappedFilePath,
-        relativePath,
-        worktreeId: targetWorktreeId || '',
-        language,
-        mode: 'edit',
-        runtimeEnvironmentId,
-        // Why: absolute SSH paths outside the worktree otherwise look identical
-        // to client-local external files when the editor reloads or restores.
-        ...(relativePath === filePath &&
-        !fileContext.settings?.activeRuntimeEnvironmentId?.trim() &&
-        fileContext.connectionId
-          ? { externalSshTargetId: fileContext.connectionId }
-          : {})
-      },
-      { forceContentReload: true }
-    )
-
     if (line !== null) {
       const openedStore = useAppStore.getState()
       // Why: scope the reveal to the opened editor tab id so owner-qualified tabs

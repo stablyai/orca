@@ -59,7 +59,8 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
       structuredLaunch: true,
       visibilityUnknown: false,
       failed: false,
-      primaryTabId: null
+      primaryTabId: null,
+      structuredSessionId: 'draft-session'
     })
     expect(mocks.settleStructuredAgentLaunch).toHaveBeenCalledWith(
       'worktree-1',
@@ -112,26 +113,41 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['failed', { kind: 'failed', error: new Error('x') }],
-    ['cancelled', { kind: 'cancelled', sessionId: 'session-1' }]
-  ])(
-    'drops the pre-launch tab on a %s settlement so nothing is pasted into it',
-    async (_kind, settlement) => {
-      mocks.settleStructuredAgentLaunch.mockResolvedValue(settlement)
+  it('drops the pre-launch tab on a failed settlement so nothing is pasted into it', async () => {
+    mocks.settleStructuredAgentLaunch.mockResolvedValue({
+      kind: 'failed',
+      error: new Error('x')
+    })
 
-      await expect(
-        settleDirectWorkItemStructuredLaunch({ ...baseArgs, primaryTabId: 'setup-shell-tab' })
-      ).resolves.toEqual({
-        completed: false,
-        structuredLaunch: true,
-        visibilityUnknown: false,
-        failed: true,
-        primaryTabId: null
-      })
-      expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    }
-  )
+    await expect(
+      settleDirectWorkItemStructuredLaunch({ ...baseArgs, primaryTabId: 'setup-shell-tab' })
+    ).resolves.toEqual({
+      completed: false,
+      structuredLaunch: true,
+      visibilityUnknown: false,
+      failed: true,
+      primaryTabId: null
+    })
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('retains producer ownership as unknown when a structured settlement is cancelled', async () => {
+    mocks.settleStructuredAgentLaunch.mockResolvedValue({
+      kind: 'cancelled',
+      sessionId: 'session-1'
+    })
+
+    await expect(
+      settleDirectWorkItemStructuredLaunch({ ...baseArgs, primaryTabId: 'setup-shell-tab' })
+    ).resolves.toEqual({
+      completed: false,
+      structuredLaunch: true,
+      visibilityUnknown: true,
+      failed: false,
+      primaryTabId: null
+    })
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
 
   it('skips the loop when the route is not structured', async () => {
     await expect(

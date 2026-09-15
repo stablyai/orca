@@ -13,6 +13,8 @@ import {
   sshTargetGenerationsEqual,
   sshTargetLabelsEqual
 } from './ssh-target-cleanup'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { clearWorkspaceActivationRecoveryLifecycle } from '@/lib/workspace-activation-recovery-lifecycle'
 
 export type RemoteWorkspaceSyncStatus = {
   phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
@@ -154,8 +156,12 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         sshTargetsHydrated: true
       }
     }),
-  clearRemovedSshTargetState: (targetId) =>
-    set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? s),
+  clearRemovedSshTargetState: (targetId) => {
+    clearWorkspaceActivationRecoveryLifecycle({
+      executionHostId: toSshExecutionHostId(targetId)
+    })
+    set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? s)
+  },
   markRemoteWorkspaceHydrated: (targetId) =>
     set((s) => {
       const next = new Set(s.remoteWorkspaceHydratedTargetIds)

@@ -25,6 +25,33 @@ function emptySessionTabsSnapshot(worktreeId: string): RuntimeMobileSessionTabsR
   }
 }
 
+function emptyTerminalList() {
+  return {
+    terminals: [],
+    truncated: false,
+    hostScope: { hostIds: ['local'], omittedHostIds: [] }
+  }
+}
+
+type TestRuntimeResponse = { ok: boolean; result: unknown }
+
+function subscribableRuntime(call: (request: { method: string }) => Promise<TestRuntimeResponse>) {
+  return {
+    call,
+    subscribe: vi.fn(
+      async (request: { method: string }, onData: (response: TestRuntimeResponse) => void) => {
+        let cancelled = false
+        void call(request).then((response) => {
+          if (!cancelled) {
+            onData(response)
+          }
+        })
+        return { unsubscribe: () => (cancelled = true) }
+      }
+    )
+  }
+}
+
 function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState> {
   return {
     repos: [
@@ -111,8 +138,8 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     })
     vi.stubGlobal('window', {
       api: {
-        runtime: {
-          call: vi.fn(async ({ method }: { method: string }) =>
+        runtime: subscribableRuntime(
+          vi.fn(async ({ method }: { method: string }) =>
             method === 'terminal.list'
               ? {
                   ok: true,
@@ -140,7 +167,7 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
                 }
               : { ok: true, result: emptySessionTabsSnapshot(worktree.id) }
           )
-        },
+        ),
         pty: {
           listSessions: vi.fn(async () => [
             {
@@ -178,9 +205,15 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     useAppStore.setState(baseState(worktree))
     vi.stubGlobal('window', {
       api: {
-        runtime: {
-          call: vi.fn(async () => ({ ok: true, result: emptySessionTabsSnapshot(worktree.id) }))
-        },
+        runtime: subscribableRuntime(
+          vi.fn(async ({ method }: { method: string }) => ({
+            ok: true,
+            result:
+              method === 'terminal.list'
+                ? emptyTerminalList()
+                : emptySessionTabsSnapshot(worktree.id)
+          }))
+        ),
         pty: { listSessions: vi.fn(async () => []) }
       }
     })

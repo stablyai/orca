@@ -1,6 +1,11 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  runtimeTargetForActivationRoute,
+  type WorktreeAgentActivationRoute
+} from './worktree-agent-activation-route'
 
 export type StructuredActivationInventory = {
   snapshot: RuntimeMobileSessionTabsResult
@@ -14,19 +19,35 @@ export type StructuredActivationInventory = {
 }
 
 export async function readWorktreeStructuredActivationInventory(
-  worktreeId: string
+  routeOrWorktreeId: WorktreeAgentActivationRoute | string,
+  options: { timeoutMs?: number; signal?: AbortSignal } = {}
 ): Promise<false | StructuredActivationInventory> {
   if (typeof window === 'undefined') {
     return false
   }
-  const response = await window.api.runtime.call({
-    method: 'session.tabs.list',
-    params: { worktree: toRuntimeWorktreeSelector(worktreeId) }
-  })
-  if (!response.ok) {
+  const route = typeof routeOrWorktreeId === 'string' ? null : routeOrWorktreeId
+  const worktreeId =
+    typeof routeOrWorktreeId === 'string' ? routeOrWorktreeId : routeOrWorktreeId.workspaceKey
+  const target = route ? runtimeTargetForActivationRoute(route) : { kind: 'local' as const }
+  if (!target) {
+    throw new Error('structured session inventory route unavailable')
+  }
+  let snapshot: RuntimeMobileSessionTabsResult
+  try {
+    snapshot = await callRuntimeRpc<RuntimeMobileSessionTabsResult>(
+      target,
+      'session.tabs.list',
+      { worktree: toRuntimeWorktreeSelector(worktreeId) },
+      {
+        ...options,
+        ...(route?.runtimeEnvironmentRevision === null || route === null
+          ? {}
+          : { expectedEnvironmentPairingRevision: route.runtimeEnvironmentRevision })
+      }
+    )
+  } catch {
     throw new Error('structured session inventory unavailable')
   }
-  const snapshot = response.result as RuntimeMobileSessionTabsResult
   if (
     !snapshot ||
     typeof snapshot.worktree !== 'string' ||
@@ -49,35 +70,43 @@ export async function readWorktreeStructuredActivationInventory(
     snapshot.tabs.flatMap((tab) =>
       tab.type === 'agent-session'
         ? [
-            window.api.runtime
-              .call({ method: 'agentSession.handoffStatus', params: { sessionId: tab.sessionId } })
-              .then((statusResponse) => {
-                if (!statusResponse.ok) {
-                  return
-                }
-                const status = statusResponse.result as {
-                  owner?: unknown
-                  terminal?: { paneKey?: unknown; ptyId?: unknown; tabId?: unknown }
-                }
-                if (status.owner === 'native') {
-                  ownerBySessionId.set(tab.sessionId, { owner: 'native' })
-                } else if (
-                  status.owner === 'tui' &&
-                  typeof status.terminal?.paneKey === 'string' &&
-                  typeof status.terminal?.ptyId === 'string' &&
-                  status.terminal.ptyId.length > 0 &&
-                  typeof status.terminal.tabId === 'string'
-                ) {
-                  ownerBySessionId.set(tab.sessionId, {
-                    owner: 'tui',
-                    terminal: {
-                      paneKey: status.terminal.paneKey,
-                      ptyId: status.terminal.ptyId,
-                      tabId: status.terminal.tabId
-                    }
-                  })
-                }
-              })
+            callRuntimeRpc<{
+              owner?: unknown
+              terminal?: { paneKey?: unknown; ptyId?: unknown; tabId?: unknown }
+            }>(
+              target,
+              'agentSession.handoffStatus',
+              { sessionId: tab.sessionId },
+              {
+                ...options,
+                ...(route?.runtimeEnvironmentRevision === null || route === null
+                  ? {}
+                  : { expectedEnvironmentPairingRevision: route.runtimeEnvironmentRevision })
+              }
+            ).then((status) => {
+              const typedStatus: {
+                owner?: unknown
+                terminal?: { paneKey?: unknown; ptyId?: unknown; tabId?: unknown }
+              } = status
+              if (typedStatus.owner === 'native') {
+                ownerBySessionId.set(tab.sessionId, { owner: 'native' })
+              } else if (
+                typedStatus.owner === 'tui' &&
+                typeof typedStatus.terminal?.paneKey === 'string' &&
+                typeof typedStatus.terminal?.ptyId === 'string' &&
+                typedStatus.terminal.ptyId.length > 0 &&
+                typeof typedStatus.terminal.tabId === 'string'
+              ) {
+                ownerBySessionId.set(tab.sessionId, {
+                  owner: 'tui',
+                  terminal: {
+                    paneKey: typedStatus.terminal.paneKey,
+                    ptyId: typedStatus.terminal.ptyId,
+                    tabId: typedStatus.terminal.tabId
+                  }
+                })
+              }
+            })
           ]
         : []
     )

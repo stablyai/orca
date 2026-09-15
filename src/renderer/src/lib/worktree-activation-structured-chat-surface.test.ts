@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
+import { queueStandaloneSetupTab } from './worktree-setup-issue-command-queue'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
@@ -26,25 +27,22 @@ const setup = {
   envVars: { ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1' }
 }
 
-// Why: a native-chat create used to land the user on a bare "Terminal 1" beside the chat,
-// because the returned setup script counted as work needing a shell to attach to.
-describe('seeding beside a caller-provided chat surface', () => {
+describe('terminal seeding for explicit setup work', () => {
   it('runs a new-tab setup script without seeding a shell', () => {
     let createdIndex = 0
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
     const store = createMockStore({ createTab })
 
-    const primaryTabId = ensureWorktreeHasInitialTerminal(
+    const queued = queueStandaloneSetupTab({
       store,
-      'wt-1',
-      undefined,
+      worktreeId: 'wt-1',
       setup,
-      undefined,
-      undefined,
-      { callerProvidesSurface: true }
-    )
+      issueCommand: undefined,
+      defaultTabs: undefined,
+      opts: { activateCreatedTabs: false }
+    })
 
-    expect(primaryTabId).toBeNull()
+    expect(queued).toBe(true)
     expect(createTab).toHaveBeenCalledTimes(1)
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Setup', {
       recordInteraction: false
@@ -61,9 +59,7 @@ describe('seeding beside a caller-provided chat surface', () => {
     const store = createMockStore({ createTab })
     setSetupScriptLaunchMode('split-vertical')
 
-    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, setup, undefined, undefined, {
-      callerProvidesSurface: true
-    })
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, setup)
 
     expect(createTab).toHaveBeenCalledTimes(1)
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', expect.anything())
@@ -80,8 +76,7 @@ describe('seeding beside a caller-provided chat surface', () => {
       undefined,
       undefined,
       { command: 'orca issue run' },
-      undefined,
-      { callerProvidesSurface: true }
+      undefined
     )
 
     expect(createTab).toHaveBeenCalledTimes(1)
@@ -104,18 +99,17 @@ describe('seeding beside a caller-provided chat surface', () => {
     })
   })
 
-  it('activation forwards providesInitialSurface so setup alone adds one tab', () => {
+  it('activation creates a primary shell plus a new-tab setup surface', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
 
     const result = activateAndRevealWorktree(worktree.id, {
-      providesInitialSurface: true,
       notifyHostRuntime: false,
       setup
     })
 
     expect(result).not.toBe(false)
-    expect(result === false ? 'unused' : result.primaryTabId).toBeNull()
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+    expect(result === false ? null : result.primaryTabId).toBeTruthy()
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(2)
   })
 })

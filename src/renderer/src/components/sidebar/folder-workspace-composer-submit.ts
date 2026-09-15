@@ -26,6 +26,12 @@ import {
   getFolderWorkspaceAgentLaunchPlatform,
   resolveFolderWorkspaceLaunchDraft
 } from './folder-workspace-agent-startup'
+import {
+  registerWorkspaceSurfaceProducer,
+  type WorkspaceSurfaceProducer
+} from '@/lib/workspace-surface-production'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { settleStructuredAgentSurfaceProducer } from '@/lib/structured-agent-surface-production'
 
 export {
   buildFolderWorkspaceLinkedStartupPlan,
@@ -205,13 +211,23 @@ export async function submitFolderWorkspaceCreate({
         }
       : undefined
   onOpenChange(false)
+  let structuredProducer: WorkspaceSurfaceProducer | null = null
   try {
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    structuredProducer = structuredLaunch
+      ? registerWorkspaceSurfaceProducer({
+          workspaceKey,
+          executionHostId: getExecutionHostIdForWorktree(useAppStore.getState(), workspaceKey)
+        })
+      : null
     let activation = activateAndRevealFolderWorkspace(workspace.id, {
       agent: quickAgent,
       ...(!structuredLaunch && startup ? { startup } : {}),
-      ...(structuredLaunch ? { providesInitialSurface: true } : {}),
       runtimeEnvironmentId
     })
+    if (activation === false) {
+      structuredProducer?.failed('The workspace is no longer available.')
+    }
     let structuredLaunchAccepted = structuredLaunch
     const settlement =
       plan?.route === 'structured-native-chat'
@@ -244,6 +260,9 @@ export async function submitFolderWorkspaceCreate({
             { worktreeId: folderWorkspaceKey(workspace.id) }
           )
         : null
+    if (structuredProducer) {
+      settleStructuredAgentSurfaceProducer(structuredProducer, workspaceKey, settlement)
+    }
     if (settlement) {
       // Why: the workspace exists either way. Unknown keeps reporting false and failed true, as
       // the boolean did before the loop was shared; the launch layer owns the failure toast.
@@ -288,6 +307,7 @@ export async function submitFolderWorkspaceCreate({
       })
     }
   } catch (error) {
+    structuredProducer?.failed(error)
     // Why: creation already succeeded. Do not leave the completed create modal
     // open if the follow-up reveal/startup path hits a transient issue.
     console.error('Failed to activate folder workspace after create:', error)

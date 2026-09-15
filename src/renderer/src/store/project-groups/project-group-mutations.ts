@@ -18,6 +18,9 @@ import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalo
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
 import { repoWithFetchedOwner, settingsForRepoOwner } from '../repos/owner-routing'
 import { projectGroupWithFetchedOwner } from './project-group-owner-stamping'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getFolderWorkspaceHostId } from '../folder-workspaces/folder-workspace-catalog'
+import { clearWorkspaceActivationRecoveryLifecycle } from '@/lib/workspace-activation-recovery-lifecycle'
 
 export function createProjectGroupMutationActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -128,7 +131,18 @@ export function createProjectGroupMutationActions(
         if (!deleted) {
           return false
         }
-        set((s) => applyProjectGroupDeleteCascade(s, groupId, ownerHostId))
+        const current = get()
+        const next = applyProjectGroupDeleteCascade(current, groupId, ownerHostId)
+        set(next)
+        for (const workspace of current.folderWorkspaces) {
+          if (next.folderWorkspaces.includes(workspace)) {
+            continue
+          }
+          clearWorkspaceActivationRecoveryLifecycle({
+            workspaceKey: folderWorkspaceKey(workspace.id),
+            executionHostId: getFolderWorkspaceHostId(workspace, current.projectGroups)
+          })
+        }
         return true
       } catch (err) {
         console.error('Failed to delete project group:', err)

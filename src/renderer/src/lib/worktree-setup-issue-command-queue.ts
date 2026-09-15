@@ -1,4 +1,7 @@
-import type { WorktreeSetupLaunch } from '../../../shared/worktree/launch-types'
+import type {
+  WorktreeDefaultTabsLaunch,
+  WorktreeSetupLaunch
+} from '../../../shared/worktree/launch-types'
 import { buildSetupRunnerCommand } from './setup-runner'
 import { useAppStore } from '@/store'
 import type {
@@ -10,6 +13,34 @@ import type {
 export type IssueCommandLaunch =
   | WorktreeSetupLaunch
   | { command: string; env?: Record<string, string> }
+
+export function queueStandaloneSetupTab(args: {
+  store: WorktreeActivationStore
+  worktreeId: string
+  setup: WorktreeSetupLaunch | undefined
+  issueCommand: IssueCommandLaunch | undefined
+  defaultTabs: WorktreeDefaultTabsLaunch | undefined
+  opts?: InitialTerminalOptions
+}): boolean {
+  if (
+    !args.setup ||
+    args.issueCommand ||
+    args.defaultTabs?.tabs.length ||
+    (useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab') !== 'new-tab'
+  ) {
+    return false
+  }
+  queueSetupAndIssueCommands(
+    args.store,
+    args.worktreeId,
+    null,
+    args.setup,
+    undefined,
+    undefined,
+    args.opts
+  )
+  return true
+}
 
 export function queueSetupAndIssueCommands(
   store: WorktreeActivationStore,

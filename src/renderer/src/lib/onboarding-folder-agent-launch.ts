@@ -11,6 +11,10 @@ import {
   type OnboardingFolderAgentStartup
 } from '@/lib/onboarding-folder-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { useAppStore } from '@/store'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { settleStructuredAgentSurfaceProducer } from '@/lib/structured-agent-surface-production'
 
 export type OnboardingFolderAgentLaunch = {
   agent: TuiAgent | null
@@ -59,30 +63,47 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   executionHostId: ExecutionHostId | undefined
   launch: OnboardingFolderAgentLaunch
 }): Promise<void> {
-  const reveal = (
-    startup: OnboardingFolderAgentStartup | undefined,
-    providesInitialSurface = false
-  ) =>
+  const reveal = (startup: OnboardingFolderAgentStartup | undefined) =>
     activateAndRevealWorktree(args.worktreeId, {
       sidebarRevealBehavior: 'auto',
       ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
-      ...(startup ? { startup } : {}),
-      ...(providesInitialSurface ? { providesInitialSurface: true } : {})
+      ...(startup ? { startup } : {})
     })
   const { plan } = args.launch
   const structured = plan?.route === 'structured-native-chat'
-  reveal(args.launch.startup, structured)
-  if (!structured) {
-    return
+  const producer = structured
+    ? registerWorkspaceSurfaceProducer({
+        workspaceKey: args.worktreeId,
+        executionHostId:
+          args.executionHostId ??
+          getExecutionHostIdForWorktree(useAppStore.getState(), args.worktreeId)
+      })
+    : null
+  try {
+    const initialActivation = reveal(args.launch.startup)
+    if (initialActivation === false) {
+      producer?.failed('The workspace is no longer available.')
+    }
+    if (!structured) {
+      return
+    }
+    const settlement = await plan.launch(
+      {
+        legacyFallback: async () => {
+          const activation = reveal(args.launch.fallbackStartup)
+          return {
+            activation,
+            primaryTabId: activation === false ? null : activation.primaryTabId
+          }
+        }
+      },
+      { worktreeId: args.worktreeId }
+    )
+    if (producer) {
+      settleStructuredAgentSurfaceProducer(producer, args.worktreeId, settlement)
+    }
+  } catch (error) {
+    producer?.failed(error)
+    throw error
   }
-  // Why: the outcome is not consumed; the workspace is already revealed and the launch layer toasts.
-  await plan.launch(
-    {
-      legacyFallback: async () => {
-        const activation = reveal(args.launch.fallbackStartup)
-        return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
-      }
-    },
-    { worktreeId: args.worktreeId }
-  )
 }

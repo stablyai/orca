@@ -1,10 +1,11 @@
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent-test-state'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 
 // Red repro for the aug20 "windows 2" incident (restart-reattach/resume-relaunch):
 // a runtime-owned (paired remote) worktree's web-mirror tab holds a sleeping
@@ -21,6 +22,10 @@ const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const WEB_TAB_ID = 'web-terminal-host-tab-1'
 const RUNTIME_ENV_ID = 'env-abfee683'
+
+beforeEach(() => {
+  replaceRuntimeEnvironmentRevisions([{ id: RUNTIME_ENV_ID, createdAt: 1, pairingRevision: 1 }])
+})
 
 function makeRuntimeOwnedWorktree(): ReturnType<typeof makeCreatedAgentWorktree> {
   const workspacePath = path.join(path.sep, 'workspace', 'feature')
@@ -128,6 +133,7 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): string {
 
 afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
+  replaceRuntimeEnvironmentRevisions([])
 })
 
 describe('runtime-owned worktree activation with an unhydrated host mirror', () => {

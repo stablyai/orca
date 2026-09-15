@@ -6,14 +6,29 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import type { TerminalSlice } from '@/store/slices/terminals'
-import { runWorktreeAgentActivationGate } from './worktree-agent-activation-gate'
+import { useAppStore } from '@/store'
+import {
+  gateWorktreeAgentActivation,
+  runWorktreeAgentActivationGate,
+  waitForWorktreeAgentActivationGateForTests
+} from './worktree-agent-activation-gate'
 import type { LiveTerminalSurfaceOwnerIndex } from './worktree-live-terminal-surface-owners'
+import type { WorktreeAgentActivationRoute } from './worktree-agent-activation-route'
+import * as activationPtyInventory from './worktree-activation-pty-inventory'
+import * as structuredInventory from './worktree-agent-structured-inventory'
+import * as recoveryState from './workspace-activation-recovery-state'
 
 const WORKTREE_ID = 'repo::/worktree'
 const STALE_STRUCTURED_SESSION_ID = 'structured-session-stale'
 const LIVE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const DEAD_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const SIBLING_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+const LOCAL_ROUTE: WorktreeAgentActivationRoute = {
+  workspaceKey: WORKTREE_ID,
+  executionHostId: 'local',
+  runtimeEnvironmentId: null,
+  runtimeEnvironmentRevision: null
+}
 
 function listed(id: string): PtyListedSession {
   return { id, cwd: '/worktree', title: 'Codex', agentOwnership: 'present' }
@@ -325,7 +340,7 @@ describe('worktree agent activation gate', () => {
       runWorktreeAgentActivationGate(WORKTREE_ID, { ...deps, hasStructuredSession })
     ).resolves.toBe('structured')
 
-    expect(hasStructuredSession).toHaveBeenCalledWith(WORKTREE_ID)
+    expect(hasStructuredSession).toHaveBeenCalledOnce()
     expect(createTab).not.toHaveBeenCalled()
     expect(resume).not.toHaveBeenCalled()
   })
@@ -338,6 +353,39 @@ describe('worktree agent activation gate', () => {
     expect(createTab).not.toHaveBeenCalled()
     expect(resume).toHaveBeenCalledOnce()
     expect(resume).toHaveBeenCalledWith(WORKTREE_ID, { skipClaimKeys: new Set() })
+  })
+
+  it('fences resumed sessions to the captured route', async () => {
+    const { deps, resume } = testDeps({})
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps, LOCAL_ROUTE)).resolves.toBe(
+      'resumed'
+    )
+
+    expect(resume).toHaveBeenCalledWith(WORKTREE_ID, {
+      skipClaimKeys: new Set(),
+      expectedExecutionHostId: 'local',
+      expectedRuntimeEnvironmentId: null
+    })
+  })
+
+  it('fences a paired-runtime resume to the captured pairing revision', async () => {
+    const { deps, resume } = testDeps({})
+    const route: WorktreeAgentActivationRoute = {
+      ...LOCAL_ROUTE,
+      executionHostId: 'runtime:environment-1',
+      runtimeEnvironmentId: 'environment-1',
+      runtimeEnvironmentRevision: 17
+    }
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps, route)).resolves.toBe('resumed')
+
+    expect(resume).toHaveBeenCalledWith(WORKTREE_ID, {
+      skipClaimKeys: new Set(),
+      expectedExecutionHostId: 'runtime:environment-1',
+      expectedRuntimeEnvironmentId: 'environment-1',
+      expectedRuntimeEnvironmentRevision: 17
+    })
   })
 
   it('resumes a dead agent when the workspace only has a non-agent PTY', async () => {
@@ -590,9 +638,7 @@ describe('worktree agent activation gate', () => {
     })
   })
 
-  // Failing closed must not also fail silent: an unreadable census leaves the workspace with
-  // no surface, so the gate has to hand the caller its seed instead of claiming 'adopted'.
-  it('declines to mint but still asks for a seed when the host cannot answer', async () => {
+  it('blocks when the host cannot safely identify the live PTY surface', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
@@ -600,12 +646,12 @@ describe('worktree agent activation gate', () => {
       resumeCount: 0
     })
 
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
 
     expect(createTab).not.toHaveBeenCalled()
   })
 
-  it('declines to mint but still asks for a seed when two host surfaces claim one live PTY', async () => {
+  it('blocks when two host surfaces claim one live PTY', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
@@ -613,7 +659,7 @@ describe('worktree agent activation gate', () => {
       resumeCount: 0
     })
 
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
 
     expect(createTab).not.toHaveBeenCalled()
   })
@@ -630,8 +676,7 @@ describe('worktree agent activation gate', () => {
     })
     seedExistingSurface(deps.getState(), { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
 
-    // The seam re-checks its own guard, so an existing tab is not re-seeded by 'empty'.
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
 
     expect(createTab).not.toHaveBeenCalled()
     expect(warn).toHaveBeenCalledWith(
@@ -769,5 +814,93 @@ describe('worktree agent activation gate', () => {
       activate: false,
       recordInteraction: false
     })
+  })
+
+  it('stops before adoption when the captured route changes during owner inventory', async () => {
+    const livePtyId = `${WORKTREE_ID}@@live-agent`
+    const { deps, createTab, resume } = testDeps({ sessions: [listed(livePtyId)] })
+    let routeCurrent = true
+    let resolveOwners!: (owners: LiveTerminalSurfaceOwnerIndex) => void
+    deps.listSurfaceOwners.mockReturnValue(
+      new Promise((resolve) => {
+        resolveOwners = resolve
+      })
+    )
+
+    const activation = runWorktreeAgentActivationGate(
+      WORKTREE_ID,
+      { ...deps, isRouteCurrent: () => routeCurrent },
+      LOCAL_ROUTE
+    )
+    await vi.waitFor(() => expect(deps.listSurfaceOwners).toHaveBeenCalledOnce())
+    routeCurrent = false
+    resolveOwners(new Map())
+
+    await expect(activation).resolves.toBe('stale')
+    expect(createTab).not.toHaveBeenCalled()
+    expect(resume).not.toHaveBeenCalled()
+  })
+
+  it('does not resume after the gate deadline aborts inventory', async () => {
+    const { deps, createTab, resume } = testDeps({})
+    const controller = new AbortController()
+    deps.listSessions.mockImplementation(async () => {
+      controller.abort()
+      return []
+    })
+
+    await expect(
+      runWorktreeAgentActivationGate(WORKTREE_ID, deps, LOCAL_ROUTE, {
+        signal: controller.signal,
+        timeoutMs: 100
+      })
+    ).resolves.toBe('blocked')
+    expect(createTab).not.toHaveBeenCalled()
+    expect(resume).not.toHaveBeenCalled()
+  })
+
+  it('aborts deadline-bound inventory and releases the route dedupe entry', async () => {
+    vi.useFakeTimers()
+    const originalReadiness = {
+      workspaceSessionReady: useAppStore.getState().workspaceSessionReady,
+      terminalStartupRestorationReady: useAppStore.getState().terminalStartupRestorationReady
+    }
+    useAppStore.setState({ workspaceSessionReady: true, terminalStartupRestorationReady: true })
+    vi.stubGlobal('window', {})
+    const isCurrent = vi
+      .spyOn(recoveryState, 'isActivationExecutionRouteCurrent')
+      .mockReturnValue(true)
+    const structured = vi
+      .spyOn(structuredInventory, 'readWorktreeStructuredActivationInventory')
+      .mockResolvedValue(false)
+    const list = vi
+      .spyOn(activationPtyInventory, 'listActivationPtySessionsForRoute')
+      .mockImplementation(
+        (_route, operation = {}) =>
+          new Promise((_, reject) => {
+            operation.signal?.addEventListener(
+              'abort',
+              () => reject(new Error('inventory aborted')),
+              { once: true }
+            )
+          })
+      )
+
+    const activation = gateWorktreeAgentActivation(LOCAL_ROUTE, { timeoutMs: 100 })
+    expect(waitForWorktreeAgentActivationGateForTests(WORKTREE_ID)).toBe(activation)
+    await vi.advanceTimersByTimeAsync(100)
+
+    await expect(activation).resolves.toBe('blocked')
+    await expect(waitForWorktreeAgentActivationGateForTests(WORKTREE_ID)).resolves.toBeNull()
+    expect(list).toHaveBeenCalledWith(
+      LOCAL_ROUTE,
+      expect.objectContaining({ signal: expect.any(AbortSignal), timeoutMs: 100 })
+    )
+    structured.mockRestore()
+    list.mockRestore()
+    isCurrent.mockRestore()
+    useAppStore.setState(originalReadiness)
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 })

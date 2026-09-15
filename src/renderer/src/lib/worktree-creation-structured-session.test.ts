@@ -1,32 +1,61 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  state: {
-    pendingWorktreeCreations: { 'creation-1': {} } as Record<string, unknown>
-  },
-  listener: null as ((state: { pendingWorktreeCreations: Record<string, unknown> }) => void) | null,
-  unsubscribe: vi.fn(),
-  startStructuredAgentLaunch: vi.fn(),
-  cancelStructuredAgentLaunch: vi.fn(),
-  closeStructuredAgentSession: vi.fn(),
-  callRuntimeRpc: vi.fn(),
-  activateStructuredAgentSessionById: vi.fn(),
-  activateAndRevealWorktree: vi.fn(),
-  ensureWorktreeHasInitialTerminal: vi.fn(),
-  ensureWebRuntimeWorktreeTerminalAfterWake: vi.fn(),
-  preflightAgentTrust: vi.fn(),
-  updateWorktreeMeta: vi.fn()
-}))
+type MockState = {
+  pendingWorktreeCreations: Record<string, unknown>
+  reconcileWorktreeTabModel: () => {
+    renderableTabCount: number
+    activeRenderableTabId: string
+  }
+  allWorktrees?: () => { id: string; path: string }[]
+  repos?: { id: string; connectionId: string }[]
+  updateWorktreeMeta?: ReturnType<typeof vi.fn>
+}
+
+const mocks = vi.hoisted(() => {
+  let listener: ((state: MockState) => void) | null = null
+  const reconcileWorktreeTabModel = vi.fn(() => ({
+    renderableTabCount: 1,
+    activeRenderableTabId: 'agent-session:session-1'
+  }))
+  let state: MockState = {
+    pendingWorktreeCreations: { 'creation-1': {} },
+    reconcileWorktreeTabModel
+  }
+  return {
+    get state(): MockState {
+      return state
+    },
+    set state(value: MockState) {
+      state = value
+    },
+    get listener(): ((state: MockState) => void) | null {
+      return listener
+    },
+    set listener(value: ((state: MockState) => void) | null) {
+      listener = value
+    },
+    unsubscribe: vi.fn(),
+    startStructuredAgentLaunch: vi.fn(),
+    cancelStructuredAgentLaunch: vi.fn(),
+    closeStructuredAgentSession: vi.fn(),
+    callRuntimeRpc: vi.fn(),
+    activateStructuredAgentSessionById: vi.fn(),
+    activateAndRevealWorktree: vi.fn(),
+    ensureWorktreeHasInitialTerminal: vi.fn(),
+    ensureWebRuntimeWorktreeTerminalAfterWake: vi.fn(),
+    preflightAgentTrust: vi.fn(),
+    updateWorktreeMeta: vi.fn(),
+    reconcileWorktreeTabModel
+  }
+})
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(vi.fn(), {
     getState: () => mocks.state,
-    subscribe: vi.fn(
-      (listener: (state: { pendingWorktreeCreations: Record<string, unknown> }) => void) => {
-        mocks.listener = listener
-        return mocks.unsubscribe
-      }
-    )
+    subscribe: vi.fn((listener: (state: MockState) => void) => {
+      mocks.listener = listener
+      return mocks.unsubscribe
+    })
   })
 }))
 
@@ -112,14 +141,18 @@ function storeWithWorktree() {
     pendingWorktreeCreations: { 'creation-1': {} },
     allWorktrees: () => [{ id: 'worktree-1', path: '/tmp/worktree-1' }],
     repos: [{ id: 'repo-1', connectionId: 'ssh-1' }],
-    updateWorktreeMeta: mocks.updateWorktreeMeta
-  } as unknown as typeof mocks.state
+    updateWorktreeMeta: mocks.updateWorktreeMeta,
+    reconcileWorktreeTabModel: mocks.reconcileWorktreeTabModel
+  }
 }
 
 describe('launchStructuredWorktreeSession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.state = { pendingWorktreeCreations: { 'creation-1': {} } }
+    mocks.state = {
+      pendingWorktreeCreations: { 'creation-1': {} },
+      reconcileWorktreeTabModel: mocks.reconcileWorktreeTabModel
+    }
     mocks.listener = null
     mocks.closeStructuredAgentSession.mockResolvedValue('closed')
     mocks.callRuntimeRpc.mockResolvedValue(undefined)
@@ -232,7 +265,10 @@ describe('launchStructuredWorktreeSession', () => {
   })
 
   it('returns cancelled without starting a launch when the creation is already gone', async () => {
-    mocks.state = { pendingWorktreeCreations: {} }
+    mocks.state = {
+      pendingWorktreeCreations: {},
+      reconcileWorktreeTabModel: mocks.reconcileWorktreeTabModel
+    }
 
     await expect(
       launchStructuredWorktreeSession({
@@ -273,7 +309,10 @@ describe('launchStructuredWorktreeSession', () => {
     await Promise.resolve()
     expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
 
-    mocks.state = { pendingWorktreeCreations: {} }
+    mocks.state = {
+      pendingWorktreeCreations: {},
+      reconcileWorktreeTabModel: mocks.reconcileWorktreeTabModel
+    }
     mocks.listener?.(mocks.state)
     mocks.listener?.(mocks.state)
     expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledExactlyOnceWith(
@@ -398,7 +437,10 @@ describe('launchStructuredWorktreeSession', () => {
     // Why: the module trusts its callers for the route, so the agent check is the last local
     // eligibility gate. Without it a dismissed creation reports itself cancelled for an agent that
     // was never going to open a session here.
-    mocks.state = { pendingWorktreeCreations: {} }
+    mocks.state = {
+      pendingWorktreeCreations: {},
+      reconcileWorktreeTabModel: mocks.reconcileWorktreeTabModel
+    }
 
     await expect(
       launchStructuredWorktreeSession({
@@ -542,7 +584,10 @@ describe('launchStructuredWorktreeSession', () => {
       primaryTabId: null
     })
 
-    mocks.state = { pendingWorktreeCreations: {} }
+    mocks.state = {
+      pendingWorktreeCreations: {},
+      reconcileWorktreeTabModel: mocks.reconcileWorktreeTabModel
+    }
     mocks.listener?.(mocks.state)
     resolveLaunch({ sessionId: 'session-1', fence: 1 })
 
@@ -638,9 +683,7 @@ describe('launchStructuredWorktreeSession', () => {
       primaryTabId: null
     })
 
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1', {
-      providesInitialSurface: true
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1')
     expect(mocks.activateAndRevealWorktree.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.activateStructuredAgentSessionById.mock.invocationCallOrder[0]
     )

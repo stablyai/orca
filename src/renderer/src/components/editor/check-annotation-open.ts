@@ -6,6 +6,8 @@ import {
   getOpenableAnnotationLine,
   resolveAnnotationPathInsideWorktree
 } from './check-annotation-path'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 export { getOpenableAnnotationLine }
 
@@ -27,24 +29,36 @@ export function openAnnotationLocation(params: {
     return
   }
   const { absolutePath, relativePath } = resolvedPath
+  cancelAnnotationRevealFrame(revealRafRef)
+  cancelAnnotationRevealFrame(revealInnerRafRef)
 
   // Why: reuse the shared activation path so an annotation jump lands in the
   // same history stack as sidebar, palette, and terminal-link navigation.
-  activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
-
-  store.openFile(
-    {
-      filePath: absolutePath,
-      relativePath,
-      worktreeId,
-      language: detectLanguage(relativePath),
-      mode: 'edit'
-    },
-    { forceContentReload: true }
-  )
-
-  cancelAnnotationRevealFrame(revealRafRef)
-  cancelAnnotationRevealFrame(revealInnerRafRef)
+  const producer = registerWorkspaceSurfaceProducer({
+    workspaceKey: worktreeId,
+    executionHostId: getExecutionHostIdForWorktree(store, worktreeId)
+  })
+  try {
+    const activation = activateAndRevealWorktree(worktreeId)
+    if (activation === false) {
+      producer.failed('The workspace is no longer available.')
+      return
+    }
+    const surfaceId = store.openFile(
+      {
+        filePath: absolutePath,
+        relativePath,
+        worktreeId,
+        language: detectLanguage(relativePath),
+        mode: 'edit'
+      },
+      { forceContentReload: true }
+    )
+    producer.materialized({ kind: 'tab', id: surfaceId })
+  } catch (error) {
+    producer.failed(error)
+    return
+  }
   store.setPendingEditorReveal(null)
 
   // Why: opening can replace the active tab and mount Monaco asynchronously.

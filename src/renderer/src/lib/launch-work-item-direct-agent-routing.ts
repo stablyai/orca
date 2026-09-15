@@ -117,6 +117,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
   /** The structured launch ended without a surface; there is nothing for the legacy path to finish. */
   failed: boolean
   primaryTabId: string | null
+  structuredSessionId?: string
 }> {
   const { plan } = args
   const notLaunched = (structuredLaunch: boolean) => ({
@@ -176,7 +177,8 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
         structuredLaunch: true,
         visibilityUnknown: false,
         failed: false,
-        primaryTabId: args.primaryTabId
+        primaryTabId: args.primaryTabId,
+        structuredSessionId: settlement.sessionId
       }
     case 'refused-then-legacy':
       return {
@@ -195,8 +197,9 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
         primaryTabId: args.primaryTabId
       }
     case 'failed':
-    case 'cancelled':
       // Why: the launch layer already toasted the failure.
       return withoutAgentSurface
+    case 'cancelled':
+      return { ...withoutAgentSurface, visibilityUnknown: true, failed: false }
   }
 }

@@ -3,19 +3,21 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
-import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
+import {
+  callAbortableLocalRuntime,
+  createRuntimeRpcAbortError,
+  waitForAbortableRuntimeDependency
+} from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
-import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
 import type { RuntimeClientTarget } from './runtime-client-target'
 
-export {
-  getActiveRuntimeTarget,
-  settingsForRuntimeOwner,
-  type RuntimeClientTarget
-} from './runtime-client-target'
+export { getActiveRuntimeTarget, settingsForRuntimeOwner } from './runtime-client-target'
+export type { RuntimeClientTarget } from './runtime-client-target'
 export {
   hasRuntimeRpcErrorCode,
+  isRuntimeScopeForbiddenError,
   RuntimeRpcCallError,
   unwrapRuntimeRpcResult
 } from './runtime-rpc-result'
@@ -35,13 +37,6 @@ type RuntimeCompatibilityCacheEntry = {
 }
 
 const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
-
-// Why: mobile-scope device tokens are denied non-allowlisted runtime methods
-// with code 'forbidden'. Callers use this to surface one scope-mismatch banner
-// instead of silently swallowing the failure into empty/retry-looping UI.
-export function isRuntimeScopeForbiddenError(error: unknown): boolean {
-  return error instanceof RuntimeRpcCallError && error.code === 'forbidden'
-}
 
 export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
@@ -69,10 +64,13 @@ export async function callRuntimeRpc<TResult>(
     method !== 'status.get' &&
     options.skipCompatibilityCheck !== true
   ) {
-    await ensureRuntimeEnvironmentCompatible(target.environmentId, {
-      ...options,
-      expectedEnvironmentPairingRevision
-    })
+    await waitForAbortableRuntimeDependency(
+      ensureRuntimeEnvironmentCompatible(target.environmentId, {
+        ...options,
+        expectedEnvironmentPairingRevision
+      }),
+      options.signal
+    )
   }
   if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
@@ -82,7 +80,9 @@ export async function callRuntimeRpc<TResult>(
     : params
   const response =
     target.kind === 'local'
-      ? await window.api.runtime.call({ method, params: nextParams })
+      ? options.signal
+        ? await callAbortableLocalRuntime(method, nextParams, options.timeoutMs, options.signal)
+        : await window.api.runtime.call({ method, params: nextParams })
       : await callRuntimeEnvironmentWithRevision({
           environmentId: target.environmentId,
           method,
@@ -332,6 +332,4 @@ export async function assertRuntimeEnvironmentCapability(
   }
 }
 
-export function clearRuntimeCompatibilityCacheForTests(): void {
-  clearRuntimeCompatibilityCache()
-}
+export const clearRuntimeCompatibilityCacheForTests = clearRuntimeCompatibilityCache

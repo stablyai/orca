@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
@@ -11,6 +11,7 @@ import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 
 // Pins the activation contract behind the run6-review-pr-11959 incident shape:
 // a persisted (husk) tab whose pane cannot resume in place gets ONE appended
@@ -23,6 +24,10 @@ const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const HUSK_TAB_ID = 'husk-tab-1'
 const RUNTIME_ENV_ID = 'env-4f0a8c21'
 const RUNTIME_HOST_ID = `runtime:${encodeURIComponent(RUNTIME_ENV_ID)}` as ExecutionHostId
+
+beforeEach(() => {
+  replaceRuntimeEnvironmentRevisions([{ id: RUNTIME_ENV_ID, createdAt: 1, pairingRevision: 1 }])
+})
 
 function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState> {
   return {
@@ -132,6 +137,7 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): void {
 afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
   resetHostSessionMirrorHydrationForTests()
+  replaceRuntimeEnvironmentRevisions([])
 })
 
 describe('preserved-pane replacement contract on workspace activation', () => {

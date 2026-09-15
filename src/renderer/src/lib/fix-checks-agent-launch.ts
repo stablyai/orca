@@ -25,6 +25,9 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { settleStructuredAgentSurfaceProducer } from '@/lib/structured-agent-surface-production'
 
 type StartFixChecksAgentArgs = {
   repoId: string
@@ -186,39 +189,58 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       toast.error(agentArgsPlan.error)
       return false
     }
-    // launchAgentInNewTab below creates the surface; seeding here would add a stray shell.
-    if (!activateAndRevealWorktree(targetWorktreeId, { providesInitialSurface: true })) {
-      toast.error(
-        translate(
-          'auto.lib.fix.checks.agent.launch.03c1d61f83',
-          'Unable to open the workspace attached to these checks.'
-        )
-      )
-      return false
-    }
-    const result = launchAgentInNewTab({
-      agent,
-      worktreeId: targetWorktreeId,
-      groupId: args.groupId ?? targetWorktreeId,
-      prompt: commandInput,
-      agentArgs: recipe.agentArgs,
-      promptDelivery: 'submit-after-ready',
-      launchPlatform,
-      launchSource: args.launchSource
+    const producer = registerWorkspaceSurfaceProducer({
+      workspaceKey: targetWorktreeId,
+      executionHostId: getExecutionHostIdForWorktree(store, targetWorktreeId)
     })
-    if (!result) {
-      toast.error(
-        translate(
-          'auto.lib.fix.checks.agent.launch.fb6c294e85',
-          'Could not build the agent launch command.'
+    try {
+      if (activateAndRevealWorktree(targetWorktreeId) === false) {
+        producer.failed('The workspace is no longer available.')
+        toast.error(
+          translate(
+            'auto.lib.fix.checks.agent.launch.03c1d61f83',
+            'Unable to open the workspace attached to these checks.'
+          )
         )
-      )
-      return false
+        return false
+      }
+      const result = launchAgentInNewTab({
+        agent,
+        worktreeId: targetWorktreeId,
+        groupId: args.groupId ?? targetWorktreeId,
+        prompt: commandInput,
+        agentArgs: recipe.agentArgs,
+        promptDelivery: 'submit-after-ready',
+        launchPlatform,
+        launchSource: args.launchSource
+      })
+      if (!result) {
+        producer.failed('Could not build the agent launch command.')
+        toast.error(
+          translate(
+            'auto.lib.fix.checks.agent.launch.fb6c294e85',
+            'Could not build the agent launch command.'
+          )
+        )
+        return false
+      }
+      if (result.tabId) {
+        producer.materialized({ kind: 'tab', id: result.tabId })
+        focusTerminalTabSurface(result.tabId)
+      } else if (result.structuredSettlement) {
+        void result.structuredSettlement.then(
+          (settlement) =>
+            settleStructuredAgentSurfaceProducer(producer, targetWorktreeId, settlement),
+          (error: unknown) => producer.failed(error)
+        )
+      } else {
+        producer.failed('The agent launch did not publish a surface.')
+      }
+      return true
+    } catch (error) {
+      producer.failed(error)
+      throw error
     }
-    if (result.tabId) {
-      focusTerminalTabSurface(result.tabId)
-    }
-    return true
   }
 
   if (!args.item || !args.openModalFallback) {

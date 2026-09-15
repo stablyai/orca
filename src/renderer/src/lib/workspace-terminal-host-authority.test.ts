@@ -98,26 +98,22 @@ describe('workspace terminal seeding authority', () => {
 
     // The host answers and holds nothing here. That is positive evidence, so the workspace seeds.
     store.getState().markRemoteWorkspaceHydrated(TARGET_ID)
+    store.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, { phase: 'synced', direction: 'pull' })
     expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe('none')
     expect(ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID)).toBeTruthy()
     expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(1)
   })
 
   it.each(['offline', 'error'] as const)(
-    'falls back to none when a sync terminates in %s without ever hydrating',
+    'does not let the legacy %s-to-none floor authorize a writer',
     (phase) => {
-      // The regression this guards: remoteWorkspaceHydratedTargetIds is add-only in practice
-      // (clearRemoteWorkspaceHydrated has no production caller), so without a floor one failed sync
-      // leaves every git worktree on this target terminal-less and its sleeping agents unresumable
-      // for the rest of the app session — strictly worse than the pre-gate behaviour, and escapable
-      // only by creating a tab by hand.
       const store = createTestStore()
       seedDirectSsh(store)
       store.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, { phase, direction: 'pull' })
 
       expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe('none')
-      expect(ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID)).toBeTruthy()
-      expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(1)
+      expect(ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID)).toBeNull()
+      expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(0)
     }
   )
 

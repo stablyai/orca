@@ -1,6 +1,9 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { PtyListedSession, PtySessionListScope } from '../../../shared/pty-listed-session'
+import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import {
@@ -11,6 +14,10 @@ import {
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
+import {
+  runtimeTargetForActivationRoute,
+  type WorktreeAgentActivationRoute
+} from './worktree-agent-activation-route'
 
 /** Main rejects a scoped list with this prefix when the relay is detached (pty/provider/registry.ts). */
 const DETACHED_PROVIDER_REJECTION = 'No PTY provider for connection'
@@ -84,4 +91,50 @@ export async function listActivationPtySessions(
     }
     return window.api.pty.listSessions()
   }
+}
+
+export async function listActivationPtySessionsForRoute(
+  route: WorktreeAgentActivationRoute,
+  options: { timeoutMs?: number; signal?: AbortSignal } = {}
+): Promise<PtyListedSession[]> {
+  const target = runtimeTargetForActivationRoute(route)
+  if (!target) {
+    throw new Error('activation PTY inventory route unavailable')
+  }
+  const result = await callRuntimeRpc<RuntimeTerminalListResult>(
+    target,
+    'terminal.list',
+    {
+      worktree: toRuntimeWorktreeSelector(route.workspaceKey),
+      requireFreshPtyLiveness: true,
+      includeVisualLayouts: false
+    },
+    {
+      ...options,
+      ...(route.runtimeEnvironmentRevision === null
+        ? {}
+        : { expectedEnvironmentPairingRevision: route.runtimeEnvironmentRevision })
+    }
+  )
+  if (
+    result.truncated ||
+    !result.hostScope?.hostIds.includes(route.executionHostId) ||
+    !Array.isArray(result.terminals)
+  ) {
+    throw new Error('activation PTY inventory scope unavailable')
+  }
+  return result.terminals.flatMap((terminal) =>
+    terminal.ptyId &&
+    (terminal.executionHostId === undefined || terminal.executionHostId === route.executionHostId)
+      ? [
+          {
+            id: terminal.ptyId,
+            cwd: terminal.worktreePath,
+            title: terminal.title ?? '',
+            worktreeId: terminal.worktreeId,
+            agentOwnership: terminal.agentIdentity ? ('present' as const) : ('unknown' as const)
+          }
+        ]
+      : []
+  )
 }

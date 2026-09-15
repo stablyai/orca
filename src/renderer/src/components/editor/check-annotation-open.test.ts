@@ -23,7 +23,7 @@ afterEach(() => {
 })
 
 describe('openAnnotationLocation', () => {
-  it('activates as a surface-providing caller before opening the editor', () => {
+  it('activates before opening the editor through its concrete producer', () => {
     vi.stubGlobal('requestAnimationFrame', vi.fn().mockReturnValue(1))
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
@@ -35,11 +35,7 @@ describe('openAnnotationLocation', () => {
       revealInnerRafRef: { current: null }
     })
 
-    // Why: the annotation's editor file is the surface — the jump must not re-seed
-    // a shell into a workspace whose last terminal the user closed.
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
     expect(mocks.state.openFile).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-1', relativePath: 'src/a.ts' }),
       { forceContentReload: true }

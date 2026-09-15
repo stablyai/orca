@@ -17,6 +17,8 @@ import {
   useSetupTargetWorktree
 } from './FeatureWallSetupWorkflowActions'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 export function BrowserAction(props: { done: boolean }): React.JSX.Element {
   const targetWorktree = useSetupTargetWorktree()
@@ -37,18 +39,49 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
       return
     }
     closeModal()
-    activateAndRevealWorktree(targetWorktree.id, { providesInitialSurface: true })
     const state = useAppStore.getState()
+    const producer = registerWorkspaceSurfaceProducer({
+      workspaceKey: targetWorktree.id,
+      executionHostId: getExecutionHostIdForWorktree(state, targetWorktree.id)
+    })
+    try {
+      if (activateAndRevealWorktree(targetWorktree.id) === false) {
+        producer.failed('The workspace is no longer available.')
+        return
+      }
+    } catch (error) {
+      producer.failed(error)
+      toast.error(error instanceof Error ? error.message : String(error))
+      return
+    }
     // Why: open the browser into the worktree's active group so it lands beside
     // the user's current work rather than spawning a detached surface.
     const groupId =
       state.activeGroupIdByWorktree[targetWorktree.id] ??
       state.groupsByWorktree[targetWorktree.id]?.[0]?.id
     if (groupId) {
-      void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
-        toast.error(error instanceof Error ? error.message : String(error))
-      })
+      const existingSurfaceIds = new Set(
+        (useAppStore.getState().unifiedTabsByWorktree[targetWorktree.id] ?? []).map((tab) => tab.id)
+      )
+      void openNewBrowserTabInActiveWorkspace(groupId)
+        .then(() => {
+          const settledState = useAppStore.getState()
+          settledState.reconcileWorktreeTabModel(targetWorktree.id)
+          const surfaceId = (
+            useAppStore.getState().unifiedTabsByWorktree[targetWorktree.id] ?? []
+          ).find((tab) => !existingSurfaceIds.has(tab.id))?.id
+          if (surfaceId) {
+            producer.materialized({ kind: 'tab', id: surfaceId })
+            return
+          }
+          producer.failed('The browser did not publish a workspace surface.')
+        })
+        .catch((error) => {
+          producer.failed(error)
+          toast.error(error instanceof Error ? error.message : String(error))
+        })
     } else {
+      producer.failed('No workspace group is available for this worktree yet.')
       toast.warning(
         translate(
           'auto.components.feature.wall.FeatureWallBrowserAction.5022c43a88',

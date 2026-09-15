@@ -4,6 +4,7 @@ import type {
   WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
+import type { WorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
 
 // Guards executeWorktreeCreation's post-create tail: callers fire and forget,
 // so a throw after createWorktree succeeds must be contained per-step and the
@@ -13,6 +14,7 @@ import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surfa
 // plus toast instead of a panel silently stuck at "creating".
 
 type TestActiveView = 'terminal' | 'tasks'
+const initialUnifiedTabsByWorktree: Record<string, { id: string }[]> = {}
 
 const store = {
   settings: {
@@ -53,7 +55,24 @@ const store = {
   updateWorktreeMeta: vi.fn(),
   createWorktree: vi.fn(),
   tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string }[]>,
-  unifiedTabsByWorktree: {}
+  unifiedTabsByWorktree: initialUnifiedTabsByWorktree,
+  reconcileWorktreeTabModel: vi.fn()
+}
+
+const surfaceProducer: WorkspaceSurfaceProducer = {
+  attempt: {
+    id: 'create-recovery-producer',
+    workspaceKey: 'wt-1',
+    executionHostId: 'local',
+    result: Promise.resolve({ kind: 'failed', reason: 'activation exploded' })
+  },
+  materialized: vi.fn(),
+  declined: vi.fn(),
+  failed: vi.fn(),
+  unverifiable: vi.fn(),
+  blocked: vi.fn(),
+  unexpected: vi.fn(),
+  intentionalEmpty: vi.fn()
 }
 
 vi.mock('@/store', () => ({
@@ -107,6 +126,25 @@ vi.mock('@/lib/worktree-creation-structured-recovery', () => ({
   retryStructuredWorktreeLaunch: vi.fn()
 }))
 
+vi.mock('@/lib/workspace-surface-production', () => ({
+  registerWorkspaceSurfaceProducer: vi.fn(() => surfaceProducer)
+}))
+
+vi.mock('@/lib/worktree-activation-recovery', () => ({
+  recoverWorkspaceActivation: vi.fn(async () => ({
+    kind: 'failed',
+    reason: 'producer-failed',
+    diagnosticId: 'create-recovery-attempt'
+  }))
+}))
+
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: () => 'local',
+  getRuntimeEnvironmentIdForWorktree: () => null
+}))
+
+vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => 'create-recovery-attempt' }))
+
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
@@ -115,6 +153,8 @@ import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { prepareRequestForCreate } from '@/lib/ephemeral-vm-worktree-creation'
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
 import { runBackgroundWorktreeCreation } from './worktree-creation-flow'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { recoverWorkspaceActivation } from '@/lib/worktree-activation-recovery'
 
 function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
   return {
@@ -167,18 +207,24 @@ beforeEach(() => {
   store.activeView = 'terminal'
   store.repos = [{ id: 'repo-1', connectionId: null }]
   store.tabsByWorktree = {}
+  store.unifiedTabsByWorktree = {}
   store.pendingWorktreeCreations = {}
   store.activePendingCreationId = null
   store.createWorktree.mockResolvedValue({
     worktree: { id: 'wt-1', repoId: 'repo-1' }
   })
+  vi.mocked(registerWorkspaceSurfaceProducer).mockReturnValue(surfaceProducer)
+  vi.mocked(recoverWorkspaceActivation).mockResolvedValue({
+    kind: 'failed',
+    reason: 'producer-failed',
+    diagnosticId: 'create-recovery-attempt'
+  })
 })
 
 describe('a throw after createWorktree succeeds no longer strands the creation surface', () => {
-  it('activating branch: a planless agent throw recovers a terminal and completes', async () => {
+  it('activating branch: a planless agent throw reports recovery failure without a shell', async () => {
     const request = makeRequest({ agent: 'claude' })
     seedPendingCreation(request)
-    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('recovered-tab')
     vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
       throw new Error('activation exploded')
     })
@@ -190,14 +236,23 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       'wt-1',
       expect.any(Error)
     )
-    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
-      store,
-      'wt-1',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined
+    expect(Object.hasOwn(store.tabsByWorktree, 'wt-1')).toBe(false)
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+    expect(registerWorkspaceSurfaceProducer).toHaveBeenCalledWith({
+      workspaceKey: 'wt-1',
+      executionHostId: 'local',
+      runtimeEnvironmentId: null,
+      attemptId: 'create-recovery-attempt'
+    })
+    expect(surfaceProducer.failed).toHaveBeenCalledWith(expect.any(Error))
+    expect(recoverWorkspaceActivation).toHaveBeenCalledWith(
+      {
+        workspaceKey: 'wt-1',
+        executionHostId: 'local',
+        runtimeEnvironmentId: null,
+        attemptId: 'create-recovery-attempt'
+      },
+      { mode: 'explicit' }
     )
     // Contained: completion still tears the surface down.
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
@@ -224,7 +279,7 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     })
   })
 
-  it('activating branch: routes draft and follow-up delivery to the stamped agent tab', async () => {
+  it('activating branch: a selection-stamped legacy row cannot suppress recovery', async () => {
     const request = makeRequest({
       agent: 'codex',
       startupPlan: {
@@ -247,8 +302,10 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     await executeWorktreeCreation('creation-1', request)
 
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+    expect(surfaceProducer.failed).toHaveBeenCalledWith(expect.any(Error))
+    expect(recoverWorkspaceActivation).toHaveBeenCalledOnce()
     expect(ensureAgentStartupInTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({ primaryTabId: 'agent-tab' })
+      expect.objectContaining({ primaryTabId: null })
     )
   })
 

@@ -18,6 +18,7 @@ import { useAppStore, type AppState } from '@/store'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { resetWorkspaceSurfaceProducersForTests } from '@/lib/workspace-surface-production'
 
 const PROVIDER_SESSION_ID = '019feb51-2269-71c2-89c6-faa8dc65c8dc'
 const ORIGINAL_TAB_ID = '1c897bc8-973b-47b4-9449-ac5fc6b726c3'
@@ -86,6 +87,7 @@ function makeLayout(leafId: string, ptyId: string) {
 }
 
 function seedWorkspace(options: { helper?: boolean } = {}): void {
+  resetWorkspaceSurfaceProducersForTests()
   useAppStore.setState(initialAppStoreState, true)
   const target = makeWorktree(WORKTREE_ID, WORKTREE_PATH)
   const canary = makeWorktree(CANARY_WORKTREE_ID, CANARY_WORKTREE_PATH)

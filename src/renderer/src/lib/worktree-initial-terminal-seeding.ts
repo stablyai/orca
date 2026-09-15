@@ -2,7 +2,6 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
@@ -28,38 +27,13 @@ import {
   type IssueCommandLaunch
 } from '@/lib/worktree-setup-issue-command-queue'
 import { applyDefaultTerminalTabs } from '@/lib/worktree-default-terminal-tabs'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveWorkspaceExecutionEvidence } from '@/lib/workspace-execution-evidence'
 
 function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
   return getSetupRunnerCommandPlatformForPath(
     setup.runnerScriptPath,
     navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
-  )
-}
-
-/** Re-seed after an empty gate unless its activation owns the surface or no longer owns the host. */
-export function reseedGatedEmptyWorkspace(
-  workspaceKey: string,
-  callerProvidesSurface: boolean,
-  executionHostId?: ExecutionHostId
-): void {
-  const state = useAppStore.getState()
-  if (
-    callerProvidesSurface === true ||
-    state.activeWorktreeId !== workspaceKey ||
-    (executionHostId !== undefined && state.activeWorkspaceExecutionHostId !== executionHostId)
-  ) {
-    return
-  }
-  ensureWorktreeHasInitialTerminal(
-    state,
-    workspaceKey,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    {
-      reseedEmptiedWorkspace: true
-    }
   )
 }
 
@@ -99,6 +73,12 @@ export function ensureWorktreeHasInitialTerminal(
 
   const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
   const hostAuthority = resolveWorkspaceTerminalHostAuthority(ownerState, worktreeId)
+  const executionEvidence = resolveWorkspaceExecutionEvidence(
+    ownerState,
+    worktreeId,
+    getExecutionHostIdForWorktree(ownerState, worktreeId),
+    opts?.hostAbsenceConfirmed === true
+  )
   // Why: explicit spawn evidence survives the new-worktree ownership race; a host that owns terminal creation provides the same authority for later activations.
   if (backendStartupTerminalSpawned || hostAuthority === 'live') {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
@@ -137,32 +117,6 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
-  // Why: a caller opening its own primary surface (a structured native chat) asked for that surface
-  // alone. Setup launched in its own tab needs no shell to attach to, so seeding one leaves a stray
-  // "Terminal 1" beside the chat. Splits and issue automation still need a pane to split from.
-  const setupNeedsHostTerminal =
-    setup !== undefined &&
-    (useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab') !== 'new-tab'
-  if (
-    opts?.callerProvidesSurface === true &&
-    renderableTabCount === 0 &&
-    !sequencedStartup &&
-    !issueCommand &&
-    !setupNeedsHostTerminal &&
-    !defaultTabs?.tabs.length &&
-    opts?.createNewTerminalForStartup !== true
-  ) {
-    queueSetupAndIssueCommands(
-      store,
-      worktreeId,
-      null,
-      setup,
-      undefined,
-      wrappedSetupCommandStr,
-      opts
-    )
-    return null
-  }
   // Why: only startup hydration honours the closed-last-tab tombstone. Every explicit
   // activation (sidebar, palette, automation resume, wake) re-seeds a surface instead,
   // because closing the last terminal normally deactivates the workspace too
@@ -175,15 +129,18 @@ export function ensureWorktreeHasInitialTerminal(
   // deactivation hooks for pane moves and retirement, where re-seeding is the wanted outcome.
   const shouldHonourClosedTerminalTombstone =
     Object.hasOwn(store.tabsByWorktree, worktreeId) && opts?.reseedEmptiedWorkspace !== true
-  // Why: an execution host that has not answered is not a host with no terminals; seeding into that
-  // gap is what adds a tab per launch (STA-4658). Explicit launch work below is a request to create
-  // a terminal now, so it stays ungated.
+  // Why: an execution host that has not answered is not a host with no terminals; neither automatic
+  // recovery nor explicit launch work can turn that uncertainty into permission for another writer.
   const shouldAutoCreate =
     hostAuthority === 'none' &&
+    executionEvidence === 'exited' &&
     shouldAutoCreateInitialTerminal(renderableTabCount, shouldHonourClosedTerminalTombstone)
-  const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
+  const shouldCreateForExplicitWork =
+    executionEvidence === 'exited' && renderableTabCount === 0 && hasExplicitLaunchWork
   const shouldCreateNewStartupTerminal =
-    opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined
+    executionEvidence === 'exited' &&
+    opts?.createNewTerminalForStartup === true &&
+    sequencedStartup !== undefined
   if (!shouldAutoCreate && !shouldCreateForExplicitWork && !shouldCreateNewStartupTerminal) {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {

@@ -362,12 +362,8 @@ describe('delete worktree flow', () => {
     const toastOptions = vi.mocked(showDeleteWorktreeFailureToast).mock.calls[0]?.[0]
     toastOptions?.onViewChanges()
 
-    // Why: the Source Control panel is the surface; seeding a shell would repopulate a
-    // workspace the user is trying to delete and erase its closed-last-terminal tombstone.
     const { activateAndRevealWorktree } = await import('@/lib/worktree-activation')
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
-    })
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {})
     expect(mocks.state.setRightSidebarTab).toHaveBeenCalledWith('source-control')
     expect(mocks.state.setRightSidebarOpen).toHaveBeenCalledWith(true)
   })

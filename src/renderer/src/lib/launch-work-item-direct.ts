@@ -7,13 +7,7 @@ import {
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
-import {
-  agentLaunchCommandErrorMessage,
-  gitLabIssueNumber,
-  resolvePrHeadErrorMessage,
-  unavailableAgentErrorMessage,
-  workspaceActivationErrorMessage
-} from '@/lib/launch-work-item-direct-messages'
+import * as directLaunchMessages from '@/lib/launch-work-item-direct-messages'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { SetupDecision } from '../../../shared/worktree/create-types'
@@ -40,18 +34,15 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session-launch-plan'
+import type { WorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import {
+  beginDirectWorkItemSurfaceProduction,
+  settleDirectWorkItemSurfaceProduction
+} from './direct-work-item-surface-production'
 
 /**
- * "Use" flow: create the workspace, activate it, launch the default agent,
- * and paste the work item context into the agent. Most callers leave it as a draft;
- * fix-check launches can opt into submitting the prompt after the TUI is ready.
- * Falls back to `openModalFallback()` when:
- *   - the repo's `setupRunPolicy` is `'ask'` (the user must pick per-workspace)
- *   - the repo can't be resolved from `repoId`
- *   - no compatible agent is detected on PATH
- *
- * Best-effort: after workspace activation, paste failures only toast a notice — the user still
- * has a usable workspace and can paste the work item context themselves.
+ * Creates a workspace, launches its default agent, and delivers the work-item context.
+ * Preflight can fall back to the modal; post-activation prompt delivery is best-effort.
  */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<boolean> {
   const {
@@ -152,7 +143,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       resolvedBranchNameOverride = result.branchNameOverride
       resolvedCompareBaseRef = result.compareBaseRef
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : resolvePrHeadErrorMessage())
+      toast.error(
+        error instanceof Error ? error.message : directLaunchMessages.resolvePrHeadErrorMessage()
+      )
       openModalFallback()
       return false
     }
@@ -167,6 +160,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let plan: AgentSessionLaunchPlan | null = null
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
   let startupPlanFailed = false
+  let structuredProducer: WorkspaceSurfaceProducer | null = null
   try {
     const result = await store.createWorktree(
       repoId,
@@ -184,7 +178,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       resolvedBranchNameOverride,
       undefined,
       itemType === 'mr' && itemNumber ? itemNumber : undefined,
-      gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
+      directLaunchMessages.gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
       undefined,
       undefined,
       undefined,
@@ -220,7 +214,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         sidebarRevealBehavior: 'auto',
         setup: result.setup
       })
-      toast.error(unavailableAgentErrorMessage())
+      toast.error(directLaunchMessages.unavailableAgentErrorMessage())
       return false
     }
     effectiveAgent = launchPreparation.effectiveAgent
@@ -229,12 +223,21 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     startupPlanFailed = launchPreparation.startupPlanFailed
     plan = launchPreparation.plan
 
+    const surfaceProduction = beginDirectWorkItemSurfaceProduction({
+      store: latestStore,
+      structuredLaunch: launchPreparation.structuredLaunch,
+      worktreeId,
+      setup: result.setup,
+      issueCommand: undefined,
+      defaultTabs: result.defaultTabs
+    })
+    structuredProducer = surfaceProduction.producer
     const activation = activateAndRevealWorktree(worktreeId, {
       sidebarRevealBehavior: 'auto',
-      setup: result.setup,
+      setup: surfaceProduction.setupRunsWithoutPrimary ? undefined : result.setup,
       defaultTabs: result.defaultTabs,
       ...(launchPreparation.structuredLaunch
-        ? { providesInitialSurface: true }
+        ? {}
         : buildDirectWorkItemStartupOpts(
             effectiveAgent,
             startupPlan,
@@ -242,30 +245,45 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
             promptDelivery === 'draft' ? draftContent : undefined
           ))
     })
-    if (!activation) {
+    if (activation === false) {
+      structuredProducer?.failed('The workspace is no longer available.')
       // Worktree vanished between create and activate — extremely unlikely but
       // worth handling explicitly rather than silently dropping the draft.
-      toast.error(workspaceActivationErrorMessage())
+      toast.error(directLaunchMessages.workspaceActivationErrorMessage())
       return false
     }
     primaryTabId = activation.primaryTabId
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create workspace.'
-    toast.error(message)
+    structuredProducer?.failed(error)
+    toast.error(
+      error instanceof Error ? error.message : directLaunchMessages.workspaceCreationErrorMessage()
+    )
     return false
   }
 
   store.setSidebarOpen(true)
 
-  const structuredResult = await settleDirectWorkItemStructuredLaunch({
-    plan,
-    worktreeId,
-    workspacePath: worktreePath,
-    connectionId: repoConnectionId,
-    primaryTabId,
-    startupPlan,
-    launchSource
-  })
+  let structuredResult: Awaited<ReturnType<typeof settleDirectWorkItemStructuredLaunch>>
+  try {
+    structuredResult = await settleDirectWorkItemStructuredLaunch({
+      plan,
+      worktreeId,
+      workspacePath: worktreePath,
+      connectionId: repoConnectionId,
+      primaryTabId,
+      startupPlan,
+      launchSource
+    })
+  } catch (error) {
+    structuredProducer?.failed(error)
+    toast.error(
+      error instanceof Error ? error.message : directLaunchMessages.agentLaunchErrorMessage()
+    )
+    return false
+  }
+  if (structuredProducer) {
+    settleDirectWorkItemSurfaceProduction(structuredProducer, structuredResult)
+  }
   if (structuredResult.visibilityUnknown || structuredResult.failed) {
     // Why: callers hang irreversible follow-up work off a `true` here, so a structured launch that
     // opened no surface must not report the workspace as started.
@@ -277,7 +295,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   primaryTabId = structuredResult.primaryTabId
 
   if (startupPlanFailed) {
-    toast.error(agentLaunchCommandErrorMessage())
+    toast.error(directLaunchMessages.agentLaunchCommandErrorMessage())
     return false
   }
 

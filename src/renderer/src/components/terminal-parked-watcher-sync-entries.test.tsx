@@ -65,8 +65,6 @@ function renderWatcherEffects(overrides: Partial<WatcherController> = {}): Promi
     activityTerminalPortals: [],
     anyMountedWorktreeHasLayout: false,
     backgroundMountRevision: 0,
-    createTab: vi.fn(),
-    reconcileWorktreeTabModel: vi.fn(),
     pairedRuntimeParkingEnvironmentIds: new Set(),
     terminalSshParkingEnabled: true,
     terminalProviderSnapshotCapabilityRevision: 0,

@@ -1,15 +1,12 @@
 import { useAppStore } from '@/store'
 import type { PtyListedSession } from '../../../shared/pty-listed-session'
-import { parsePtySessionId, PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import { listActivationPtySessions } from './worktree-activation-pty-inventory'
+import { listActivationPtySessionsForRoute } from './worktree-activation-pty-inventory'
 import {
   resumeSleepingAgentSessionsForWorktree,
   type ResumeSleepingAgentSessionsOptions
 } from './resume-sleeping-agent-session'
-import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
 import {
   adoptLiveWorkspacePtySurfaces,
   bindLivePtyToExactSurface,
@@ -17,11 +14,21 @@ import {
 } from './worktree-agent-live-surface-adoption'
 import type { LiveTerminalSurfaceOwnerIndex } from './worktree-live-terminal-surface-owners'
 import { readWorktreeLiveTerminalSurfaceOwners } from './worktree-live-terminal-surface-owners'
-import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   readWorktreeStructuredActivationInventory,
   type StructuredActivationInventory
 } from './worktree-agent-structured-inventory'
+import {
+  worktreeAgentActivationRouteKey,
+  type WorktreeAgentActivationRoute
+} from './worktree-agent-activation-route'
+import { isActivationExecutionRouteCurrent } from './workspace-activation-recovery-state'
+import {
+  liveSleepingAgentClaimKeys,
+  sessionBelongsToWorkspace,
+  workspaceHasSleepingAgentSessions,
+  workspaceHasStructuredAgentSession
+} from './worktree-agent-activation-claims'
 
 type ActivationStore = LiveSurfaceAdoptionStore &
   Pick<
@@ -31,13 +38,22 @@ type ActivationStore = LiveSurfaceAdoptionStore &
 
 type ActivationGateDeps = {
   getState: () => ActivationStore
-  awaitReady?: () => Promise<boolean>
-  listSessions: () => Promise<PtyListedSession[]>
+  awaitReady?: (operation?: ActivationGateOperation) => Promise<boolean>
+  listSessions: (operation?: ActivationGateOperation) => Promise<PtyListedSession[]>
   /** Host-recorded PTY→surface ownership; null when the host could not answer. */
-  listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
-  hasStructuredSession?: (worktreeId: string) => Promise<boolean | StructuredActivationInventory>
+  listSurfaceOwners: (
+    worktreeId: string,
+    operation?: ActivationGateOperation
+  ) => Promise<LiveTerminalSurfaceOwnerIndex | null>
+  hasStructuredSession?: (
+    worktreeId: string,
+    operation?: ActivationGateOperation
+  ) => Promise<boolean | StructuredActivationInventory>
   resume: (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number
+  isRouteCurrent?: () => boolean
 }
+
+type ActivationGateOperation = { signal: AbortSignal; timeoutMs: number }
 
 export type WorktreeAgentActivationOutcome =
   | 'adopted'
@@ -45,11 +61,12 @@ export type WorktreeAgentActivationOutcome =
   | 'resumed'
   | 'empty'
   | 'blocked'
+  | 'stale'
 
-const inFlightByWorktreeId = new Map<string, Promise<WorktreeAgentActivationOutcome>>()
+const inFlightByRoute = new Map<string, Promise<WorktreeAgentActivationOutcome>>()
 const WORKSPACE_SESSION_READY_TIMEOUT_MS = 30_000
 
-function waitForWorkspaceSessionReady(): Promise<boolean> {
+function waitForWorkspaceSessionReady(operation?: ActivationGateOperation): Promise<boolean> {
   const isReady = () => {
     const state = useAppStore.getState()
     return state.workspaceSessionReady && state.terminalStartupRestorationReady
@@ -62,106 +79,67 @@ function waitForWorkspaceSessionReady(): Promise<boolean> {
     const settle = (ready: boolean) => {
       clearTimeout(timeout)
       unsubscribe?.()
+      operation?.signal.removeEventListener('abort', onAbort)
       resolve(ready)
     }
-    const timeout = setTimeout(() => settle(isReady()), WORKSPACE_SESSION_READY_TIMEOUT_MS)
+    const onAbort = (): void => settle(false)
+    const timeout = setTimeout(
+      () => settle(isReady()),
+      operation?.timeoutMs ?? WORKSPACE_SESSION_READY_TIMEOUT_MS
+    )
     unsubscribe = useAppStore.subscribe((state) => {
       if (state.workspaceSessionReady && state.terminalStartupRestorationReady) {
         settle(true)
       }
     })
+    operation?.signal.addEventListener('abort', onAbort, { once: true })
+    if (operation?.signal.aborted) {
+      settle(false)
+      return
+    }
     if (isReady()) {
       settle(true)
     }
   })
 }
 
-export function workspaceHasSleepingAgentSessions(
-  state: Pick<ReturnType<typeof useAppStore.getState>, 'sleepingAgentSessionsByPaneKey'>,
-  worktreeId: string
-): boolean {
-  return Object.values(state.sleepingAgentSessionsByPaneKey).some(
-    (record) => record.worktreeId === worktreeId
-  )
-}
-
-function hasStructuredSession(store: ActivationStore, worktreeId: string): boolean {
-  return (store.unifiedTabsByWorktree[worktreeId] ?? []).some(
-    (tab) => tab.contentType === 'agent-session'
-  )
-}
-
-function sessionBelongsToWorkspace(sessionId: string, worktreeId: string): boolean {
-  if (parsePtySessionId(sessionId).worktreeId === worktreeId) {
-    return true
-  }
-  const scope = parseWorkspaceKey(worktreeId)
-  return (
-    scope?.type === 'folder' &&
-    sessionId.startsWith(`${worktreeId}${PTY_SESSION_ID_SEPARATOR}`) &&
-    sessionId.length > worktreeId.length + PTY_SESSION_ID_SEPARATOR.length
-  )
-}
-
-function liveSleepingAgentClaimKeys(
-  store: ActivationStore,
-  worktreeId: string,
-  livePtyIds: ReadonlySet<string>,
-  structuredInventory: StructuredActivationInventory | null
-): Set<string> {
-  const keys = new Set<string>()
-  for (const record of Object.values(store.sleepingAgentSessionsByPaneKey)) {
-    if (record.worktreeId !== worktreeId) {
-      continue
-    }
-    const stable = parsePaneKey(record.paneKey)
-    const tabId = record.tabId ?? stable?.tabId
-    const layoutPtyId = stable
-      ? store.terminalLayoutsByTabId[stable.tabId]?.ptyIdsByLeafId?.[stable.leafId]
-      : undefined
-    const tabPtyIds = tabId ? store.ptyIdsByTabId[tabId] : undefined
-    const structuredOwner =
-      stable && isStructuredAgentSyntheticSleepingRecord(record)
-        ? structuredInventory?.ownerBySessionId.get(record.providerSession.id)
-        : undefined
-    if (structuredOwner?.owner === 'native') {
-      keys.add(getProviderSessionClaimKey(record))
-      continue
-    }
-    // Packaged hydration can omit renderer bindings while main retains this session's exact TUI.
-    const structuredOwnerPtyId =
-      structuredOwner?.owner === 'tui' ? structuredOwner.terminal?.ptyId : undefined
-    const persistedPtyId =
-      layoutPtyId ?? (tabPtyIds?.length === 1 ? tabPtyIds[0] : undefined) ?? structuredOwnerPtyId
-    if (persistedPtyId && livePtyIds.has(persistedPtyId)) {
-      keys.add(getProviderSessionClaimKey(record))
-    }
-  }
-  return keys
-}
-
 export async function runWorktreeAgentActivationGate(
   worktreeId: string,
-  deps: ActivationGateDeps
+  deps: ActivationGateDeps,
+  route?: WorktreeAgentActivationRoute,
+  operation?: ActivationGateOperation
 ): Promise<WorktreeAgentActivationOutcome> {
+  const routeIsCurrent = (): boolean => deps.isRouteCurrent?.() !== false
+  const mayAct = (): boolean => routeIsCurrent() && operation?.signal.aborted !== true
+  const interruptedOutcome = (): WorktreeAgentActivationOutcome =>
+    routeIsCurrent() ? 'blocked' : 'stale'
+  if (!mayAct()) {
+    return interruptedOutcome()
+  }
   try {
-    if (deps.awaitReady && !(await deps.awaitReady())) {
-      return 'blocked'
+    if (deps.awaitReady && !(await deps.awaitReady(operation))) {
+      return interruptedOutcome()
     }
   } catch {
-    return 'blocked'
+    return interruptedOutcome()
+  }
+  if (!mayAct()) {
+    return interruptedOutcome()
   }
   let structured = false
   let structuredInventory: StructuredActivationInventory | null = null
   try {
-    const reportedStructuredSession = await deps.hasStructuredSession?.(worktreeId)
+    const reportedStructuredSession = await deps.hasStructuredSession?.(worktreeId, operation)
     structuredInventory =
       typeof reportedStructuredSession === 'object' ? reportedStructuredSession : null
     structured = Boolean(
-      hasStructuredSession(deps.getState(), worktreeId) || reportedStructuredSession
+      workspaceHasStructuredAgentSession(deps.getState(), worktreeId) || reportedStructuredSession
     )
   } catch {
-    return 'blocked'
+    return interruptedOutcome()
+  }
+  if (!mayAct()) {
+    return interruptedOutcome()
   }
 
   const structuredTabs = structuredInventory?.snapshot.tabs.filter(
@@ -189,10 +167,13 @@ export async function runWorktreeAgentActivationGate(
 
   let sessions: PtyListedSession[]
   try {
-    sessions = await deps.listSessions()
+    sessions = await deps.listSessions(operation)
   } catch {
     // Inventory uncertainty cannot authorize a second writer.
-    return 'blocked'
+    return interruptedOutcome()
+  }
+  if (!mayAct()) {
+    return interruptedOutcome()
   }
 
   // Why either signal rather than a preference: a relay row's worktreeId can be seeded from the
@@ -208,6 +189,9 @@ export async function runWorktreeAgentActivationGate(
     if (owner.owner !== 'tui') {
       continue
     }
+    if (!mayAct()) {
+      return interruptedOutcome()
+    }
     if (
       !owner.terminal ||
       !liveWorkspacePtyIds.has(owner.terminal.ptyId) ||
@@ -218,15 +202,18 @@ export async function runWorktreeAgentActivationGate(
   }
   let liveSurfaceAdopted = false
   if (liveWorkspaceSessions.length > 0) {
-    // Why: an unreadable census adopts nothing and mints nothing, so reporting 'adopted'
-    // would suppress the caller's seed and leave the workspace with no surface at all —
-    // fail-closed must still leave the user a usable pane (STA-5701).
+    // Why: an unreadable census adopts nothing and mints nothing, so reporting 'adopted' would
+    // falsely settle the request; recovery presents the blocked result without starting a writer.
     const adoption = await adoptLiveWorkspacePtySurfaces(
       deps.getState,
       worktreeId,
       [...liveWorkspacePtyIds],
-      deps.listSurfaceOwners
+      (targetWorktreeId) => deps.listSurfaceOwners(targetWorktreeId, operation),
+      mayAct
     )
+    if (adoption.stale) {
+      return interruptedOutcome()
+    }
     liveSurfaceAdopted = adoption.surfaced
     // A live agent the user can no longer see has to be diagnosable from the console.
     if (adoption.declinedPtyIds.length > 0) {
@@ -234,6 +221,9 @@ export async function runWorktreeAgentActivationGate(
         worktreeId,
         declinedPtyIds: adoption.declinedPtyIds
       })
+      if (!liveSurfaceAdopted) {
+        return 'blocked'
+      }
     }
     if (liveSurfaceAdopted && !workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
       return 'adopted'
@@ -243,16 +233,28 @@ export async function runWorktreeAgentActivationGate(
   if (structured && !workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
     return 'structured'
   }
+  if (!mayAct()) {
+    return interruptedOutcome()
+  }
   const launched = deps.resume(worktreeId, {
     skipClaimKeys: liveSleepingAgentClaimKeys(
       deps.getState(),
       worktreeId,
       liveWorkspacePtyIds,
       structuredInventory
-    )
+    ),
+    ...(route
+      ? {
+          expectedExecutionHostId: route.executionHostId,
+          expectedRuntimeEnvironmentId: route.runtimeEnvironmentId,
+          ...(route.runtimeEnvironmentRevision === null
+            ? {}
+            : { expectedRuntimeEnvironmentRevision: route.runtimeEnvironmentRevision })
+        }
+      : {})
   })
-  // 'empty' is the caller's directive — "this gate produced no surface, seed one" — not a
-  // claim the host had nothing; the callers re-check their own seeding guards first.
+  // 'empty' is a caller directive, not a durable liveness verdict. The routed inventory above
+  // must have completed before an SSH folder may use it as current host-absence evidence.
   return launched > 0
     ? 'resumed'
     : liveSurfaceAdopted
@@ -263,33 +265,54 @@ export async function runWorktreeAgentActivationGate(
 }
 
 export function gateWorktreeAgentActivation(
-  worktreeId: string
+  route: WorktreeAgentActivationRoute,
+  options: { timeoutMs?: number } = {}
 ): Promise<WorktreeAgentActivationOutcome> {
-  const existing = inFlightByWorktreeId.get(worktreeId)
+  const key = worktreeAgentActivationRouteKey(route)
+  const existing = inFlightByRoute.get(key)
   if (existing) {
     return existing
   }
-  const gate = runWorktreeAgentActivationGate(worktreeId, {
-    getState: () => useAppStore.getState(),
-    awaitReady: waitForWorkspaceSessionReady,
-    listSessions: () =>
-      typeof window === 'undefined'
-        ? Promise.resolve([])
-        : listActivationPtySessions(useAppStore.getState(), worktreeId),
-    listSurfaceOwners: readWorktreeLiveTerminalSurfaceOwners,
-    hasStructuredSession: readWorktreeStructuredActivationInventory,
-    resume: resumeSleepingAgentSessionsForWorktree
-  }).finally(() => {
-    if (inFlightByWorktreeId.get(worktreeId) === gate) {
-      inFlightByWorktreeId.delete(worktreeId)
+  const controller = new AbortController()
+  const timeoutMs = options.timeoutMs ?? WORKSPACE_SESSION_READY_TIMEOUT_MS
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const operation = { signal: controller.signal, timeoutMs }
+  const gate = runWorktreeAgentActivationGate(
+    route.workspaceKey,
+    {
+      getState: () => useAppStore.getState(),
+      awaitReady: waitForWorkspaceSessionReady,
+      listSessions: (request) =>
+        typeof window === 'undefined'
+          ? Promise.resolve([])
+          : listActivationPtySessionsForRoute(route, request),
+      listSurfaceOwners: (_worktreeId, request) =>
+        readWorktreeLiveTerminalSurfaceOwners(route, request),
+      hasStructuredSession: (_worktreeId, request) =>
+        readWorktreeStructuredActivationInventory(route, request),
+      resume: resumeSleepingAgentSessionsForWorktree,
+      isRouteCurrent: () => isActivationExecutionRouteCurrent(route)
+    },
+    route,
+    operation
+  ).finally(() => {
+    clearTimeout(timeout)
+    if (inFlightByRoute.get(key) === gate) {
+      inFlightByRoute.delete(key)
     }
   })
-  inFlightByWorktreeId.set(worktreeId, gate)
+  inFlightByRoute.set(key, gate)
   return gate
 }
 
 export function waitForWorktreeAgentActivationGateForTests(
   worktreeId: string
 ): Promise<WorktreeAgentActivationOutcome | null> {
-  return inFlightByWorktreeId.get(worktreeId) ?? Promise.resolve(null)
+  for (const [key, gate] of inFlightByRoute) {
+    const routeKey: unknown = JSON.parse(key)
+    if (Array.isArray(routeKey) && routeKey[3] === worktreeId) {
+      return gate
+    }
+  }
+  return Promise.resolve(null)
 }

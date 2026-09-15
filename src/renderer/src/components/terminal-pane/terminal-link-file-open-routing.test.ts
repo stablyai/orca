@@ -65,11 +65,7 @@ describe('handleOscLink', () => {
       expect.objectContaining({ title: 'report.html', activate: true })
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
-    // Why: the browser tab is the surface — activation must not re-seed a shell into a
-    // workspace whose last terminal the user closed.
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
-    })
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
   })
 
   it('also opens local .htm paths in Orca browser tabs with the platform modifier', async () => {
@@ -108,10 +104,7 @@ describe('handleOscLink', () => {
       matchLength: 0
     })
     expect(openFilePathMock).not.toHaveBeenCalled()
-    // Why: the editor file is the surface — the cross-worktree jump must not add a shell.
-    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
-    })
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {})
   })
 
   it('opens a sibling folder-workspace path under its owning host and workspace', async () => {
@@ -131,7 +124,6 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(activateAndRevealWorkspace).toHaveBeenCalledWith('folder:notes', {
-      providesInitialSurface: true,
       executionHostId: 'local'
     })
     expect(openFileMock).toHaveBeenCalledWith(

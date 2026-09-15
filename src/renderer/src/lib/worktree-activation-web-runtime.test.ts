@@ -15,12 +15,16 @@ import {
   resetWebRuntimeWakeTerminalRespawnForTests,
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync'
+import { resetWorkspaceSurfaceProducersForTests } from './workspace-surface-production'
 
 registerWorktreeActivationReset()
 
 afterEach(() => {
   vi.unstubAllGlobals()
   resetWebRuntimeWakeTerminalRespawnForTests()
+  resetWebSessionTabsSnapshotFreshnessForTests()
+  resetWorkspaceSurfaceProducersForTests()
 })
 
 describe('activateAndRevealWorktree', () => {

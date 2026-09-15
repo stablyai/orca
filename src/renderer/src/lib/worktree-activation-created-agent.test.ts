@@ -217,7 +217,8 @@ describe('activateAndRevealWorktree', () => {
   })
 
   it('forwards an explicit sidebar reveal behavior', () => {
-    const worktree = makeWorktree()
+    // A distinct identity prevents this synchronous contract from joining another test's gate.
+    const worktree = { ...makeWorktree(), id: 'wt-sidebar-reveal' }
     const revealWorktreeInSidebar = vi.fn()
 
     useAppStore.setState({

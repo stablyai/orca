@@ -7,21 +7,34 @@ import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-a
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 // A failed delete usually means unresolved changes, so land on the diff panel.
 function viewWorktreeDiff(
   worktreeId: string,
   executionHostId: WorktreeRemovalTarget['executionHostId']
 ): void {
-  // The Source Control panel is the requested surface — don't re-seed a shell in a
-  // workspace the user is trying to delete.
-  activateAndRevealWorktree(worktreeId, {
-    providesInitialSurface: true,
-    ...(executionHostId ? { executionHostId } : {})
-  })
   const state = useAppStore.getState()
-  state.setRightSidebarTab('source-control')
-  state.setRightSidebarOpen(true)
+  const producer = registerWorkspaceSurfaceProducer({
+    workspaceKey: worktreeId,
+    executionHostId: executionHostId ?? getExecutionHostIdForWorktree(state, worktreeId)
+  })
+  try {
+    const activation = activateAndRevealWorktree(
+      worktreeId,
+      executionHostId ? { executionHostId } : {}
+    )
+    if (activation === false) {
+      producer.failed('The workspace is no longer available.')
+      return
+    }
+    state.setRightSidebarTab('source-control')
+    state.setRightSidebarOpen(true)
+    producer.materialized({ kind: 'workspace-content', id: 'source-control' })
+  } catch (error) {
+    producer.failed(error)
+  }
 }
 
 export function runWorktreeDeleteWithToast(

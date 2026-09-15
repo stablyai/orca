@@ -80,8 +80,12 @@ function adoptHostOwnedSurface(
   getState: () => LiveSurfaceAdoptionStore,
   worktreeId: string,
   owner: LiveTerminalSurfaceOwner,
-  materializedTabIds: Set<string>
+  materializedTabIds: Set<string>,
+  canMutate: () => boolean
 ): boolean {
+  if (!canMutate()) {
+    return false
+  }
   const store = getState()
   const known = tabExists(store, owner.tabId)
   if (bindLivePtyToExactSurface(store, worktreeId, owner)) {
@@ -99,6 +103,9 @@ function adoptHostOwnedSurface(
   const current = getState()
   const layout = current.terminalLayoutsByTabId[owner.tabId]
   if (!layout?.root) {
+    return false
+  }
+  if (!canMutate()) {
     return false
   }
   current.setTabLayout(owner.tabId, {
@@ -128,8 +135,9 @@ export async function adoptLiveWorkspacePtySurfaces(
   getState: () => LiveSurfaceAdoptionStore,
   worktreeId: string,
   livePtyIds: readonly string[],
-  listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
-): Promise<{ surfaced: boolean; declinedPtyIds: string[] }> {
+  listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>,
+  canMutate: () => boolean = () => true
+): Promise<{ surfaced: boolean; declinedPtyIds: string[]; stale: boolean }> {
   // Why: ptyIdsByTabId holds only panes this renderer mounted, so a tab bound
   // solely in tab.ptyId or the persisted layout used to read as unbound.
   const unbound = livePtyIds.filter(
@@ -138,7 +146,7 @@ export async function adoptLiveWorkspacePtySurfaces(
   let surfaced = unbound.length < livePtyIds.length
   const declinedPtyIds: string[] = []
   if (unbound.length === 0) {
-    return { surfaced, declinedPtyIds }
+    return { surfaced, declinedPtyIds, stale: false }
   }
   let surfaceOwners: LiveTerminalSurfaceOwnerIndex | null
   try {
@@ -146,8 +154,14 @@ export async function adoptLiveWorkspacePtySurfaces(
   } catch {
     surfaceOwners = null
   }
+  if (!canMutate()) {
+    return { surfaced: false, declinedPtyIds: [], stale: true }
+  }
   const materializedTabIds = new Set<string>()
   for (const ptyId of unbound) {
+    if (!canMutate()) {
+      return { surfaced: false, declinedPtyIds, stale: true }
+    }
     // Why: a pane can mount while the census is in flight, so the pre-RPC
     // verdict is stale by the time it would authorize a mint.
     if (resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind !== 'none') {
@@ -156,7 +170,7 @@ export async function adoptLiveWorkspacePtySurfaces(
     }
     const owner = surfaceOwners?.get(ptyId)
     if (owner) {
-      if (adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds)) {
+      if (adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds, canMutate)) {
         surfaced = true
       } else {
         declinedPtyIds.push(ptyId)
@@ -176,5 +190,5 @@ export async function adoptLiveWorkspacePtySurfaces(
     })
     surfaced = true
   }
-  return { surfaced, declinedPtyIds }
+  return { surfaced, declinedPtyIds, stale: false }
 }

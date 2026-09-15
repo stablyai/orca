@@ -45,14 +45,9 @@ export type WorkspaceTerminalHostAuthorityState = WorktreeRuntimeOwnerState & {
  *  lift it. Four paths reach here: local-hydration timeout, a null `remoteWorkspace.get`, a falsy
  *  apply token, and never connecting at all.
  *
- *  Known gap: this floor was reasoned about when hydration was add-only, so "un-hydrated" implied
- *  "the host never answered". A snapshot whose rows could not be placed now revokes hydration
- *  (remote-workspace-snapshot-apply.ts), so a target that later lands on `offline`/`error` reaches
- *  this floor having *demonstrably* answered with tabs. Seeding is then authorised over live host
- *  terminals. That is not a regression — before the revocation existed the same target was marked
- *  hydrated and `synced`, which reached `none` sooner — but the floor should learn to tell a
- *  revoked target from one that never answered. Tracked for the SSH-v3 consolidation, where a
- *  single authoritative liveness source replaces this pair. */
+ *  This legacy ownership floor is not execution evidence. Writer authorization goes through
+ *  workspace-execution-evidence, which keeps offline/error and stale hydration `unverifiable`.
+ *  Tracked for SSH-v3 consolidation, where one authoritative liveness source replaces this pair. */
 const TERMINATED_WITHOUT_ANSWER_PHASES = new Set(['offline', 'error'])
 
 function resolveDirectSshAuthority(
@@ -67,10 +62,8 @@ function resolveDirectSshAuthority(
     return phase === 'conflict' ? 'unverifiable' : 'none'
   }
   if (phase !== undefined && TERMINATED_WITHOUT_ANSWER_PHASES.has(phase)) {
-    // The bounded floor. Without it a single failed sync leaves every git worktree on this target
-    // terminal-less and its sleeping agents unresumable for the rest of the app session — strictly
-    // worse than the pre-gate behaviour, and only escapable by creating a tab by hand. Declining to
-    // seed is meant to be a wait, not a permanent refusal.
+    // Legacy readers retain the bounded floor; recovery and seeding separately require current
+    // `exited` evidence, so this value cannot authorize a writer while the host is unreachable.
     return 'none'
   }
   // Not connected, still pulling, or not yet attempted — "we could not ask", never "nothing there".

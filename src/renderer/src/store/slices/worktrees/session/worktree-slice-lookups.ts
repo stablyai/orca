@@ -14,6 +14,7 @@ import type {
   TerminalRecoveryRemountRequest,
   TerminalRecoveryRemountResult
 } from '../../../terminals/terminal-tab-recovery-ledger'
+import { clearWorkspaceActivationRecoveryLifecycle } from '@/lib/workspace-activation-recovery-lifecycle'
 
 export function createSetRenamingWorktreeId(
   set: WorktreeSliceSet,
@@ -149,6 +150,12 @@ export function createPurgeWorktreeTerminalState(
     })
     if (purgeableWorktreeTargets.length === 0) {
       return
+    }
+    for (const target of purgeableWorktreeTargets) {
+      clearWorkspaceActivationRecoveryLifecycle({
+        workspaceKey: typeof target === 'string' ? target : target.id,
+        ...(typeof target === 'string' || !target.hostId ? {} : { executionHostId: target.hostId })
+      })
     }
     set((s) => buildWorktreePurgeState(s, purgeableWorktreeTargets))
   }

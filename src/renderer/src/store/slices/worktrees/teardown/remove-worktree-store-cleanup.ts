@@ -5,6 +5,7 @@ import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
 import { omitRecordKeys } from './record-key-omission'
+import { clearWorkspaceActivationRecoveryLifecycle } from '@/lib/workspace-activation-recovery-lifecycle'
 
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
@@ -15,6 +16,10 @@ export function applyRemoveWorktreeSuccessState(
   // Why outside `set`: it is module-scope, not store state. Dropping it also
   // re-arms the once-per-workspace warning if this id is ever added back.
   forgetAmbiguousOwnerWarnings([worktreeId])
+  clearWorkspaceActivationRecoveryLifecycle({
+    workspaceKey: worktreeId,
+    ...(executionHostId ? { executionHostId } : {})
+  })
   set((s) => {
     const worktreeIds = [worktreeId]
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)

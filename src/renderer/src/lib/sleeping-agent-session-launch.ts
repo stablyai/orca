@@ -14,6 +14,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
@@ -26,6 +27,9 @@ export type ResumeSleepingAgentSessionsOptions = {
   /** Called with the tab id of each freshly launched resume tab, so
    *  navigation-suppressed callers can background-mount exactly those tabs. */
   onSessionLaunched?: (tabId: string) => void
+  expectedExecutionHostId?: ExecutionHostId
+  expectedRuntimeEnvironmentId?: string | null
+  expectedRuntimeEnvironmentRevision?: number
 }
 
 function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {

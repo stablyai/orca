@@ -33,6 +33,10 @@ const store = {
   agentStatusByPaneKey: {} as Record<string, { agentType?: string }>,
   tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string | null }[]>,
   getKnownWorktreeById: vi.fn(),
+  reconcileWorktreeTabModel: vi.fn(() => ({
+    renderableTabCount: 1,
+    activeRenderableTabId: 'agent-session:session-1'
+  })),
   createWorktree: mockCreateWorktree
 }
 
@@ -183,8 +187,7 @@ describe('forkAgentSessionFromPane', () => {
     await vi.waitFor(() => expect(mockActivateAndRevealWorktree).toHaveBeenCalled())
 
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-      sidebarRevealBehavior: 'auto',
-      providesInitialSurface: true
+      sidebarRevealBehavior: 'auto'
     })
     expect(mockToast.success).not.toHaveBeenCalled()
     settle({ kind: 'structured', sessionId: 'session-1' })
@@ -274,8 +277,7 @@ describe('forkAgentSessionFromPane', () => {
       expect(mockToast.success).not.toHaveBeenCalled()
       expect(mockWriteClipboardText).toHaveBeenCalledTimes(copiesContext ? 1 : 0)
       expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-        sidebarRevealBehavior: 'auto',
-        providesInitialSurface: true
+        sidebarRevealBehavior: 'auto'
       })
     }
   )

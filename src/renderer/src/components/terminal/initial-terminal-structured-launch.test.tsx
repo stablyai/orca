@@ -5,22 +5,42 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
 import type { TerminalColdActivationController } from '../terminal-cold-activation'
 
-const mocks = vi.hoisted(() => ({
-  gate: vi.fn(),
-  launchStatus: vi.fn((_worktreeId: string, _provider: string): string => 'idle'),
-  createTab: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  let uuid = 0
+  return {
+    recover: vi.fn(),
+    produce: vi.fn(),
+    nextUuid: () => `startup-recovery-${++uuid}`,
+    resetUuid: () => {
+      uuid = 0
+    }
+  }
+})
+
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign(() => 'none', {
-    getState: () => ({ activeWorktreeId: 'wt-1' })
-  })
+  useAppStore: Object.assign(
+    (
+      selector: (state: {
+        activeWorkspaceExecutionHostId: null
+        runtimeEnvironments: readonly []
+      }) => unknown
+    ) => selector({ activeWorkspaceExecutionHostId: null, runtimeEnvironments: [] }),
+    {
+      getState: () => ({ activeWorktreeId: 'folder:workspace-1' })
+    }
+  )
 }))
-vi.mock('@/lib/worktree-agent-activation-gate', () => ({
-  gateWorktreeAgentActivation: mocks.gate
+vi.mock('@/lib/worktree-activation-recovery', () => ({
+  recoverWorkspaceActivation: mocks.recover
 }))
-vi.mock('@/lib/structured-agent-session-launch', () => ({
-  getStructuredAgentLaunchStatus: mocks.launchStatus
+vi.mock('@/lib/workspace-activation-surface-producer', () => ({
+  startWorkspaceActivationSurfaceProducer: mocks.produce
 }))
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: () => 'local',
+  getRuntimeEnvironmentIdForWorktree: () => null
+}))
+vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: mocks.nextUuid }))
 vi.mock('@/lib/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: vi.fn()
 }))
@@ -34,50 +54,87 @@ vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
   disposeAllParkedTerminalWatchers: vi.fn()
 }))
 
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', {
+  configurable: true,
+  value: true,
+  writable: true
+})
 let root: Root | undefined
+
 afterEach(async () => {
   await act(async () => root?.unmount())
-  vi.clearAllMocks()
+  root = undefined
+  mocks.recover.mockReset()
+  mocks.produce.mockReset()
+  mocks.resetUuid()
 })
 
-function Watcher(): null {
-  useTerminalWatcherEffects({
-    activeWorktreeId: 'wt-1',
+function Watcher({ activeWorktreeId }: { activeWorktreeId: string }): null {
+  const controller = {
+    activeWorktreeId,
     workspaceSessionReady: true,
     terminalStartupRestorationReady: true,
     workspaceSurfaceIds: [],
-    tabsByWorktree: {},
-    createTab: mocks.createTab,
-    reconcileWorktreeTabModel: () => ({ renderableTabCount: 0 })
-  } as unknown as TerminalColdActivationController)
+    tabsByWorktree: {}
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook test exercises only the startup fields; unused controller dependencies stay inert.
+  useTerminalWatcherEffects(controller as unknown as TerminalColdActivationController)
   return null
 }
 
-describe('passive terminal seeding during native chat creation', () => {
-  it.each([
-    ['claude', 'pending', 0],
-    ['codex', 'pending', 0],
-    ['claude', 'unknown', 0],
-    ['codex', 'unknown', 0],
-    ['claude', 'idle', 1]
-  ] as const)('handles %s launch status %s', async (agent, status, expectedTabs) => {
-    let finishGate!: (outcome: 'empty') => void
-    mocks.gate.mockReturnValue(
+describe('passive activation recovery', () => {
+  it('observes the folder-key general-setter path during startup', async () => {
+    mocks.recover.mockResolvedValue({ kind: 'intentional-empty' })
+    root = createRoot(document.createElement('div'))
+
+    await act(async () => root?.render(<Watcher activeWorktreeId="folder:workspace-1" />))
+
+    expect(mocks.recover).toHaveBeenCalledWith(
+      {
+        workspaceKey: 'folder:workspace-1',
+        executionHostId: 'local',
+        runtimeEnvironmentId: null,
+        attemptId: 'startup-recovery-1'
+      },
+      { mode: 'startup', signal: expect.any(AbortSignal) }
+    )
+    expect(mocks.produce).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceKey: 'folder:workspace-1' }),
+      { mode: 'startup' }
+    )
+  })
+
+  it('observes every later general-setter selection', async () => {
+    mocks.recover.mockResolvedValue({ kind: 'materialized' })
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<Watcher activeWorktreeId="worktree-1" />))
+    await act(async () => undefined)
+
+    await act(async () => root?.render(<Watcher activeWorktreeId="worktree-2" />))
+
+    expect(mocks.recover).toHaveBeenCalledTimes(2)
+    expect(mocks.produce).toHaveBeenCalledTimes(2)
+    expect(mocks.recover.mock.calls.map(([request]) => request.workspaceKey)).toEqual([
+      'worktree-1',
+      'worktree-2'
+    ])
+  })
+
+  it('aborts an unsettled request without consuming the next startup assessment', async () => {
+    let settleSecond!: () => void
+    mocks.recover.mockReturnValueOnce(new Promise(() => undefined)).mockReturnValueOnce(
       new Promise((resolve) => {
-        finishGate = resolve
+        settleSecond = () => resolve({ kind: 'intentional-empty' })
       })
     )
-    mocks.launchStatus.mockReturnValue('idle')
     root = createRoot(document.createElement('div'))
-    await act(async () => root?.render(<Watcher />))
+    await act(async () => root?.render(<Watcher activeWorktreeId="worktree-1" />))
+    const firstSignal = mocks.recover.mock.calls[0]?.[1]?.signal
 
-    // A create starts after the inventory probe but before its empty result returns.
-    mocks.launchStatus.mockImplementation((_worktreeId, provider) =>
-      provider === agent ? status : 'idle'
-    )
-    await act(async () => finishGate('empty'))
+    await act(async () => root?.render(<Watcher activeWorktreeId="folder:workspace-2" />))
 
-    expect(mocks.createTab).toHaveBeenCalledTimes(expectedTabs)
+    expect(firstSignal?.aborted).toBe(true)
+    expect(mocks.recover).toHaveBeenCalledTimes(2)
+    await act(async () => settleSecond())
   })
 })

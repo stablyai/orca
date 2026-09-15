@@ -21,6 +21,8 @@ import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mod
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getConnectionId } from '@/lib/connection-context'
 import { toast } from 'sonner'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,
@@ -78,6 +80,14 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
     return
   }
+  const producer = registerWorkspaceSurfaceProducer({
+    workspaceKey: worktreeId,
+    executionHostId: toRuntimeExecutionHostId(runtimeEnvironmentId)
+  })
+  state.reconcileWorktreeTabModel(worktreeId)
+  const existingSurfaceIds = new Set(
+    (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+  )
 
   const startup = opts?.startup
   const viewModeProps = launchAgent
@@ -90,35 +100,52 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
       })
     : {}
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
-  void createWebRuntimeSessionTerminal({
-    worktreeId,
-    environmentId: runtimeEnvironmentId,
-    ...viewModeProps,
-    ...(startup
-      ? {
-          command: startup.command,
-          ...(startup.env ? { env: startup.env } : {}),
-          ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
-          ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
-          ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
-          ...(startup.startupCommandDelivery
-            ? { startupCommandDelivery: startup.startupCommandDelivery }
-            : {})
-        }
-      : launchAgent
-        ? { agent: launchAgent }
-        : {}),
-    activate: opts?.activate !== false,
-    selectWorktree: false
-  })
+  void Promise.resolve()
+    .then(() =>
+      createWebRuntimeSessionTerminal({
+        worktreeId,
+        environmentId: runtimeEnvironmentId,
+        ...viewModeProps,
+        ...(startup
+          ? {
+              command: startup.command,
+              ...(startup.env ? { env: startup.env } : {}),
+              ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+              ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
+              ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
+              ...(startup.startupCommandDelivery
+                ? { startupCommandDelivery: startup.startupCommandDelivery }
+                : {})
+            }
+          : launchAgent
+            ? { agent: launchAgent }
+            : {}),
+        activate: opts?.activate !== false,
+        selectWorktree: false
+      })
+    )
     .then((outcome) => {
       if (outcome.status === 'failed') {
+        producer.failed(outcome.message)
         toast.error(outcome.message, {
           id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
         })
+        return
+      }
+      const settledState = useAppStore.getState()
+      settledState.reconcileWorktreeTabModel(worktreeId)
+      const surfaceId = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
+        (tab) => !existingSurfaceIds.has(tab.id)
+      )?.id
+      if (surfaceId) {
+        producer.materialized({ kind: 'tab', id: surfaceId })
+      } else {
+        producer.unverifiable('The execution host created a terminal that is not visible yet.')
       }
     })
+    .catch(producer.failed)
     .finally(() => {
       endWebRuntimeWakeTerminalRespawn(worktreeId)
     })
+    .catch(producer.failed)
 }

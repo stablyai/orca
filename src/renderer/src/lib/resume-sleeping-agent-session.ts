@@ -17,6 +17,11 @@ import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-syn
 import { findUnhydratedHostMirrorForPane } from './host-mirrored-pane-liveness'
 import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
 import { parkUntilHostSessionMirrorHydrates } from '@/runtime/host-session-mirror-hydration'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from './worktree-runtime-owner'
+import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 
 export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 
@@ -166,9 +171,38 @@ function parkWorktreeResumeSweepUntilHostMirrorHydrates(
     // wakes, and a latch that has since failed must stay resumable here.
     resumeSleepingAgentSessionsForWorktree(worktreeId, {
       ...(options?.onSessionLaunched ? { onSessionLaunched: options.onSessionLaunched } : {}),
+      ...(options?.expectedExecutionHostId
+        ? { expectedExecutionHostId: options.expectedExecutionHostId }
+        : {}),
+      ...('expectedRuntimeEnvironmentId' in (options ?? {})
+        ? { expectedRuntimeEnvironmentId: options?.expectedRuntimeEnvironmentId ?? null }
+        : {}),
+      ...(options?.expectedRuntimeEnvironmentRevision === undefined
+        ? {}
+        : { expectedRuntimeEnvironmentRevision: options.expectedRuntimeEnvironmentRevision }),
       ...(isActive ? {} : { suppressNavigation: true })
     })
   })
+}
+
+function resumeRouteIsCurrent(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string,
+  options: ResumeSleepingAgentSessionsOptions | undefined
+): boolean {
+  return (
+    (options?.expectedExecutionHostId === undefined ||
+      getExecutionHostIdForWorktree(state, worktreeId) === options.expectedExecutionHostId) &&
+    (!options ||
+      !('expectedRuntimeEnvironmentId' in options) ||
+      getRuntimeEnvironmentIdForWorktree(state, worktreeId) ===
+        options.expectedRuntimeEnvironmentId) &&
+    (options?.expectedRuntimeEnvironmentRevision === undefined ||
+      (options.expectedRuntimeEnvironmentId !== null &&
+        options.expectedRuntimeEnvironmentId !== undefined &&
+        getRuntimeEnvironmentRevision(options.expectedRuntimeEnvironmentId) ===
+          options.expectedRuntimeEnvironmentRevision))
+  )
 }
 
 export function resumeSleepingAgentSessionsForWorktree(
@@ -176,6 +210,9 @@ export function resumeSleepingAgentSessionsForWorktree(
   options?: ResumeSleepingAgentSessionsOptions
 ): number {
   const state = useAppStore.getState()
+  if (!resumeRouteIsCurrent(state, worktreeId, options)) {
+    return 0
+  }
   // Why: every branch below reads local rows as the verdict on what the execution host is running,
   // and before it answers "I hold no pane for this record" is `unverifiable`, not `exited`. Resuming
   // on it forks a second agent onto a transcript the host is still writing (STA-3500). Declining is
@@ -200,6 +237,9 @@ export function resumeSleepingAgentSessionsForWorktree(
   let launched = 0
   for (const record of worktreeRecords) {
     const currentState = useAppStore.getState()
+    if (!resumeRouteIsCurrent(currentState, worktreeId, options)) {
+      return launched
+    }
     if (currentState.sleepingAgentSessionsByPaneKey[record.paneKey] !== record) {
       continue
     }

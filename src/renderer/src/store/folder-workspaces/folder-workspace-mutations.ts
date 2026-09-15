@@ -28,6 +28,7 @@ import {
   getFolderWorkspaceUpdateIdentity,
   reconcileFailedFolderWorkspaceUpdate
 } from './folder-workspace-catalog'
+import { clearWorkspaceActivationRecoveryLifecycle } from '@/lib/workspace-activation-recovery-lifecycle'
 
 export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
 
@@ -248,6 +249,10 @@ export function createFolderWorkspaceMutationActions(
           return false
         }
         const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+        clearWorkspaceActivationRecoveryLifecycle({
+          workspaceKey,
+          executionHostId: ownerHostId
+        })
         set((s) => ({
           folderWorkspaces: s.folderWorkspaces.filter(
             (workspace) =>

@@ -6,6 +6,11 @@ import type {
 } from '../../../shared/runtime-types'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  runtimeTargetForActivationRoute,
+  type WorktreeAgentActivationRoute
+} from './worktree-agent-activation-route'
 
 /** The exact surface the execution host records as owning a live PTY. */
 export type LiveTerminalSurfaceOwner = {
@@ -94,28 +99,59 @@ export function indexLiveTerminalSurfaceOwners(
  * complete one for the workspace.
  */
 export async function readWorktreeLiveTerminalSurfaceOwners(
-  worktreeId: string
+  routeOrWorktreeId: WorktreeAgentActivationRoute | string,
+  options: { timeoutMs?: number; signal?: AbortSignal } = {}
 ): Promise<LiveTerminalSurfaceOwnerIndex | null> {
   if (typeof window === 'undefined') {
     return null
   }
-  const response = await window.api.runtime.call({
-    method: 'terminal.list',
-    params: {
-      worktree: toRuntimeWorktreeSelector(worktreeId),
-      limit: OWNER_LISTING_LIMIT,
-      includeVisualLayouts: false
-    }
-  })
-  if (!response.ok || !isScopedTerminalListResult(response.result)) {
+  const route = typeof routeOrWorktreeId === 'string' ? null : routeOrWorktreeId
+  const worktreeId =
+    typeof routeOrWorktreeId === 'string' ? routeOrWorktreeId : routeOrWorktreeId.workspaceKey
+  const target = route ? runtimeTargetForActivationRoute(route) : { kind: 'local' as const }
+  if (!target) {
     return null
   }
-  const { hostScope, terminals, truncated } = response.result
+  let result: RuntimeTerminalListResult
+  try {
+    result = await callRuntimeRpc<RuntimeTerminalListResult>(
+      target,
+      'terminal.list',
+      {
+        worktree: toRuntimeWorktreeSelector(worktreeId),
+        limit: OWNER_LISTING_LIMIT,
+        includeVisualLayouts: false,
+        requireFreshPtyLiveness: true
+      },
+      {
+        ...options,
+        ...(route?.runtimeEnvironmentRevision === null || route === null
+          ? {}
+          : { expectedEnvironmentPairingRevision: route.runtimeEnvironmentRevision })
+      }
+    )
+  } catch {
+    return null
+  }
+  if (!isScopedTerminalListResult(result)) {
+    return null
+  }
+  const { hostScope, terminals, truncated } = result
   // A worktree-scoped listing names every host but the target's as omitted by
   // design, so completeness here is "the workspace's own host answered" —
   // `hostIds` holds exactly that host when it did. A truncated list never proves
   // any PTY unowned.
-  return truncated === true || hostScope.hostIds.length === 0
+  return truncated === true ||
+    (route ? !hostScope.hostIds.includes(route.executionHostId) : hostScope.hostIds.length === 0)
     ? null
-    : indexLiveTerminalSurfaceOwners(terminals, worktreeId)
+    : indexLiveTerminalSurfaceOwners(
+        route
+          ? terminals.filter(
+              (terminal) =>
+                terminal.executionHostId === undefined ||
+                terminal.executionHostId === route.executionHostId
+            )
+          : terminals,
+        worktreeId
+      )
 }

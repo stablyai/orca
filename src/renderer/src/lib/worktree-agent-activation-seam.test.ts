@@ -9,6 +9,14 @@ import type {
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent-test-state'
+import {
+  registerWorkspaceSurfaceProducer,
+  resetWorkspaceSurfaceProducersForTests
+} from './workspace-surface-production'
+import {
+  readWorkspaceActivationRecoveryPresentation,
+  resetWorkspaceActivationRecoveryPresentationsForTests
+} from './workspace-activation-recovery-presentation'
 
 const initialState = useAppStore.getState()
 
@@ -153,12 +161,29 @@ function stubInventory(args?: {
         ]
       : []
   )
-  vi.stubGlobal('window', { api: { runtime: { call: runtimeCall }, pty: { listSessions } } })
+  const runtimeSubscribe = vi.fn(
+    async (
+      request: { method: string; params?: unknown },
+      callback: (response: unknown) => void
+    ) => {
+      callback(await runtimeCall(request))
+      return { unsubscribe: vi.fn() }
+    }
+  )
+  vi.stubGlobal('window', {
+    api: {
+      runtime: { call: runtimeCall, subscribe: runtimeSubscribe },
+      runtimeEnvironments: { subscribe: vi.fn() },
+      pty: { listSessions }
+    }
+  })
   return { runtimeCall, listSessions }
 }
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  resetWorkspaceSurfaceProducersForTests()
+  resetWorkspaceActivationRecoveryPresentationsForTests()
   useAppStore.setState(initialState, true)
 })
 
@@ -213,8 +238,9 @@ describe('worktree agent activation seam', () => {
     stubInventory({ livePtyId })
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
-
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(1)
+    )
     const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
     expect(tabs).toHaveLength(1)
     expect(tabs[0]?.ptyId).toBe(livePtyId)
@@ -226,8 +252,9 @@ describe('worktree agent activation seam', () => {
     stubInventory()
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
-
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(1)
+    )
     const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
     expect(tabs).toHaveLength(1)
     expect(tabs[0]?.ptyId).toBeNull()
@@ -243,42 +270,66 @@ describe('worktree agent activation seam', () => {
     stubInventory()
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
-
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(1)
+    )
     const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
     expect(tabs).toHaveLength(1)
     // A fresh shell, never a second surface forked onto the live agent's PTY.
     expect(tabs[0]?.ptyId).toBeNull()
   })
 
-  it('does not race an explicitly promised surface with a fallback terminal', async () => {
+  it('does not race a registered surface producer with a fallback terminal', async () => {
     const worktree = makeWorktree()
     useAppStore.setState(baseState())
     stubInventory()
+    const producer = registerWorkspaceSurfaceProducer({
+      workspaceKey: worktree.id,
+      executionHostId: 'local'
+    })
 
-    expect(activateAndRevealWorktree(worktree.id, { providesInitialSurface: true })).toEqual({
+    expect(activateAndRevealWorktree(worktree.id)).toEqual({
       primaryTabId: null
     })
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+    await Promise.resolve()
 
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
+    producer.materialized({ kind: 'workspace-content', id: 'requested-content' })
+    await producer.attempt.result
+  })
+
+  it('does not treat an unrelated surviving browser as completion of a requested launch', async () => {
+    const worktree = makeWorktree()
+    useAppStore.setState(baseState())
+    useAppStore.getState().createBrowserTab(worktree.id, 'https://example.com', { activate: true })
+
+    expect(
+      activateAndRevealWorktree(worktree.id, {
+        startup: { command: 'codex', launchAgent: 'codex' }
+      })
+    ).toEqual({ primaryTabId: null })
+
+    await vi.waitFor(() =>
+      expect(readWorkspaceActivationRecoveryPresentation(worktree.id, 'local')?.kind).toBe(
+        'producer-failed'
+      )
+    )
     expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
   })
 
-  // A paired-runtime owner is always omitted from its own scoped census, and an SSH relay that
-  // never answered omits everything. Declining to mint is right; leaving the workspace with no
-  // surface at all is not — the user asked for a pane and must get one.
-  it('still seeds a usable pane when the census cannot prove who owns a live PTY', async () => {
+  it('shows a blocked recovery without seeding when a live PTY cannot be safely surfaced', async () => {
     const worktree = makeWorktree()
     const livePtyId = `${worktree.id}@@live-codex`
     useAppStore.setState(baseState())
     stubInventory({ livePtyId, unverifiableCensus: true })
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
-
-    const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
-    expect(tabs).toHaveLength(1)
-    expect(tabs[0]?.ptyId).toBeNull()
+    await vi.waitFor(() =>
+      expect(readWorkspaceActivationRecoveryPresentation(worktree.id, 'local')?.kind).toBe(
+        'blocked'
+      )
+    )
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
   })
 
   it('does not spawn before a structured chat tab hydrates', async () => {
@@ -287,7 +338,7 @@ describe('worktree agent activation seam', () => {
     const { runtimeCall, listSessions } = stubInventory({ structured: true })
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalled())
 
     expect(useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).toHaveLength(0)
     expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
@@ -295,16 +346,22 @@ describe('worktree agent activation seam', () => {
       method: 'session.tabs.list',
       params: { worktree: `id:${worktree.id}` }
     })
-    expect(listSessions).toHaveBeenCalledExactlyOnceWith({ connectionId: null })
+    expect(listSessions).not.toHaveBeenCalled()
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'terminal.list',
+      params: {
+        worktree: `id:${worktree.id}`,
+        requireFreshPtyLiveness: true,
+        includeVisualLayouts: false
+      }
+    })
     expect(runtimeCall).toHaveBeenCalledWith({
       method: 'agentSession.handoffStatus',
       params: { sessionId: 'chat-1' }
     })
   })
 
-  // A peer owns its own PTYs, so this client can never scope an inventory at it. Scoping must not
-  // turn that into a refusal: 'blocked' would also skip the sleeping-agent resume below.
-  it('still reaches a verdict for a paired-runtime-owned workspace', async () => {
+  it('keeps a paired-runtime launch producer authoritative when host creation fails', async () => {
     const worktree = makeWorktree()
     useAppStore.setState({
       ...baseState(),
@@ -313,14 +370,16 @@ describe('worktree agent activation seam', () => {
     const { listSessions } = stubInventory()
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
-    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
-    expect(listSessions).toHaveBeenCalledExactlyOnceWith()
+    await vi.waitFor(() =>
+      expect(readWorkspaceActivationRecoveryPresentation(worktree.id, 'runtime:env-1')?.kind).toBe(
+        'producer-failed'
+      )
+    )
+    expect(listSessions).not.toHaveBeenCalled()
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
   })
 
-  // Loss of contact with the relay is not evidence about the host, and once the sync has stopped
-  // without an answer the bounded floor in workspace-terminal-host-authority.ts hands seeding back
-  // to this client — a detached provider must not turn that into a permanently empty workspace.
-  it('still seeds a pane when the selected SSH relay is detached', async () => {
+  it('shows reconnect recovery without starting a requested writer when SSH is detached', async () => {
     const worktree = makeWorktree()
     useAppStore.setState({
       ...baseState(),
@@ -335,12 +394,17 @@ describe('worktree agent activation seam', () => {
       return []
     })
 
-    expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
-    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
-    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box' }], []])
+    expect(
+      activateAndRevealWorktree(worktree.id, {
+        startup: { command: 'codex', launchAgent: 'codex' }
+      })
+    ).toEqual({ primaryTabId: null })
     await vi.waitFor(() =>
-      expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(1)
+      expect(readWorkspaceActivationRecoveryPresentation(worktree.id, 'ssh:box')?.kind).toBe(
+        'unverifiable'
+      )
     )
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]?.[0]?.ptyId).toBeNull()
+    expect(listSessions).not.toHaveBeenCalled()
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
   })
 })

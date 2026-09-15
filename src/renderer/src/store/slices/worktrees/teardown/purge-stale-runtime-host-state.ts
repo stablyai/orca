@@ -16,6 +16,7 @@ import {
 } from '../../stale-runtime-host-rows'
 import { buildWorktreePurgeState } from './worktree-purge-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
+import { clearWorkspaceActivationRecoveryLifecycle } from '@/lib/workspace-activation-recovery-lifecycle'
 
 export function createPurgeStaleRuntimeHostState(
   set: WorktreeSliceSet,
@@ -25,6 +26,11 @@ export function createPurgeStaleRuntimeHostState(
     const removed = new Set(removedEnvironmentIds)
     if (removed.size === 0) {
       return
+    }
+    for (const environmentId of removed) {
+      clearWorkspaceActivationRecoveryLifecycle({
+        executionHostId: toRuntimeExecutionHostId(environmentId)
+      })
     }
     set((s) => {
       const repoIdsWithRemovedOwners = new Set<string>()

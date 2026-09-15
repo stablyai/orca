@@ -7,6 +7,11 @@ import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-sess
 import { useAppStore } from '@/store'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
 import { toast } from 'sonner'
+import {
+  readWorkspaceSurfaceProducerEntries,
+  resetWorkspaceSurfaceProducersForTests
+} from './workspace-surface-production'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
@@ -21,6 +26,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   resetWebSessionTabsSnapshotFreshnessForTests()
   resetWebRuntimeWakeTerminalRespawnForTests()
+  resetWorkspaceSurfaceProducersForTests()
   useAppStore.setState(initialAppStoreState, true)
 })
 
@@ -120,6 +126,14 @@ describe('empty remote worktree activation', () => {
       })
     )
     expect(toast.error).not.toHaveBeenCalled()
+    await vi.waitFor(() =>
+      expect(
+        readWorkspaceSurfaceProducerEntries({
+          workspaceKey: worktree.id,
+          executionHostId: toRuntimeExecutionHostId('web-runtime-1')
+        })
+      ).toMatchObject([{ result: { kind: 'unverifiable' } }])
+    )
   })
 
   it('surfaces a failed host terminal request without retrying ambiguously', async () => {
@@ -169,5 +183,11 @@ describe('empty remote worktree activation', () => {
       })
     )
     expect(callRuntimeEnvironment).toHaveBeenCalledTimes(1)
+    expect(
+      readWorkspaceSurfaceProducerEntries({
+        workspaceKey: worktree.id,
+        executionHostId: toRuntimeExecutionHostId('web-runtime-1')
+      })
+    ).toMatchObject([{ result: { kind: 'failed', reason: 'Host refused the terminal' } }])
   })
 })

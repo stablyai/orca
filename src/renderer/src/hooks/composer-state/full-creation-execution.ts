@@ -38,7 +38,11 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { useAppStore } from '@/store'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
-import { settleFullCreationStructuredLaunch } from './full-creation-structured-launch'
+import {
+  beginFullCreationSurfaceProduction,
+  settleFullCreationStructuredLaunch,
+  settleFullCreationSurfaceProduction
+} from './full-creation-structured-launch'
 import { finalizeFullCreation } from './full-creation-finalization'
 import { buildFullCreationIssueCommand } from './full-creation-issue-command'
 import { buildFullCreationStartup } from './full-creation-startup'
@@ -217,25 +221,43 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         telemetry: composerTelemetry
       })
 
-      const initialActivation = activateAndRevealWorktree(worktree.id, {
-        sidebarRevealBehavior: 'auto',
-        agent: tuiAgent,
-        setup: result.setup,
-        defaultTabs: result.defaultTabs,
-        issueCommand,
-        ...(backendSpawnedStartup ? { backendStartupTerminalSpawned: true } : {}),
-        ...(!structuredLaunch && startup ? { startup } : {}),
-        ...(structuredLaunch ? { providesInitialSurface: true } : {})
-      })
+      const { producer: structuredProducer, setupRunsWithoutPrimary } =
+        beginFullCreationSurfaceProduction({
+          structuredLaunch,
+          worktreeId: worktree.id,
+          setup: result.setup,
+          issueCommand,
+          defaultTabs: result.defaultTabs
+        })
+      let initialActivation: ReturnType<typeof activateAndRevealWorktree>
+      let settlement: Awaited<ReturnType<typeof settleFullCreationStructuredLaunch>>
+      try {
+        initialActivation = activateAndRevealWorktree(worktree.id, {
+          sidebarRevealBehavior: 'auto',
+          agent: tuiAgent,
+          setup: setupRunsWithoutPrimary ? undefined : result.setup,
+          defaultTabs: result.defaultTabs,
+          issueCommand,
+          ...(backendSpawnedStartup ? { backendStartupTerminalSpawned: true } : {}),
+          ...(!structuredLaunch && startup ? { startup } : {})
+        })
+        if (initialActivation === false) {
+          structuredProducer?.failed('The workspace is no longer available.')
+        }
 
-      const settlement = await settleFullCreationStructuredLaunch({
-        plan: launchPlan,
-        agent: tuiAgent,
-        worktreeId: worktree.id,
-        startup,
-        pendingFirstAgentMessageRename,
-        applyWorktreeMeta
-      })
+        settlement = await settleFullCreationStructuredLaunch({
+          plan: launchPlan,
+          agent: tuiAgent,
+          worktreeId: worktree.id,
+          startup,
+          pendingFirstAgentMessageRename,
+          applyWorktreeMeta
+        })
+        settleFullCreationSurfaceProduction(structuredProducer, worktree.id, settlement)
+      } catch (error) {
+        structuredProducer?.failed(error)
+        throw error
+      }
 
       // Why: both leave the workspace revealed and the composer text intact; the launch layer has
       // already toasted a failure, and an unknown outcome reconciles on the next click.

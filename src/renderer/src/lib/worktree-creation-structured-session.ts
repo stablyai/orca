@@ -13,6 +13,9 @@ import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { registerWorkspaceSurfaceProducer } from '@/lib/workspace-surface-production'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { settleStructuredAgentSurfaceProducer } from '@/lib/structured-agent-surface-production'
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
@@ -138,6 +141,10 @@ export async function launchStructuredWorktreeSession(
           ...(args.request.promptDelivery ? { promptDelivery: args.request.promptDelivery } : {})
         })
   })
+  const producer = registerWorkspaceSurfaceProducer({
+    workspaceKey: args.worktreeId,
+    executionHostId: getExecutionHostIdForWorktree(useAppStore.getState(), args.worktreeId)
+  })
   const abandoned = new AbortController()
   const unsubscribe = useAppStore.subscribe((state) => {
     if (!state.pendingWorktreeCreations[args.creationId]) {
@@ -158,10 +165,8 @@ export async function launchStructuredWorktreeSession(
             return
           }
           // Why: chat selection requires its workspace to be active.
-          if (!activation) {
-            activation = activateAndRevealWorktree(args.worktreeId, {
-              providesInitialSurface: true
-            })
+          if (activation === false) {
+            activation = activateAndRevealWorktree(args.worktreeId)
             primaryTabId = activation === false ? null : activation.primaryTabId
           }
           activateStructuredAgentSessionById({ worktreeId: args.worktreeId, sessionId })
@@ -169,16 +174,28 @@ export async function launchStructuredWorktreeSession(
       },
       { worktreeId: args.worktreeId }
     )
-  } catch {
+  } catch (error) {
     // Why: nothing awaits this creation's caller, so an escaped throw would strand the panel
     // mid-create. Report it the way a failed launch already does; the launch layer toasts it.
+    producer.failed(error)
+    if (args.shouldActivateOnCompletion && activation === false) {
+      activation = activateAndRevealWorktree(args.worktreeId)
+    }
     return { ...settled, activation, primaryTabId }
   } finally {
     unsubscribe()
   }
   if (!settlement) {
+    producer.failed('The agent launch did not start.')
+    if (args.shouldActivateOnCompletion && activation === false) {
+      activation = activateAndRevealWorktree(args.worktreeId)
+    }
     return { ...settled, activation, primaryTabId }
   }
+  if (settlement.kind === 'failed' && args.shouldActivateOnCompletion && activation === false) {
+    activation = activateAndRevealWorktree(args.worktreeId)
+  }
+  settleStructuredAgentSurfaceProducer(producer, args.worktreeId, settlement)
   switch (settlement.kind) {
     case 'cancelled': {
       // Why: a refusal means no session exists on the host, so there is nothing to retire.

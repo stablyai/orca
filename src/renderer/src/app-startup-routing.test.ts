@@ -19,18 +19,24 @@ const SESSION_PERSISTENCE_PATH = 'src/renderer/src/app-shell/use-app-session-per
 const PERSISTED_UI_WRITER_PATH = 'src/renderer/src/app-shell/use-persisted-ui-writer.ts'
 
 describe('renderer startup runtime routing', () => {
-  it('routes packaged terminal restore through the daemon adoption gate', () => {
+  it('routes packaged terminal restore through the activation recovery owner', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/renderer/src/components/use-terminal-watcher-effects.ts'),
       'utf8'
     )
-    const gateStart = source.indexOf('const startupActivationGateWorktreeIdsRef')
-    const gateEnd = source.indexOf('const startupResumeWorktreeIdsRef', gateStart)
-    const gateEffect = source.slice(gateStart, gateEnd)
+    const recoveryCall = source.indexOf('void recoverWorkspaceActivation(')
+    const recoveryStart = source.lastIndexOf('useEffect(() => {', recoveryCall)
+    const recoveryEnd = source.indexOf('  }, [', recoveryCall)
+    const recoveryEffect = source.slice(recoveryStart, recoveryEnd)
 
-    expect(gateStart).toBeGreaterThanOrEqual(0)
-    expect(gateEffect).toContain('void gateWorktreeAgentActivation(activeWorktreeId)')
-    expect(gateEffect).not.toContain('resumeSleepingAgentSessionsForWorktree')
+    expect(recoveryStart).toBeGreaterThanOrEqual(0)
+    expect(recoveryEffect).toContain(
+      "startWorkspaceActivationSurfaceProducer(identity, { mode: 'startup' })"
+    )
+    expect(recoveryEffect).toContain('signal: abort.signal')
+    expect(recoveryEffect).toContain('abort.abort()')
+    expect(recoveryEffect).not.toContain('gateWorktreeAgentActivation')
+    expect(recoveryEffect).not.toContain('resumeSleepingAgentSessionsForWorktree')
   })
 
   it('hydrates persisted UI before local catalog and worktree hydration', () => {
@@ -405,24 +411,21 @@ describe('renderer startup runtime routing', () => {
       "timeRendererStartupStep('project-structured-session-tabs'"
     )
     const readyIndex = appSource.indexOf('actions.setTerminalStartupRestorationReady(true)')
-    const gateStart = terminalSource.indexOf('const startupActivationGateWorktreeIdsRef')
-    const gateEnd = terminalSource.indexOf('const startupResumeWorktreeIdsRef', gateStart)
-    const gateBlock = terminalSource.slice(gateStart, gateEnd)
-    const gateIndex = gateBlock.indexOf('gateWorktreeAgentActivation(activeWorktreeId)')
-    const createIndex = gateBlock.indexOf(
-      'createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })'
-    )
+    const recoveryCall = terminalSource.indexOf('void recoverWorkspaceActivation(')
+    const recoveryStart = terminalSource.lastIndexOf('useEffect(() => {', recoveryCall)
+    const recoveryEnd = terminalSource.indexOf('  }, [', recoveryCall)
+    const recoveryBlock = terminalSource.slice(recoveryStart, recoveryEnd)
 
     expect(hydrateIndex).toBeGreaterThanOrEqual(0)
     expect(hydrateIndex).toBeLessThan(prepareIndex)
     expect(prepareIndex).toBeLessThan(reconnectIndex)
     expect(reconnectIndex).toBeLessThan(projectIndex)
     expect(projectIndex).toBeLessThan(readyIndex)
-    expect(gateBlock).toContain('terminalStartupRestorationReady')
-    expect(gateBlock).not.toContain('hydrationSucceeded')
-    expect(gateIndex).toBeGreaterThanOrEqual(0)
-    expect(gateIndex).toBeLessThan(createIndex)
-    expect(gateBlock.slice(gateIndex, createIndex)).toContain("outcome !== 'empty'")
+    expect(recoveryBlock).toContain('terminalStartupRestorationReady')
+    expect(recoveryBlock).not.toContain('hydrationSucceeded')
+    expect(recoveryCall).toBeGreaterThanOrEqual(0)
+    expect(recoveryBlock).not.toContain('gateWorktreeAgentActivation')
+    expect(recoveryBlock).not.toContain('createTab(')
   })
 
   it('does not load the terminal workbench on the no-workspace landing path', () => {

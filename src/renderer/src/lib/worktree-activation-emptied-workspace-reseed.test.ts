@@ -1,304 +1,151 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import {
-  activateAndRevealFolderWorkspace,
-  activateAndRevealWorkspace,
-  activateAndRevealWorktree
-} from './worktree-activation'
+import { activateAndRevealFolderWorkspace, activateAndRevealWorktree } from './worktree-activation'
 import * as activationGate from './worktree-agent-activation-gate'
-import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
 } from '@/lib/worktree-activation-created-agent-test-state'
-import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
+import {
+  registerWorkspaceSurfaceProducer,
+  resetWorkspaceSurfaceProducersForTests
+} from './workspace-surface-production'
+import { resetWorkspaceActivationRecoveryPresentationsForTests } from './workspace-activation-recovery-presentation'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
 const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  resetWorkspaceSurfaceProducersForTests()
+  resetWorkspaceActivationRecoveryPresentationsForTests()
   useAppStore.setState(initialAppStoreState, true)
 })
 
-/** The state a workspace lands in once its last terminal is closed: the row survives as an
- *  explicit empty list rather than disappearing. */
 function seedClosedLastTerminal(worktreeId: string): void {
   useAppStore.setState({ tabsByWorktree: { [worktreeId]: [] } })
-  const { renderableTabCount } = useAppStore.getState().reconcileWorktreeTabModel(worktreeId)
-  expect(renderableTabCount).toBe(0)
+  expect(useAppStore.getState().reconcileWorktreeTabModel(worktreeId).renderableTabCount).toBe(0)
 }
 
-describe('activating a workspace whose last terminal was closed', () => {
+function sleepingRecord(worktreeId: string): SleepingAgentSessionRecord {
+  return {
+    paneKey: 'pane-1',
+    worktreeId,
+    agent: 'codex',
+    providerSession: { key: 'session_id', id: 'session-1' },
+    prompt: '',
+    state: 'done',
+    capturedAt: 1,
+    updatedAt: 1,
+    origin: 'worktree-sleep'
+  }
+}
+
+describe('selection-free empty-workspace recovery', () => {
   it.each([
-    ['Blank Terminal', null, 1],
-    ['an agent', 'codex' as const, 0]
-  ])('seeds a default shell for %s selection only', (_label, agent, expectedTabCount) => {
+    ['Blank Terminal', null],
+    ['an agent selection without a producer', 'codex' as const]
+  ])('seeds one plain shell for %s when inventory APIs are unavailable', async (_label, agent) => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
 
     const result = activateAndRevealWorktree(worktree.id, {
       agent,
       notifyHostRuntime: false
     })
 
-    expect(result).not.toBe(false)
-    expect(result === false ? null : result.primaryTabId === null).toBe(expectedTabCount === 0)
-    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(expectedTabCount)
+    expect(result).toEqual({ primaryTabId: expect.any(String) })
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+    expect(result === false ? null : result.primaryTabId).toBe(
+      useAppStore.getState().tabsByWorktree[worktree.id]?.[0]?.id
+    )
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]?.[0]?.launchAgent).toBeUndefined()
   })
 
-  it.each([true, false])(
-    'forwards providesInitialSurface=%s through the async activation gate',
-    async (providesInitialSurface) => {
+  it.each([null, 'codex' as const])(
+    're-seeds after a gate reports empty regardless of picker selection (%s)',
+    async (agent) => {
       const worktree = makeWorktree()
       seedEmptyActivatableWorktree(worktree)
       seedClosedLastTerminal(worktree.id)
       useAppStore.setState({
         sleepingAgentSessionsByPaneKey: {
-          'pane-1': { worktreeId: worktree.id }
-        } as never
+          'pane-1': sleepingRecord(worktree.id)
+        }
       })
-      const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
-      gate.mockResolvedValue('empty')
+      vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockResolvedValue('empty')
 
-      activateAndRevealWorktree(worktree.id, {
-        providesInitialSurface,
-        notifyHostRuntime: false
-      })
-      await gate.mock.results[0]?.value
+      activateAndRevealWorktree(worktree.id, { agent, notifyHostRuntime: false })
 
-      expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(
-        providesInitialSurface ? 0 : 1
+      await vi.waitFor(() =>
+        expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
       )
     }
   )
 
-  // An empty gate invalidates agent-based suppression; only an explicit caller surface survives.
-  it.each([
-    ['an agent selection', { agent: 'codex' as const }, 1],
-    [
-      'an agent selection whose caller promised its own surface',
-      { agent: 'codex' as const, providesInitialSurface: true },
-      0
-    ]
-  ])('re-seeds a gate-reported empty workspace for %s', async (_label, selection, expectedTabs) => {
+  it('waits for a concrete surface producer instead of a promise boolean', async () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
-    seedClosedLastTerminal(worktree.id)
-    useAppStore.setState({
-      sleepingAgentSessionsByPaneKey: {
-        'pane-1': { worktreeId: worktree.id }
-      } as never
+    const producer = registerWorkspaceSurfaceProducer({
+      workspaceKey: worktree.id,
+      executionHostId: 'local'
     })
-    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
-    gate.mockResolvedValue('empty')
-
-    const result = activateAndRevealWorktree(worktree.id, {
-      ...selection,
-      notifyHostRuntime: false
-    })
-    await gate.mock.results[0]?.value
-
-    // The gate owns seeding for this activation, so the synchronous call never returns a tab.
-    expect(result === false ? null : result.primaryTabId).toBeNull()
-    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(expectedTabs)
-  })
-
-  it('lets the latest caller surface supersede an older callback on the shared gate', async () => {
-    const worktree = makeWorktree()
-    seedEmptyActivatableWorktree(worktree)
-    seedClosedLastTerminal(worktree.id)
-    useAppStore.setState({
-      sleepingAgentSessionsByPaneKey: {
-        'pane-1': { worktreeId: worktree.id }
-      } as never
-    })
-    let resolveGate!: (outcome: activationGate.WorktreeAgentActivationOutcome) => void
-    const pendingGate = new Promise<activationGate.WorktreeAgentActivationOutcome>((resolve) => {
-      resolveGate = resolve
-    })
-    vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockReturnValue(pendingGate)
 
     activateAndRevealWorktree(worktree.id, { agent: 'codex', notifyHostRuntime: false })
-    activateAndRevealWorktree(worktree.id, {
-      providesInitialSurface: true,
-      notifyHostRuntime: false
-    })
-    resolveGate('empty')
-    await pendingGate
+    await Promise.resolve()
 
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
+    producer.materialized({ kind: 'workspace-content', id: 'requested-content' })
+    await producer.attempt.result
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
   })
 
-  it('does not double-seed when another recovery creates a tab before the gate settles', async () => {
+  it('does not double-seed when content appears before the gate settles', async () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
     seedClosedLastTerminal(worktree.id)
     useAppStore.setState({
-      sleepingAgentSessionsByPaneKey: {
-        'pane-1': { worktreeId: worktree.id }
-      } as never
+      sleepingAgentSessionsByPaneKey: { 'pane-1': sleepingRecord(worktree.id) }
     })
     let resolveGate!: (outcome: activationGate.WorktreeAgentActivationOutcome) => void
-    const pendingGate = new Promise<activationGate.WorktreeAgentActivationOutcome>((resolve) => {
-      resolveGate = resolve
-    })
-    vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockReturnValue(pendingGate)
-
-    activateAndRevealWorktree(worktree.id, { agent: 'codex', notifyHostRuntime: false })
-    const recoveredTabId = ensureWorktreeHasInitialTerminal(
-      useAppStore.getState(),
-      worktree.id,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { reseedEmptiedWorkspace: true }
-    )
-    resolveGate('empty')
-    await pendingGate
-
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]?.[0]?.id).toBe(recoveredTabId)
-  })
-
-  it('re-seeds a terminal when the workspace is opened from elsewhere', () => {
-    const worktree = makeWorktree()
-    seedEmptyActivatableWorktree(worktree)
-    seedClosedLastTerminal(worktree.id)
-
-    const result = activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
-
-    expect(result).not.toBe(false)
-    expect(result === false ? null : result.primaryTabId).toBeTruthy()
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
-  })
-
-  // Why: hydration restores an emptied workspace as active, so the user is already looking at the
-  // blank pane when they click its row. Suppressing the re-seed there strands them on the bug.
-  it('re-seeds when the restored active workspace is reopened on the same host', () => {
-    const worktree = makeWorktree()
-    seedEmptyActivatableWorktree(worktree)
-    seedClosedLastTerminal(worktree.id)
-    useAppStore.setState({
-      activeWorktreeId: worktree.id,
-      activeWorkspaceExecutionHostId: 'local',
-      activeView: 'terminal'
-    })
-
-    activateAndRevealWorktree(worktree.id, {
-      executionHostId: 'local',
-      notifyHostRuntime: false
-    })
-
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
-  })
-
-  // Why: entry points disagree about whether to pass a host for the same local workspace — the
-  // sidebar derives 'local', the Cmd+J palette passes nothing. Re-seeding no longer reads the
-  // host at all; this guards against reintroducing a host-sensitive carve-out.
-  it('re-seeds identically whether or not the caller passes an execution host', () => {
-    for (const opts of [{}, { executionHostId: 'local' as const }]) {
-      const worktree = makeWorktree()
-      seedEmptyActivatableWorktree(worktree)
-      seedClosedLastTerminal(worktree.id)
-      useAppStore.setState({
-        activeWorktreeId: worktree.id,
-        activeWorkspaceExecutionHostId: 'local',
-        activeView: 'terminal'
+    vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockReturnValue(
+      new Promise((resolve) => {
+        resolveGate = resolve
       })
-
-      activateAndRevealWorktree(worktree.id, { ...opts, notifyHostRuntime: false })
-
-      expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
-    }
-  })
-
-  // Why: terminal file links and check annotations activate only to route history before they
-  // open an editor tab. Seeding there hands the user a shell they never asked for and erases the
-  // tombstone permanently. See terminal-file-open-routing.ts and check-annotation-open.ts.
-  it('leaves the row empty when the caller opens its own surface', () => {
-    const worktree = makeWorktree()
-    seedEmptyActivatableWorktree(worktree)
-    seedClosedLastTerminal(worktree.id)
-
-    const result = activateAndRevealWorktree(worktree.id, {
-      providesInitialSurface: true,
-      notifyHostRuntime: false
+    )
+    vi.stubGlobal('window', {
+      api: {
+        runtime: { subscribe: vi.fn() },
+        runtimeEnvironments: { subscribe: vi.fn() }
+      }
     })
-
-    expect(result).not.toBe(false)
-    expect(result === false ? null : result.primaryTabId).toBeNull()
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
-  })
-
-  it('leaves the row empty for startup hydration, which never opts into re-seeding', () => {
-    const worktree = makeWorktree()
-    seedEmptyActivatableWorktree(worktree)
-    seedClosedLastTerminal(worktree.id)
-
-    const tabId = ensureWorktreeHasInitialTerminal(useAppStore.getState(), worktree.id)
-
-    expect(tabId).toBeNull()
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
-  })
-
-  // Why: this passes ahead of the tombstone check — a renderable browser tab short-circuits
-  // `shouldAutoCreateInitialTerminal` — so it guards `renderableTabCount`, not the re-seed flag.
-  it('does not add a terminal to a workspace that still renders a browser tab', () => {
-    const worktree = makeWorktree()
-    seedEmptyActivatableWorktree(worktree)
-    seedClosedLastTerminal(worktree.id)
-    useAppStore.setState({
-      browserTabsByWorktree: {
-        [worktree.id]: [
-          {
-            id: 'browser-1',
-            worktreeId: worktree.id,
-            url: 'https://example.com',
-            title: 'example',
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      unifiedTabsByWorktree: {
-        [worktree.id]: [
-          {
-            id: 'browser-1',
-            entityId: 'browser-1',
-            groupId: 'group-1',
-            worktreeId: worktree.id,
-            contentType: 'browser',
-            label: 'example',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      groupsByWorktree: {
-        [worktree.id]: [
-          {
-            id: 'group-1',
-            worktreeId: worktree.id,
-            activeTabId: 'browser-1',
-            tabOrder: ['browser-1']
-          }
-        ]
-      },
-      activeGroupIdByWorktree: { [worktree.id]: 'group-1' }
-    } as unknown as Partial<ReturnType<typeof useAppStore.getState>>)
-    expect(
-      useAppStore.getState().reconcileWorktreeTabModel(worktree.id).renderableTabCount
-    ).toBeGreaterThan(0)
 
     activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
+    useAppStore.getState().createTab(worktree.id)
+    resolveGate('empty')
+
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+    )
+  })
+
+  it('keeps a surviving browser as the chosen surface', async () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    useAppStore.getState().createBrowserTab(worktree.id, 'https://example.com', { activate: true })
+
+    activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
+    await Promise.resolve()
 
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+    expect(
+      useAppStore.getState().reconcileWorktreeTabModel(worktree.id).activeRenderableTabId
+    ).toBeTruthy()
   })
 })
 
@@ -306,203 +153,124 @@ const FOLDER_ID = 'folder-1'
 const FOLDER_KEY = folderWorkspaceKey(FOLDER_ID)
 const SSH_HOST_ID = toSshExecutionHostId('conn-1')
 
-/** One folder id resolves to a different `FolderWorkspace` per host while both share a single
- *  `tabsByWorktree[FOLDER_KEY]` row. */
-function seedEmptiedFolderWorkspaceOnTwoHosts(): void {
-  const base = {
-    id: FOLDER_ID,
-    projectGroupId: 'group-1',
-    name: 'notes',
-    linkedTask: null,
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0
-  }
+function seedEmptyFolderWorkspace(executionHostId: 'local' | `ssh:${string}`): void {
   useAppStore.setState({
     folderWorkspaces: [
-      { ...base, folderPath: '/local/notes', executionHostId: 'local' },
-      // Why: an SSH host, not a runtime one — runtime-owned workspaces return early from
-      // `ensureWorktreeHasInitialTerminal` because the host owns terminal creation.
-      { ...base, folderPath: '/remote/notes', executionHostId: SSH_HOST_ID, connectionId: 'conn-1' }
+      {
+        id: FOLDER_ID,
+        projectGroupId: 'group-1',
+        name: 'notes',
+        folderPath: executionHostId === 'local' ? '/local/notes' : '/remote/notes',
+        executionHostId,
+        ...(executionHostId === 'local' ? {} : { connectionId: 'conn-1' }),
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
     ],
     activeView: 'terminal',
     tabsByWorktree: { [FOLDER_KEY]: [] },
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
-    getFreshFolderWorkspacePathStatus: () => ({ exists: true }),
+    getFreshFolderWorkspacePathStatus: () => ({ exists: true, path: '/local/notes' }),
     markWorktreeVisited: vi.fn(),
     recordWorktreeVisit: vi.fn(),
     revealWorktreeInSidebar: vi.fn()
-  } as unknown as Partial<ReturnType<typeof useAppStore.getState>>)
-  expect(useAppStore.getState().reconcileWorktreeTabModel(FOLDER_KEY).renderableTabCount).toBe(0)
+  })
 }
 
-describe('activating a folder workspace whose last terminal was closed', () => {
-  it.each([
-    ['Blank Terminal', null, 1],
-    ['an agent', 'codex' as const, 0]
-  ])('seeds a default shell for %s selection only', (_label, agent, expectedTabCount) => {
-    seedEmptiedFolderWorkspaceOnTwoHosts()
+describe('folder activation recovery', () => {
+  it('recovers the folder-specific activation path without consulting agent selection', async () => {
+    seedEmptyFolderWorkspace('local')
 
-    const result = activateAndRevealFolderWorkspace(FOLDER_ID, {
-      agent,
+    activateAndRevealFolderWorkspace(FOLDER_ID, {
+      agent: 'codex',
       executionHostId: 'local'
     })
 
-    expect(result).not.toBe(false)
-    expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
-    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(expectedTabCount)
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
+    )
   })
 
-  it.each([true, false])(
-    'forwards providesInitialSurface=%s through the async activation gate',
-    async (providesInitialSurface) => {
-      seedEmptiedFolderWorkspaceOnTwoHosts()
-      useAppStore.setState({
-        sleepingAgentSessionsByPaneKey: {
-          'pane-1': { worktreeId: FOLDER_KEY }
-        } as never
-      })
-      const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
-      gate.mockResolvedValue('empty')
+  it('does not start a writer for an unverifiable SSH folder', async () => {
+    seedEmptyFolderWorkspace(SSH_HOST_ID)
 
-      activateAndRevealFolderWorkspace(FOLDER_ID, {
-        executionHostId: 'local',
-        providesInitialSurface
-      })
-      await gate.mock.results[0]?.value
+    activateAndRevealFolderWorkspace(FOLDER_ID, { executionHostId: SSH_HOST_ID })
+    await Promise.resolve()
 
-      expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(
-        providesInitialSurface ? 0 : 1
-      )
-    }
-  )
-
-  it.each(['local', SSH_HOST_ID] as const)(
-    'opens a notification on %s without revealing the folder',
-    (executionHostId) => {
-      seedEmptiedFolderWorkspaceOnTwoHosts()
-      useAppStore.setState({ sidebarBody: 'agents' })
-
-      const result = activateAndRevealWorkspace(FOLDER_KEY, {
-        executionHostId,
-        revealInSidebar: false,
-        clearSidebarFilters: false
-      })
-
-      expect(result).not.toBe(false)
-      expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
-      expect(useAppStore.getState().sidebarBody).toBe('agents')
-      expect(useAppStore.getState().revealWorktreeInSidebar).not.toHaveBeenCalled()
-    }
-  )
-
-  // This must use the folder entry point; setActiveWorktree(folderWorkspaceKey(...)) takes the git path.
-  it.each([
-    ['a local agent selection', { agent: 'codex' as const }, 'local' as const, 1],
-    ['an SSH agent selection', { agent: 'codex' as const }, SSH_HOST_ID, 1],
-    [
-      'an agent selection whose caller promised its own surface',
-      { agent: 'codex' as const, providesInitialSurface: true },
-      'local' as const,
-      0
-    ]
-  ])(
-    're-seeds a gate-reported empty workspace for %s',
-    async (_label, selection, executionHostId, expectedTabs) => {
-      seedEmptiedFolderWorkspaceOnTwoHosts()
-      useAppStore.setState({
-        sleepingAgentSessionsByPaneKey: {
-          'pane-1': { worktreeId: FOLDER_KEY }
-        } as never
-      })
-      const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
-      gate.mockResolvedValue('empty')
-
-      activateAndRevealFolderWorkspace(FOLDER_ID, { ...selection, executionHostId })
-      await gate.mock.results[0]?.value
-
-      expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
-      expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(executionHostId)
-      expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY] ?? []).toHaveLength(expectedTabs)
-    }
-  )
-
-  it('re-seeds a terminal when the workspace is opened', () => {
-    seedEmptiedFolderWorkspaceOnTwoHosts()
-
-    const result = activateAndRevealFolderWorkspace(FOLDER_ID, { executionHostId: 'local' })
-
-    expect(result).not.toBe(false)
-    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
-  })
-
-  it('re-seeds when the restored active folder workspace is reopened on the same host', () => {
-    seedEmptiedFolderWorkspaceOnTwoHosts()
-    useAppStore.setState({
-      activeWorktreeId: FOLDER_KEY,
-      activeWorkspaceExecutionHostId: 'local'
-    })
-
-    activateAndRevealFolderWorkspace(FOLDER_ID, { executionHostId: 'local' })
-
-    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
-  })
-
-  // Why: the opt-out must mean the same thing on both workspace shapes, or routing a
-  // file link through a folder workspace would silently regress to seeding a shell.
-  it('leaves the row empty when the caller opens its own surface', async () => {
-    seedEmptiedFolderWorkspaceOnTwoHosts()
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      terminalStartupRestorationReady: true
-    })
-    vi.stubGlobal('window', {
-      api: {
-        runtime: {
-          // A `session.tabs.list` answer must name the scope it listed, or the gate refuses it and
-          // blocks — which would leave the row empty for the wrong reason.
-          call: vi.fn(async () => ({
-            ok: true,
-            result: {
-              worktree: FOLDER_KEY,
-              publicationEpoch: 'epoch-1',
-              snapshotVersion: 1,
-              activeGroupId: null,
-              activeTabId: null,
-              activeTabType: null,
-              tabs: []
-            }
-          }))
-        },
-        pty: { listSessions: vi.fn(async () => []) }
-      }
-    })
-
-    const result = activateAndRevealFolderWorkspace(FOLDER_ID, {
-      executionHostId: 'local',
-      providesInitialSurface: true
-    })
-    await waitForWorktreeAgentActivationGateForTests(FOLDER_KEY)
-
-    expect(result).not.toBe(false)
-    expect(result === false ? null : result.primaryTabId).toBeNull()
     expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toEqual([])
   })
 
-  it('re-seeds the shared row when opening the same folder id on a different host', () => {
-    seedEmptiedFolderWorkspaceOnTwoHosts()
+  it('does not treat a synced SSH target as absence evidence for a folder', async () => {
+    seedEmptyFolderWorkspace(SSH_HOST_ID)
     useAppStore.setState({
-      activeWorktreeId: FOLDER_KEY,
-      activeWorkspaceExecutionHostId: 'local'
+      remoteWorkspaceHydratedTargetIds: new Set(['conn-1']),
+      remoteWorkspaceSyncStatusByTargetId: { 'conn-1': { phase: 'synced' } }
     })
 
     const result = activateAndRevealFolderWorkspace(FOLDER_ID, { executionHostId: SSH_HOST_ID })
+    await Promise.resolve()
 
-    expect(result).not.toBe(false)
-    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
-    expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(SSH_HOST_ID)
+    expect(result).toEqual({ primaryTabId: null })
+    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toEqual([])
+  })
+
+  it('does not treat a synced SSH target as absence evidence for a folder startup', async () => {
+    seedEmptyFolderWorkspace(SSH_HOST_ID)
+    useAppStore.setState({
+      remoteWorkspaceHydratedTargetIds: new Set(['conn-1']),
+      remoteWorkspaceSyncStatusByTargetId: { 'conn-1': { phase: 'synced' } }
+    })
+    vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockReturnValue(
+      new Promise(() => undefined)
+    )
+
+    const result = activateAndRevealFolderWorkspace(FOLDER_ID, {
+      executionHostId: SSH_HOST_ID,
+      startup: { command: 'echo start' }
+    })
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toEqual([])
+    expect(activationGate.gateWorktreeAgentActivation).toHaveBeenCalled()
+  })
+
+  it('starts a requested SSH folder startup only after the host census reports empty', async () => {
+    seedEmptyFolderWorkspace(SSH_HOST_ID)
+    useAppStore.setState({
+      remoteWorkspaceHydratedTargetIds: new Set(['conn-1']),
+      remoteWorkspaceSyncStatusByTargetId: { 'conn-1': { phase: 'synced' } }
+    })
+    vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockResolvedValue('empty')
+
+    const result = activateAndRevealFolderWorkspace(FOLDER_ID, {
+      executionHostId: SSH_HOST_ID,
+      startup: { command: 'echo start' }
+    })
+
+    expect(result).toEqual({ primaryTabId: null })
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
+    )
+  })
+
+  it('does not launch an SSH folder startup when host inventory is incomplete', async () => {
+    seedEmptyFolderWorkspace(SSH_HOST_ID)
+    vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockResolvedValue('blocked')
+
+    activateAndRevealFolderWorkspace(FOLDER_ID, {
+      executionHostId: SSH_HOST_ID,
+      startup: { command: 'echo start' }
+    })
+
+    await vi.waitFor(() => expect(activationGate.gateWorktreeAgentActivation).toHaveBeenCalled())
+    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toEqual([])
   })
 })

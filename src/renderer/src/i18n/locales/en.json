@@ -677,7 +677,9 @@
               "8bc45efdbc": "Failed to resolve PR head.",
               "agent": {
                 "ceeeb509b5": "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle."
-              }
+              },
+              "agentLaunchFailed": "The agent launch failed.",
+              "workspaceCreationFailed": "Failed to create workspace."
             }
           }
         }
@@ -2994,6 +2996,28 @@
                 }
               }
             }
+          }
+        },
+        "activation": {
+          "recovery": {
+            "blocked": {
+              "title": "Workspace recovery is paused",
+              "description": "Orca could not safely determine whether this workspace already owns a running surface."
+            },
+            "producerFailed": {
+              "title": "The requested surface did not open",
+              "description": "The surface producer reported a failure. Retry after correcting the problem."
+            },
+            "unverifiable": {
+              "title": "Reconnect to continue",
+              "description": "Orca cannot verify the execution host, so it will not start another process."
+            },
+            "unexpected": {
+              "title": "Workspace recovery failed",
+              "description": "An unexpected error interrupted workspace recovery."
+            },
+            "progress": "Checking workspace surfaces…",
+            "retry": "Retry"
           }
         }
       },
