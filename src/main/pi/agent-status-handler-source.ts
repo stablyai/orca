@@ -123,7 +123,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     `  pi.on('agent_start', (${bareCtxParams}) => {`,
     ...captureSessionMetadata,
     '    clearPendingAgentEndCheck()',
-    '    agentEndReported = false',
+    '    runGeneration += 1',
     // Why: a turn cannot begin under a dialog holding input focus, so this is the one
     // boundary that can recover a modal whose close never arrived.
     ...(kind === 'pi' ? ['    piUiPromptDepth = 0', '    piTurnInFlight = true'] : []),
@@ -174,7 +174,15 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  const AGENT_END_IDLE_RECHECK_MS = 25',
     '  const AGENT_END_IDLE_RECHECK_MAX_MS = 250',
     '  let agentSettledSupported = false',
-    '  let agentEndReported = false',
+    // Why: completion is a per-RUN fact. A sibling extension (the memory reminder is one)
+    // can start the next run from inside its own agent_settled handler, and Pi dispatches
+    // handlers in registration order, so this extension sees that run's agent_start
+    // BEFORE its own agent_settled for the run that just ended. A boolean "already
+    // posted" latch reset on agent_start then eats the newer run's completion and leaves
+    // the host stuck on that run's last working event.
+    '  let runGeneration = 0',
+    '  let endedRunGeneration = 0',
+    '  let completionPostedGeneration = -1',
     '  let agentEndIdleRecheckMs = AGENT_END_IDLE_RECHECK_MS',
     '  let pendingAgentEndCheck: ReturnType<typeof setTimeout> | null = null',
     '  let pendingAgentEndContext: { isIdle: () => boolean } | null = null',
@@ -186,12 +194,13 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  }',
     '',
     '  // Why: isIdle flips before agent_settled handlers run, so both paths',
-    '  // share a per-run guard instead of racing duplicate completion posts.',
+    '  // share a guard instead of racing duplicate completion posts — one keyed on the',
+    '  // generation of the run that ENDED, so a later run still reports its own end.',
     '  function postAgentEndOnce(): void {',
-    '    if (agentEndReported) return',
-    '    agentEndReported = true',
-    // Why: distinct from agentEndReported, which also dedupes the completion post and so
-    // starts false on a pane that has not run a turn yet — that pane is idle, not busy.
+    '    if (completionPostedGeneration === endedRunGeneration) return',
+    '    completionPostedGeneration = endedRunGeneration',
+    // Why: distinct from the completion guard, which holds the generation of the posted run
+    // and so starts clean on a pane that has not run a turn yet — that pane is idle, not busy.
     ...(kind === 'pi' ? ['    piTurnInFlight = false'] : []),
     "    post('agent_end')",
     '  }',
@@ -199,7 +208,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  function checkPendingAgentEnd(): void {',
     '    pendingAgentEndCheck = null',
     '    const ctx = pendingAgentEndContext',
-    '    if (!ctx || agentSettledSupported || agentEndReported) {',
+    '    if (!ctx || agentSettledSupported || completionPostedGeneration === endedRunGeneration) {',
     '      pendingAgentEndContext = null',
     '      return',
     '    }',
@@ -231,6 +240,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '      clearPendingAgentEndCheck()',
     '      return',
     '    }',
+    '    endedRunGeneration = runGeneration',
     '    if (isOmpRuntime()) {',
     '      postAgentEndOnce()',
     '      return',
