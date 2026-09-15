@@ -67,6 +67,7 @@ describe('terminal keyboard pane ownership', () => {
       persistLayoutSnapshot: vi.fn(),
       toggleExpandPane: vi.fn(),
       setSearchOpen: vi.fn(),
+      focusSearchInput: vi.fn(),
       onSearchSelectedText: vi.fn(),
       onRequestClosePane: vi.fn(),
       onClearPaneScrollback: vi.fn(),

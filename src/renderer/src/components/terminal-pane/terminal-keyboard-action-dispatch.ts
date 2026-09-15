@@ -8,7 +8,10 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
-import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
+import {
+  resolveSearchToggleAction,
+  type resolveTerminalKeyboardShortcutAction
+} from './terminal-keyboard-shortcut-matching'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
@@ -23,6 +26,8 @@ type ActionDispatchContext = {
   persistLayoutSnapshot: () => void
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
+  focusSearchInput: () => void
+  searchOpenRef: React.RefObject<boolean>
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
@@ -51,6 +56,8 @@ export function dispatchTerminalShortcutAction(
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
+    focusSearchInput,
+    searchOpenRef,
     onRequestClosePane,
     onClearPaneScrollback,
     onSetTitle,
@@ -95,7 +102,11 @@ export function dispatchTerminalShortcutAction(
   if (action.type === 'toggleSearch') {
     event.preventDefault()
     event.stopImmediatePropagation()
-    setSearchOpen((prev) => !prev)
+    if (resolveSearchToggleAction(searchOpenRef.current) === 'refocus') {
+      focusSearchInput()
+    } else {
+      setSearchOpen(true)
+    }
     return
   }
   if (action.type === 'clearActivePane') {

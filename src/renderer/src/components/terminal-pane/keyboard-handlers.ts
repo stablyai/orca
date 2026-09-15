@@ -7,6 +7,7 @@ export {
   recordKeyboardCreatedTerminalPaneSplit,
   matchSearchNavigate,
   runTerminalSearchNavigation,
+  resolveSearchToggleAction,
   matchFileSearchShortcut
 } from './terminal-keyboard-shortcut-matching'
 
