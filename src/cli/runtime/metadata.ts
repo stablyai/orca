@@ -7,6 +7,7 @@ import {
   type RuntimeMetadata
 } from '../../shared/runtime-bootstrap'
 import { RuntimeClientError } from './types'
+import { statusObservationError } from './status-observation'
 
 export function readMetadata(userDataPath: string): RuntimeMetadata {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
@@ -33,9 +34,16 @@ export function readMetadata(userDataPath: string): RuntimeMetadata {
 export function tryReadMetadata(userDataPath: string): RuntimeMetadata | null {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
   try {
-    return JSON.parse(readFileSync(metadataPath, 'utf8')) as RuntimeMetadata | null
-  } catch {
-    return null
+    const metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as RuntimeMetadata | null
+    if (!metadata || typeof metadata !== 'object') {
+      throw new Error('Invalid metadata')
+    }
+    return metadata
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+      return null
+    }
+    throw statusObservationError('unverifiable', error)
   }
 }
 
