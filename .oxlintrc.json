@@ -59,28 +59,14 @@
     "react/void-use-memo": "error",
     "react/jsx-curly-brace-presence": [
       "error",
-      {
-        "props": "never",
-        "children": "never",
-        "propElementValues": "always"
-      }
+      { "props": "never", "children": "never", "propElementValues": "always" }
     ],
-    "react/jsx-filename-extension": [
-      "error",
-      {
-        "extensions": [".tsx", ".jsx"]
-      }
-    ],
+    "react/jsx-filename-extension": ["error", { "extensions": [".tsx", ".jsx"] }],
     "react/jsx-fragments": "error",
     "react/jsx-key": "error",
     "react/jsx-no-constructed-context-values": "error",
     "react/jsx-no-target-blank": "error",
-    "react/jsx-no-useless-fragment": [
-      "error",
-      {
-        "allowExpressions": true
-      }
-    ],
+    "react/jsx-no-useless-fragment": ["error", { "allowExpressions": true }],
     "react/jsx-pascal-case": "error",
     "react/no-object-type-as-default-prop": "error",
     "react/self-closing-comp": "error",
@@ -92,12 +78,7 @@
     "typescript/consistent-type-assertions": "error",
     "typescript/consistent-type-definitions": ["error", "type"],
     "typescript/consistent-type-imports": "error",
-    "typescript/no-explicit-any": [
-      "error",
-      {
-        "ignoreRestArgs": true
-      }
-    ],
+    "typescript/no-explicit-any": ["error", { "ignoreRestArgs": true }],
     "typescript/no-confusing-non-null-assertion": "error",
     "typescript/no-import-type-side-effects": "error",
     "typescript/no-unnecessary-boolean-literal-compare": "error",
@@ -109,9 +90,7 @@
     "typescript/prefer-ts-expect-error": "error",
     "typescript/switch-exhaustiveness-check": [
       "error",
-      {
-        "allowDefaultCaseForExhaustiveSwitch": false
-      }
+      { "allowDefaultCaseForExhaustiveSwitch": false }
     ],
     "curly": "error",
     "no-unneeded-ternary": "error",
@@ -178,53 +157,25 @@
     {
       "files": ["**/*.ts"],
       "rules": {
-        "max-lines": [
-          "error",
-          {
-            "max": 300,
-            "skipBlankLines": true,
-            "skipComments": true
-          }
-        ]
+        "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
       "files": ["**/*.tsx"],
       "rules": {
-        "max-lines": [
-          "error",
-          {
-            "max": 400,
-            "skipBlankLines": true,
-            "skipComments": true
-          }
-        ]
+        "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
       "files": ["**/*.mjs"],
       "rules": {
-        "max-lines": [
-          "error",
-          {
-            "max": 600,
-            "skipBlankLines": true,
-            "skipComments": true
-          }
-        ]
+        "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
       "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
       "rules": {
-        "max-lines": [
-          "error",
-          {
-            "max": 800,
-            "skipBlankLines": true,
-            "skipComments": true
-          }
-        ]
+        "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
       }
     }
   ],
@@ -235,7 +186,6 @@
     "**/out",
     "cloud/**",
     ".github/actions/cloud-sql-rollout-lease/**",
-    "tests/e2e/.cross-version-checkouts",
-    "config/oxlint-plugins/anti-slop/**"
+    "tests/e2e/.cross-version-checkouts"
   ]
 }

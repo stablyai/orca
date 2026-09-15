@@ -97,7 +97,7 @@
     "build": "pnpm run build:desktop && pnpm run build:native",
     "build:release": "pnpm run build:relay && pnpm run build:native && pnpm run verify:computer-native && pnpm run build:cli && pnpm run build:electron-vite && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer",
     "build:release:parallel": "pnpm run build:relay && pnpm run build:native && pnpm run verify:computer-native && pnpm run build:cli && pnpm run build:electron-vite:parallel && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer",
-    "postinstall": "node config/scripts/rebuild-native-deps.mjs",
+    "postinstall": "node config/scripts/rebuild-native-deps.mjs && node config/scripts/sync-anti-slop-plugin.mjs",
     "rebuild:electron": "node config/scripts/rebuild-native-deps.mjs",
     "reclaim:electron-dists": "node config/scripts/reclaim-electron-dists.mjs",
     "reclaim:dev-bundles": "node config/scripts/reclaim-dev-electron-bundles.mjs",
@@ -165,7 +165,8 @@
     "test:e2e:ssh-docker-bulk-open-freeze": "node config/scripts/run-ssh-docker-bulk-open-freeze-e2e.mjs",
     "repro:live-remote-bulk-open-freeze": "node config/scripts/live-remote-bulk-open-freeze-repro.mjs",
     "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs",
-    "audit:anti-slop": "oxlint --config config/oxlint-anti-slop.json --ignore-pattern 'config/oxlint-plugins/anti-slop/**' src config tests mobile --deny-warnings"
+    "audit:anti-slop": "oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
+    "sync:anti-slop-plugin": "node config/scripts/sync-anti-slop-plugin.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.251",
@@ -267,6 +268,7 @@
     "monaco-editor": "^0.55.1",
     "oxfmt": "^0.65.0",
     "oxlint": "^1.80.0",
+    "oxlint-plugin-anti-slop": "github:dmmulroy/anti-slop#c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b",
     "oxlint-plugin-react-doctor": "0.9.1",
     "oxlint-tsgolint": "7.0.2001",
     "pdfjs-dist": "^6.3.289",
@@ -313,12 +315,12 @@
   },
   "lint-staged": {
     "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [
-      "oxlint --no-error-on-unmatched-pattern",
-      "oxlint --config config/oxlint-react-doctor.json --no-error-on-unmatched-pattern",
-      "oxfmt --write --no-error-on-unmatched-pattern"
+      "oxlint",
+      "oxlint --config config/oxlint-react-doctor.json",
+      "oxfmt --write"
     ],
     "{*.{json,css},!(cloud)/**/*.{json,css}}": [
-      "oxfmt --write --no-error-on-unmatched-pattern"
+      "oxfmt --write"
     ]
   },
   "engines": {
