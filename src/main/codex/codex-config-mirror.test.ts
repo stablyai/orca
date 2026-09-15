@@ -316,6 +316,16 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
         '',
         '[projects."/runtime-only"]',
         'trust_level = "trusted"',
+        '',
+        '[mcp_servers.cua_repl]',
+        'command = "cua-repl"',
+        'args = ["--managed"]',
+        '',
+        '[mcp_servers.cua_repl.env]',
+        'NODE_ENV = "production"',
+        '',
+        '[mcp_servers.shared]',
+        'command = "runtime-shared"',
         ''
       ].join('\n'),
       'utf-8'
@@ -337,6 +347,12 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
         '[hooks.state."system-hooks:stop:0:0"]',
         'enabled = true',
         'trusted_hash = "sha256:system"',
+        '',
+        '[mcp_servers.shared]',
+        'command = "system-shared"',
+        '',
+        '[mcp_servers.system_only]',
+        'command = "system-only"',
         ''
       ].join('\n'),
       'utf-8'
@@ -356,6 +372,38 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).not.toContain('# system-owned parent')
     expect(runtimeConfig).toContain('trust_level = "untrusted"')
     expect(runtimeConfig.match(/\[projects\."\/repo"\]/g)?.length).toBe(1)
+    // Why: Codex provisions MCP servers into the managed home itself, so a
+    // runtime-only table is an addition to keep; a shared identity stays canonical.
+    expect(runtimeConfig).toContain('[mcp_servers.cua_repl]')
+    expect(runtimeConfig).toContain('command = "cua-repl"')
+    expect(runtimeConfig).toContain('args = ["--managed"]')
+    expect(runtimeConfig).toContain('[mcp_servers.cua_repl.env]')
+    expect(runtimeConfig).toContain('NODE_ENV = "production"')
+    expect(runtimeConfig).toContain('[mcp_servers.system_only]')
+    expect(runtimeConfig).toContain('command = "system-shared"')
+    expect(runtimeConfig).not.toContain('runtime-shared')
+    expect(runtimeConfig.match(/\[mcp_servers\.shared\]/g)?.length).toBe(1)
+  })
+
+  it('matches a quoted MCP server header to the same server as a bare one', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ['[mcp_servers.cua_repl]', 'command = "runtime-cua"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ['[mcp_servers."cua_repl"]', 'command = "system-cua"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('command = "system-cua"')
+    expect(runtimeConfig).not.toContain('runtime-cua')
+    expect(runtimeConfig.match(/\[mcp_servers\.(?:"cua_repl"|cua_repl)\]/g)?.length).toBe(1)
   })
 
   it('deduplicates basic and literal project headers by decoded Windows path', () => {

@@ -20,6 +20,7 @@ import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
 import {
   deduplicateProjectTomlSections,
+  getMcpServerTomlSectionName,
   getProjectTrustLevel,
   getRevocationTomlSectionHeaderKey,
   getTomlSectionHeaderKey,
@@ -261,6 +262,15 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
       .filter((section) => getProjectTrustLevel(section.block) === 'trusted')
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
+  // Why: a runtime-only MCP server must survive the mirror, but one the system
+  // config also defines stays canonical — appending both would duplicate the table.
+  // Deliberately one-directional: a server removed from ~/.codex leaves the
+  // managed home only once Codex stops holding it there too.
+  const systemMcpServerNames = new Set(
+    getTomlSections(systemConfig)
+      .map((section) => getMcpServerTomlSectionName(section.header))
+      .filter((name): name is string => name !== null)
+  )
   // Why: ordinary Codex settings should mirror ~/.codex exactly; runtime hook
   // trust and project trust are written under Orca's managed CODEX_HOME and
   // must survive the copy unless the user explicitly revoked project trust in
@@ -268,7 +278,13 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
   return joinTomlBlocks([
     stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders),
     ...runtimeSections
-      .filter((section) => isRuntimePreservedTomlSection(section.header))
+      .filter((section) => {
+        const mcpServerName = getMcpServerTomlSectionName(section.header)
+        return (
+          isRuntimePreservedTomlSection(section.header) ||
+          (mcpServerName !== null && !systemMcpServerNames.has(mcpServerName))
+        )
+      })
       .filter(
         (section) =>
           !isRuntimeProjectTomlSection(section.header) ||
