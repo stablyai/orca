@@ -171,7 +171,9 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   dispatched_at       TEXT,
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-  last_heartbeat_at   TEXT
+  last_heartbeat_at   TEXT,
+  -- Observed process exit code, attributable to this Attempt. Null until a process fact reports one.
+  exit_code           INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);
