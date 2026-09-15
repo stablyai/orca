@@ -3,7 +3,6 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
-  VISIBILITY_INVENTORY_REMOVAL_EPOCH,
   type SessionTabsStreamEvent
 } from './state'
 import {
@@ -64,13 +63,10 @@ export function decideWebSessionTabsSnapshot(
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   if ((snapshot as { removed?: unknown }).removed === true) {
     // Why: removed worktrees can stop publishing, so clean up their tracking now instead of waiting for a replacement snapshot that may never arrive.
-    // Retain the removal epoch transition before dropping the live freshness
-    // record; delayed sibling frames from the predecessor stay fenced.
-    // Inventory omissions use a client-only sentinel epoch; recording that
-    // sentinel would retire the host epoch and reject the next live frame.
-    if (snapshot.publicationEpoch !== VISIBILITY_INVENTORY_REMOVAL_EPOCH) {
-      noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
-    }
+    // A retraction is not a handover. The generation that published this worktree is still the live
+    // one and republishes the moment a client recreates a terminal, so retiring it here would fence
+    // a publisher that never died out of its own worktree. A genuinely delayed predecessor frame is
+    // separated from that live republication by receivedFrame, not by epoch identity.
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
     queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
     return WEB_SESSION_TABS_FRAME_APPLIED

@@ -19,6 +19,7 @@ type RuntimeTerminalOrphanAdoptionPorts = {
   getPty: (handle: string) => RuntimePtyWorktreeRecord | null
   getLeaves: (ptyId: string) => readonly RuntimeLeafRecord[]
   getLeaf: (tabId: string, leafId: string) => RuntimeLeafRecord | undefined
+  recordSurface: (pty: RuntimePtyWorktreeRecord, tabId: string, paneKey: string) => void
   getMobileSnapshots: () => Iterable<RuntimeMobileSessionTabsSnapshot>
   getSession: (worktreeId: string) => WorkspaceSessionState | null
   setSession: (worktreeId: string, session: WorkspaceSessionState) => void
@@ -134,8 +135,7 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
   })
   if (isExactPersisted && sessionWorktreeId === workspace.id) {
     for (const { claim, pty, paneKey } of validated) {
-      pty.tabId = claim.tabId
-      pty.paneKey = paneKey
+      ports.recordSurface(pty, claim.tabId, paneKey)
     }
     return {
       adopted: false,
@@ -235,8 +235,7 @@ export async function adoptRuntimeTerminalOrphansFromInventory(args: {
     throw error
   }
   for (const { claim, pty, paneKey } of validated) {
-    pty.tabId = claim.tabId
-    pty.paneKey = paneKey
+    ports.recordSurface(pty, claim.tabId, paneKey)
   }
   ports.hydrateSession(workspace.id)
   ports.notifySessionChanged(workspace.id)

@@ -21,6 +21,11 @@ import {
   type WebSessionTabsSyncState
 } from './web-session-tabs-sync'
 import {
+  recordReceivedWebSessionTabsSnapshot,
+  shouldApplyRecoveredWebSessionTabsSnapshot
+} from './web-session-tabs-sync/tracking'
+import { nextReceivedSessionTabsFrame } from './web-session-tabs-sync/state'
+import {
   ENV,
   HOST_SURFACE_ID,
   LEAF_ID,
@@ -305,6 +310,11 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(delayedOldEpoch, ENV, 'runtime-old')).toBe(true)
   })
 
+  // The property is unchanged: a predecessor frame already in flight when the worktree was removed
+  // must not resurrect it, even carrying a HIGHER version than the last frame accepted before the
+  // removal. What changed is which layer proves it. Epoch identity cannot — the live publisher
+  // republishes under that same epoch, and fencing on it locked the publisher out of its own
+  // worktree. Delivery order can, and `shouldApplyRecoveredWebSessionTabsSnapshot` holds it.
   it('keeps a removed worktree fenced against delayed predecessor epochs', () => {
     const beforeRemoval = makeSnapshot([], {
       publicationEpoch: 'epoch-before-removal',
@@ -322,27 +332,39 @@ describe('applyWebSessionTabsSnapshot', () => {
       removed: true as const
     }
 
+    const beforeFrame = recordReceivedWebSessionTabsSnapshot(ENV, beforeRemoval)
     expect(shouldApplyWebSessionTabsSnapshot(beforeRemoval, ENV)).toBe(true)
+
+    // A list for this worktree reserves its received frame here, before the removal lands.
+    const delayedFrame = nextReceivedSessionTabsFrame()
+    expect(delayedFrame).toBeGreaterThan(beforeFrame)
+
+    const removedFrame = recordReceivedWebSessionTabsSnapshot(ENV, removed)
     expect(shouldApplyWebSessionTabsSnapshot(removed, ENV)).toBe(true)
+    expect(removedFrame).toBeGreaterThan(delayedFrame)
+
+    const delayed = makeSnapshot([], {
+      publicationEpoch: 'epoch-before-removal',
+      snapshotVersion: 4,
+      activeTabType: null
+    })
+    recordReceivedWebSessionTabsSnapshot(ENV, delayed, delayedFrame, undefined, 'bootstrap')
+    expect(shouldApplyRecoveredWebSessionTabsSnapshot(ENV, delayed, delayedFrame)).toBe(false)
+    // The composed gate, exactly as every production apply path spells it.
     expect(
-      shouldApplyWebSessionTabsSnapshot(
-        makeSnapshot([], {
-          publicationEpoch: 'epoch-before-removal',
-          snapshotVersion: 4,
-          activeTabType: null
-        }),
-        ENV
-      )
+      shouldApplyRecoveredWebSessionTabsSnapshot(ENV, delayed, delayedFrame) &&
+        shouldApplyWebSessionTabsSnapshot(delayed, ENV)
     ).toBe(false)
+
+    const recreated = makeSnapshot([], {
+      publicationEpoch: 'epoch-recreated',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+    const recreatedFrame = recordReceivedWebSessionTabsSnapshot(ENV, recreated)
     expect(
-      shouldApplyWebSessionTabsSnapshot(
-        makeSnapshot([], {
-          publicationEpoch: 'epoch-recreated',
-          snapshotVersion: 1,
-          activeTabType: null
-        }),
-        ENV
-      )
+      shouldApplyRecoveredWebSessionTabsSnapshot(ENV, recreated, recreatedFrame) &&
+        shouldApplyWebSessionTabsSnapshot(recreated, ENV)
     ).toBe(true)
   })
 

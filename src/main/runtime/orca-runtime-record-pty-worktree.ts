@@ -56,6 +56,7 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
         wslDistro,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
+        surfaceRecordedAtGraphSequence: this.graphSequence,
         launchConfig: null,
         launchToken: null,
         launchIncarnationId: null,
@@ -148,6 +149,7 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     }
     if (state.paneKey !== undefined) {
       pty.paneKey = state.paneKey
+      pty.surfaceRecordedAtGraphSequence = this.graphSequence
     }
     if (state.connected !== undefined) {
       pty.connected = state.connected
