@@ -69,18 +69,46 @@ ORCA terminal wait --terminal <legacy_handle> --for tui-idle --timeout-ms 60000 
 `run_legacy_local` is an empty audit tombstone after adoption. Find the ordinary
 Run whose objective is `Recovered orchestration work from a contract update`.
 
+Inspect first: is this the auto-adopted recovery Run, and is any legacy
+Dispatch still pending or dispatched?
+
+```text
+ORCA orchestration run-show --id <adopted_run_id> --json
+ORCA orchestration task-list --run <adopted_run_id> --json
+```
+
+When no Dispatch on that adopted Run is still pending or dispatched on the
+legacy contract, plain bind is enough. Do not require `--takeover-legacy`, and
+do not wait for `coordinator_handle` to be null:
+
+```text
+ORCA orchestration run-use --id <adopted_run_id> --json
+```
+
 Only when the original coordinator is unavailable or cannot prove retained
-authority may a new live coordinator take over from its own terminal:
+authority, and a legacy Dispatch is still pending or dispatched, may a new live
+coordinator take over from its own terminal:
 
 ```text
 ORCA orchestration run-use --id <adopted_run_id> --takeover-legacy --json
 ORCA orchestration check --run <adopted_run_id> --json
 ```
 
-Takeover binds the authenticated invoking terminal; `--from` cannot nominate
-another coordinator. It fences only the old coordinator and moves pending mail
-into current Run delivery. It preserves live workers, Tasks, Dispatches, processes, and files.
+`--takeover-legacy` is only valid for the automatically adopted recovery Run.
+Legacy takeover must be invoked by the live coordinator agent terminal it will bind.
+A plain shell or a mismatched `--from` returns `legacy_read_only` with that
+message. `--from` cannot nominate another coordinator.
+
+Takeover binds the authenticated invoking terminal. It fences only the old
+coordinator and moves pending mail into current Run delivery. It preserves live
+workers, Tasks, Dispatches, processes, and files.
 Never take over while the original coordinator is actively coordinating.
+
+If both plain bind and attested takeover fail and mutations stay
+`legacy_read_only` with `effectsApplied: false`, treat the Run as inspect-only:
+keep reading `task-list` / `terminal read`, finish or stop workers out-of-band,
+then create a new current Run rather than falsifying Task outcomes on the
+frozen graph.
 
 Do not launch a replacement editor merely because Orca updated or authority is
 unclear. Keep the original worker as the only editor until a stable handoff
