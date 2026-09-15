@@ -1,17 +1,10 @@
 import type { CommandTemplateBackslash } from './commit-message-prompt'
-import {
-  getCommitMessageAgentSpec,
-  getCommitMessageModel,
-  isCustomAgentId
-} from './commit-message-agent-spec'
+import { getCommitMessageAgentSpec, isCustomAgentId } from './commit-message-agent-spec'
+import { resolveCommitMessagePlanModel } from './commit-message-plan-model'
 import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
 import type { TuiAgent } from './tui-agent'
 
-// Why: planning is a pure transformation from "user request + prompt text"
-// into "spawn-ready binary + argv". Keeping it in shared lets both the local
-// generator (main process) and the SSH provider (which delegates to the
-// relay over JSON-RPC) reuse the exact same validation and arg-building
-// logic without duplicating the spec/model/thinking checks.
+// Why: shared planning keeps local and remote generation validation identical.
 
 export type CommitMessagePlanInput = {
   agentId: TuiAgent | 'custom'
@@ -20,6 +13,7 @@ export type CommitMessagePlanInput = {
    *  to run on native Windows, where `\` is the path separator (#11375). */
   backslash?: CommandTemplateBackslash
   model: string
+  useConfiguredDefaultModel?: boolean
   thinkingLevel?: string
   customAgentCommand?: string
   agentCommandOverride?: string
@@ -276,10 +270,11 @@ export function planCommitMessageGeneration(
   if (!spec) {
     return { ok: false, error: `Agent "${input.agentId}" does not support AI commit messages.` }
   }
-  const model = getCommitMessageModel(input.agentId, input.model)
-  if (!model) {
-    return { ok: false, error: `Model "${input.model}" is not available for ${spec.label}.` }
+  const plannedModel = resolveCommitMessagePlanModel(input, spec.label)
+  if (!plannedModel.ok) {
+    return plannedModel
   }
+  const { model, modelId: plannedModelId } = plannedModel
   if (input.thinkingLevel) {
     if (!model.thinkingLevels && spec.modelSource !== 'dynamic') {
       return {
@@ -298,7 +293,7 @@ export function planCommitMessageGeneration(
   const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
   const baseArgs = spec.buildArgs({
     prompt: argvPrompt,
-    model: input.model,
+    model: plannedModelId,
     thinkingLevel: input.thinkingLevel
   })
   const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)

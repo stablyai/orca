@@ -1,3 +1,8 @@
+import type { GlobalSettings } from './global-settings-types'
+import {
+  PI_DEFAULT_MODEL_ID,
+  PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
+} from './pi-configured-default-model'
 import type {
   CommitMessageAiSettings,
   CommitMessageAiModelCapability
@@ -110,7 +115,7 @@ export function getDiscoveredModels(
   )
 }
 
-export function selectPersistedModelId(args: {
+export function selectPersistedModel(args: {
   source: SourceControlAiSettings
   legacy: CommitMessageAiSettings | null | undefined
   repoOverrides: RepoSourceControlAiOverrides | null | undefined
@@ -118,33 +123,48 @@ export function selectPersistedModelId(args: {
   hostKey: string
   agentId: TuiAgent
   defaultModelId: string
-}): string {
-  const { source, legacy, repoOverrides, operation, hostKey, agentId, defaultModelId } = args
-  return (
-    readSourceControlAiModelChoiceForHost(
-      repoOverrides?.modelOverridesByOperation?.[operation],
-      hostKey,
-      agentId
-    ) ??
-    readSourceControlAiModelChoiceForHost(
-      source.modelOverridesByOperation?.[operation],
-      hostKey,
-      agentId
-    ) ??
-    readSourceControlAiModelChoiceForHost(
-      {
-        selectedModelByAgent: source.selectedModelByAgent,
-        selectedModelByAgentByHost: source.selectedModelByAgentByHost
-      },
-      hostKey,
-      agentId
-    ) ??
+  configuredDefaultState: GlobalSettings['piConfiguredDefaultModelState']
+}): { modelId: string; useConfiguredDefaultModel: boolean } {
+  const {
+    source,
+    legacy,
+    repoOverrides,
+    operation,
+    hostKey,
+    agentId,
+    defaultModelId,
+    configuredDefaultState
+  } = args
+  const repoModel = readSourceControlAiModelChoiceForHost(
+    repoOverrides?.modelOverridesByOperation?.[operation],
+    hostKey,
+    agentId
+  )
+  const operationModel = readSourceControlAiModelChoiceForHost(
+    source.modelOverridesByOperation?.[operation],
+    hostKey,
+    agentId
+  )
+  const defaultModel =
+    readSourceControlAiModelChoiceForHost(source, hostKey, agentId) ??
     legacy?.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
     (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
       ? legacy?.selectedModelByAgent?.[agentId]
-      : undefined) ??
-    defaultModelId
-  )
+      : undefined)
+  const persisted = repoModel ?? operationModel ?? defaultModel ?? defaultModelId
+  const markedOperationSeed =
+    operation === 'commitMessage' &&
+    configuredDefaultState?.commitMessageSeedByHost[hostKey] === true &&
+    repoModel === undefined &&
+    operationModel === PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
+  const markedDefault =
+    configuredDefaultState?.defaultsByHost[hostKey] === true &&
+    repoModel === undefined &&
+    operationModel === undefined &&
+    persisted === PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
+  const useConfiguredDefaultModel =
+    agentId === 'pi' && (persisted === PI_DEFAULT_MODEL_ID || markedOperationSeed || markedDefault)
+  return { modelId: persisted, useConfiguredDefaultModel }
 }
 
 export function resolveThinkingLevel(args: {

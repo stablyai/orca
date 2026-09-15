@@ -1,3 +1,4 @@
+import { migratePiConfiguredDefaultModelState } from '../../../shared/pi-configured-default-model-state'
 import { homedir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -39,6 +40,7 @@ export type PreparedLoadedTerminalSettings = {
     >
     needsSave: boolean
   }
+  piConfiguredDefaultModelState: GlobalSettings['piConfiguredDefaultModelState']
   migratedSourceControlAi: NonNullable<GlobalSettings['sourceControlAi']>
   migratedOptionAsAlt: GlobalSettings['terminalMacOptionAsAlt']
   migratedFloatingTerminalEnabled: GlobalSettings['floatingTerminalEnabled']
@@ -96,6 +98,14 @@ export function prepareLoadedTerminalSettings(
         parsed.settings?.sourceControlAi,
         legacyCommitMessageAi
       )
+  const piMigration = migratePiConfiguredDefaultModelState({
+    sourceControlAi: migratedSourceControlAi,
+    commitMessageAi: legacyCommitMessageAi,
+    persistedState: parsed.settings?.piConfiguredDefaultModelState
+  })
+  if (piMigration.changed) {
+    markNeedsSave()
+  }
   // Why (issue #903): old 'true' default broke non-US Option-layer chars; flip 'true'→'auto' once so the layout probe decides.
   const rawOptionAsAlt = parsed.settings?.terminalMacOptionAsAlt
   const alreadyMigrated = parsed.settings?.terminalMacOptionAsAltMigrated === true
@@ -162,6 +172,7 @@ export function prepareLoadedTerminalSettings(
     migratedTerminalScrollback,
     migratedTerminalTuiScrollSensitivity,
     migratedSourceControlAi,
+    piConfiguredDefaultModelState: piMigration.state,
     migratedOptionAsAlt,
     migratedFloatingTerminalEnabled,
     migratedOsc52Clipboard,

@@ -170,6 +170,7 @@ export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customProm
 export const ResolvedSourceControlAiGenerationParams = z.object({
   agentId: z.string(),
   model: z.string(),
+  useConfiguredDefaultModel: z.boolean().optional(),
   thinkingLevel: z.string().optional(),
   customPrompt: z.string().optional(),
   commandInputTemplate: z.string().optional(),

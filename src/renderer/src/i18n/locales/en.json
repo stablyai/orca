@@ -118,6 +118,15 @@
     "retrying": "Retrying…"
   },
   "settings": {
+    "piConfiguredModelReset": {
+      "keywords": { "pi": "pi", "model": "model", "copilot": "copilot", "reset": "reset" },
+      "success": "Pi now uses its configured model on this host.",
+      "error": "Could not reset saved Pi model choices.",
+      "title": "Saved Pi model choices",
+      "description": "Reset saved Pi model choices for commit messages, pull requests, and branch names on this host. Models in recipe CLI arguments still apply.",
+      "host": "Host: {{host}}",
+      "action": "Use Pi’s configured model"
+    },
     "appearance": {
       "language": {
         "title": "Language",

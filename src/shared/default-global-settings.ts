@@ -258,6 +258,7 @@ export function buildDefaultSettings(args: {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
+    piConfiguredDefaultModelState: { version: 1, defaultsByHost: {}, commitMessageSeedByHost: {} },
     voice: args.voice
   }
 }

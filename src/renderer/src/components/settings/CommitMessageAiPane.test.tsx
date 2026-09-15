@@ -152,6 +152,7 @@ describe('CommitMessageAiPane', () => {
   it('uses known model flags when building source-control CLI argument placeholders', () => {
     expect(getSourceControlAgentArgsPlaceholder('claude')).toBe('--model sonnet')
     expect(getSourceControlAgentArgsPlaceholder('codex')).toBe('--model gpt-5.4-mini')
+    expect(getSourceControlAgentArgsPlaceholder('pi')).toBe('--model provider/model')
     expect(getSourceControlAgentArgsPlaceholder('amp')).toBe('--mode smart')
     expect(getSourceControlAgentArgsPlaceholder('aider')).toBe('--model <model>')
   })
