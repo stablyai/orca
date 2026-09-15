@@ -1,8 +1,9 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-renderer-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { mainProcessState as state } from './main-process-state'
 import { resolveOpenedMarkdownDocuments } from './os-opened-markdown-files'
+import { rehydrateRuntimeOwnedSshForRestoredWorkspaces } from './runtime-owned-ssh-startup-rehydration'
 
 export function registerMainProcessIpcHandlers(): void {
   ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
@@ -23,6 +24,16 @@ export function registerMainProcessIpcHandlers(): void {
       state.firstWindowStartupServicesReady,
       state.managedWslCliStartupBarrierReady
     ])
+    if (state.store) {
+      // Runtime-owned SSH transports are process-local and the renderer never dials them, so they
+      // are restored here — before any pane spawns against their host (#19173).
+      await rehydrateRuntimeOwnedSshForRestoredWorkspaces({
+        store: state.store,
+        userDataPath: app.getPath('userData')
+      }).catch((error) => {
+        console.warn('[ephemeral-vm] runtime-owned SSH startup rehydration failed', error)
+      })
+    }
     await state.runtime?.prepareStructuredAgentSessionStartupRestoration()
   })
   ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup', () =>
