@@ -90,8 +90,8 @@ export function requestStablePaneFit(pane: StableFitPane, onSettled?: () => void
     stableFitCallbacks.delete(pane)
     return
   }
-  // Why: keep xterm fit work off the divider pointermove hot path and let
-  // the browser coalesce drag-driven size changes the same way Superset does.
+  // Why: keep xterm fit work off the divider pointermove hot path and let the
+  // browser coalesce drag-driven size changes, which is the conventional approach.
   //
   // Windows can report a short-lived one-column anchor/scrollbar wobble when
   // the right sidebar is open. Requiring a stable proposed grid before fitting
