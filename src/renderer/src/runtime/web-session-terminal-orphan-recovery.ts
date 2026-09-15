@@ -2,6 +2,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'
 import {
   cacheRetainedSurfaces,
   claimSurfaces,
@@ -10,7 +11,9 @@ import {
   isStableAdoptionFailure,
   mergeAdoptionResponse,
   mergeFailedAdoption,
-  retainedSharesClaimedTab
+  readClientSessionSnapshotAfterAdoption,
+  retainedSharesClaimedTab,
+  type TerminalOrphanRecoveryCall
 } from './web-session-terminal-orphan-recovery-adoption'
 import {
   buildTopologyCandidates,
@@ -48,17 +51,10 @@ import {
 
 export type { TerminalOrphanRecoveryState } from './web-session-terminal-orphan-recovery-surface'
 
-type RuntimeCall = (args: {
-  selector: string
-  method: string
-  params: unknown
-  timeoutMs: number
-  expectedEnvironmentPairingRevision?: number
-}) => Promise<RuntimeRpcResponse<unknown>>
-
 export type TerminalOrphanRecoveryOptions = {
   expectedEnvironmentPairingRevision?: number
-  call?: RuntimeCall
+  expectedRuntimeId?: string
+  call?: TerminalOrphanRecoveryCall
   /** Reads live renderer topology so an RPC cannot apply a stale local claim. */
   getCurrentState?: () => TerminalOrphanRecoveryState
 }
@@ -75,8 +71,9 @@ async function recoverTerminalOrphans(
   state: TerminalOrphanRecoveryState,
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  call: RuntimeCall,
+  call: TerminalOrphanRecoveryCall,
   expectedEnvironmentPairingRevision: number | undefined,
+  expectedRuntimeId: string | undefined,
   isCurrent: () => boolean,
   getCurrentState: (() => TerminalOrphanRecoveryState) | undefined
 ): Promise<RuntimeMobileSessionTabsResult | null> {
@@ -217,7 +214,20 @@ async function recoverTerminalOrphans(
     return retainAfterAdoptionFailure(false)
   }
 
-  const adoptedSnapshot = adoptionResponse.result.snapshot
+  const adoptedSnapshot = await readClientSessionSnapshotAfterAdoption({
+    environmentId,
+    worktreeId: snapshot.worktree,
+    expectedEnvironmentPairingRevision,
+    expectedRuntimeId: expectedRuntimeId ?? getSessionTabsRuntimeIdFromResponse(adoptionResponse),
+    call,
+    isCurrent: isRecoveryCurrent
+  })
+  if (!isRecoveryCurrent()) {
+    return null
+  }
+  if (!adoptedSnapshot) {
+    return retainAfterAdoptionFailure(false)
+  }
   const adoptedRows = terminalRowsBySurface(adoptedSnapshot)
   const missingClaims = claimedSurfaces.filter((surface) => {
     const rows = adoptedRows.get(surfaceKey(surface.tabId, surface.leafId))
@@ -228,7 +238,7 @@ async function recoverTerminalOrphans(
 }
 
 function normalizeOptions(
-  optionsOrCall: TerminalOrphanRecoveryOptions | RuntimeCall | undefined
+  optionsOrCall: TerminalOrphanRecoveryOptions | TerminalOrphanRecoveryCall | undefined
 ): TerminalOrphanRecoveryOptions {
   return typeof optionsOrCall === 'function' ? { call: optionsOrCall } : (optionsOrCall ?? {})
 }
@@ -237,7 +247,7 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
   state: TerminalOrphanRecoveryState,
   frame: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  optionsOrCall?: TerminalOrphanRecoveryOptions | RuntimeCall
+  optionsOrCall?: TerminalOrphanRecoveryOptions | TerminalOrphanRecoveryCall
 ): Promise<RuntimeMobileSessionTabsResult | null> {
   const options = normalizeOptions(optionsOrCall)
   // Why: every host frame enters recovery here, so this is where a delta frame regains the proofs
@@ -275,7 +285,7 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
     supersedeTerminalRecovery(key)
     return Promise.resolve(mergeRetainedTerminalSurfaces(snapshot, prepared.retained))
   }
-  const call: RuntimeCall =
+  const call: TerminalOrphanRecoveryCall =
     options.call ??
     ((args) =>
       callRuntimeEnvironmentWithRevision({
@@ -292,6 +302,7 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
       environmentId,
       call,
       options.expectedEnvironmentPairingRevision,
+      options.expectedRuntimeId,
       isCurrent,
       options.getCurrentState
     )

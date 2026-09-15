@@ -1,0 +1,91 @@
+{
+  "operation": "source-control.remote-prerequisite",
+  "family": "git.remote-prerequisite",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
+  "scenarioSha256": "6cf6ebd20adc4cc76a12d3424863ee9db2b24f36593664a1f4e0e05de9a53d39",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "00e8a3bac22f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true,
+        "ran": true
+      }
+    },
+    "0fe2eb2410a4": {
+      "outcome": {
+        "ok": true,
+        "ran": true
+      }
+    },
+    "387442f96b16": {
+      "name": "git.push#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"publish\":true}}"
+    },
+    "b12e1ce5068c": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "publish": true,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "dc538c734db2": {
+      "name": "progress",
+      "value": "publishing"
+    }
+  },
+  "recording": {
+    "scenario": "sc-prerequisite-publish",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["b12e1ce5068c"],
+          "payloads": ["387442f96b16"],
+          "settlements": {
+            "apply": "00e8a3bac22f"
+          },
+          "state": "0fe2eb2410a4",
+          "effects": ["dc538c734db2"]
+        }
+      }
+    ]
+  }
+}

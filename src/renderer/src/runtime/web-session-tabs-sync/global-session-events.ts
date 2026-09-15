@@ -99,6 +99,7 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
   let settleHydration: HostSessionMirrorSettle | null = null
   void recoverWebSessionTerminalOrphansBeforeApply(useAppStore.getState(), event, environmentId, {
     expectedEnvironmentPairingRevision,
+    expectedRuntimeId: runtimeId,
     getCurrentState: () => useAppStore.getState()
   })
     .then((recovered) => {

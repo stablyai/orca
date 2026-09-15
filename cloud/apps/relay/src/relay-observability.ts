@@ -168,10 +168,18 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   controlActivityRecoveryFailures: 0
 })
 
+function ascending(values: number[]): number[] {
+  return [...values].sort((left, right) => left - right)
+}
+
+// Holes and NaN land past the requested rank, so the fallback still applies.
+function nearestRank(sorted: number[], percentileRank: number): number {
+  return sorted[Math.ceil(percentileRank * sorted.length) - 1] ?? 0
+}
+
 export function percentile(values: number[], percentileRank: number): number {
   if (values.length === 0) return 0
-  const sorted = [...values].sort((left, right) => left - right)
-  return sorted[Math.ceil(percentileRank * sorted.length) - 1] ?? 0
+  return nearestRank(ascending(values), percentileRank)
 }
 
 function roundMs(value: number): number {
@@ -179,11 +187,15 @@ function roundMs(value: number): number {
 }
 
 // Spreading a window into Math.max blows the stack once a busy cell samples
-// enough of it, so the maximum is folded instead.
+// enough of it, so the maximum is folded instead. The fold is also not
+// interchangeable with the sorted last element: it is seeded with zero, so an
+// all-negative or NaN window reads differently.
 function latencySummary(samples: number[]): { p50: number; p95: number; max: number } {
+  // One sorted copy serves both ranks.
+  const sorted = samples.length === 0 ? samples : ascending(samples)
   return {
-    p50: roundMs(percentile(samples, 0.5)),
-    p95: roundMs(percentile(samples, 0.95)),
+    p50: roundMs(nearestRank(sorted, 0.5)),
+    p95: roundMs(nearestRank(sorted, 0.95)),
     max: roundMs(samples.reduce((highest, sample) => Math.max(highest, sample), 0))
   }
 }

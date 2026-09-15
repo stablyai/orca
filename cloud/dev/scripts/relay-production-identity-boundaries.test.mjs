@@ -32,8 +32,7 @@ test('no workflow names the retired generic production deploy identity', async (
     'deploy-relay-production.yml',
     'operate-relay-asia-admission.yml',
     'operate-relay-production-rehome-job.yml',
-    'publish-relay-production.yml',
-    'push-deploy.yml'
+    'publish-relay-production.yml'
   ].map((name) => relayWorkflowFile(name)).sort())
 })
 
@@ -167,4 +166,13 @@ test('production mutations pass the minted admin token to live preflight', async
 test('fence broker pins the production-proven Terraform planner', async () => {
   const dockerfile = await source('apps/relay-fence-broker/Dockerfile')
   assert.match(dockerfile, /FROM hashicorp\/terraform:1\.15\.8 AS terraform/)
+})
+
+ test('push uses its dedicated identity and rollout lease', () => {
+  const workflow = readRelayWorkflow('push-deploy.yml')
+  assert.match(workflow, /PRODUCTION_GCP_PUSH_DEPLOY_WORKLOAD_IDENTITY_PROVIDER/)
+  assert.match(workflow, /PRODUCTION_GCP_PUSH_DEPLOY_SERVICE_ACCOUNT/)
+  assert.doesNotMatch(workflow, /PRODUCTION_GCP_RELAY_DEPLOY_/)
+  assert.match(workflow, /group: production-push-rollout/)
+  assert.match(workflow, /object: terraform\/state\/push-rollout\/production.lock/)
 })

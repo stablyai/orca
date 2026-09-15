@@ -276,3 +276,24 @@ describe('nested worker depth cap', () => {
     })
   })
 })
+
+describe('structured worker dispatch preamble errors', () => {
+  it('preserves the undelivered verdict across runtime RPC', () => {
+    const failure = mapRuntimeError(
+      'rpc_dispatch_preamble',
+      { runtimeId: 'runtime-1' },
+      new OrchestrationError(
+        'dispatch_preamble_undelivered',
+        'The dispatch preamble was not delivered: provider_write_failed: broken pipe.'
+      )
+    )
+
+    expect(failure).toMatchObject({
+      ok: false,
+      error: {
+        code: 'dispatch_preamble_undelivered',
+        message: 'The dispatch preamble was not delivered: provider_write_failed: broken pipe.'
+      }
+    })
+  })
+})

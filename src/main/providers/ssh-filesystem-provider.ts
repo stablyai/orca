@@ -1,3 +1,5 @@
+import { readSshPathExistenceBatch } from './ssh-filesystem-path-existence'
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
 import { uploadBuffer } from '../ssh/sftp-upload'
@@ -215,6 +217,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     } finally {
       sftp.end()
     }
+  }
+
+  pathsExist(filePaths: string[]): Promise<PathExistenceResult[]> {
+    return readSshPathExistenceBatch(this.mux, filePaths, (path) => this.stat(path))
   }
 
   async stat(filePath: string): Promise<FileStat> {

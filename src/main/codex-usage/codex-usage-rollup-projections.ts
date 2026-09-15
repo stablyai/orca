@@ -1,3 +1,4 @@
+import { highestUsageKey } from '../usage/highest-usage-key'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -57,9 +58,8 @@ export function buildSummary(
     }
   }
 
-  const topModel = [...byModel.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
-  const topProject =
-    [...byProject.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
+  const topModel = highestUsageKey(byModel)
+  const topProject = highestUsageKey(byProject)
 
   return {
     scope,
@@ -111,6 +111,9 @@ export function buildBreakdown(
 ): CodexUsageBreakdownRow[] {
   const rows = new Map<string, CodexUsageBreakdownRow>()
   const filteredDaily = getFilteredDaily(state, scope, range)
+  if (filteredDaily.length === 0) {
+    return []
+  }
   const filteredSessions = getFilteredSessions(state, scope, range)
 
   for (const daily of filteredDaily) {

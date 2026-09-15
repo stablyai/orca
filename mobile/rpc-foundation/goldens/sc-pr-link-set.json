@@ -1,0 +1,132 @@
+{
+  "operation": "source-control.pr-link",
+  "family": "worktree.review-link",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
+  "scenarioSha256": "b65bad4f8c0ae0b686f6c3db93bd43ffa072ae426f978f1a86ad8008fb24fa24",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1852c739af4f": {
+      "linkedPR": "unread",
+      "outcome": {
+        "ok": true
+      }
+    },
+    "2c746c8732cd": {
+      "name": "worktree.set#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "41bdce9de379": {
+      "linkedPR": "unread",
+      "outcome": "unlinked"
+    },
+    "86441203344c": {
+      "name": "worktree.set#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "c7ae0a3a6e6e": {
+      "name": "worktree.set#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"linkedPR\":12}}"
+    },
+    "fbc958e4d46e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-pr-link-set",
+    "checkpoints": [
+      {
+        "id": "pending",
+        "observation": {
+          "sender": ["2c746c8732cd"],
+          "payloads": ["c7ae0a3a6e6e"],
+          "settlements": {
+            "link": "9270aeb7d9c6"
+          },
+          "state": "41bdce9de379",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["86441203344c"],
+          "payloads": ["c7ae0a3a6e6e"],
+          "settlements": {
+            "link": "fbc958e4d46e"
+          },
+          "state": "1852c739af4f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

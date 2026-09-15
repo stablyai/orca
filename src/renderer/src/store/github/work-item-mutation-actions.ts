@@ -45,7 +45,7 @@ export const createWorkItemMutationActions = (
         nextCache[key] = { ...entry, data: updatedItems }
         changed = true
       }
-      return changed ? { workItemsCache: nextCache } : {}
+      return changed ? { workItemsCache: nextCache } : s
     })
   },
 

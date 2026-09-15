@@ -40,6 +40,7 @@ describe('Relay region API', () => {
     )
 
     expect(response.status).toBe(200)
+    expect(await response.clone().json()).not.toHaveProperty('regionCorrection')
     expect(assign).toHaveBeenCalledWith(
       { userId: 'user-1', relayHostId: 'asiahost00000001' },
       'asia-east2',
@@ -81,6 +82,160 @@ describe('Relay region API', () => {
       'asia-east2',
       'us-central1'
     )
+  })
+
+  it('preserves the cold-start hint and binds a negotiated window after placement', async () => {
+    const assignment = {
+      userId: 'user-1',
+      relayHostId: 'abcdefghijklmnop',
+      cellId: 'asia-c1',
+      cellUrl: 'https://asia-c1.relay.example.test',
+      region: 'asia-east2',
+      assignmentEpoch: 7,
+      leaseExpiresAt: Date.now() + 300_000
+    }
+    const assign = vi.fn(async () => assignment)
+    const window = {
+      generation: 2,
+      expiresAt: Date.now() + 86_400_000,
+      assignmentEpoch: 7,
+      incumbentRegion: 'asia-east2',
+      policyVersion: 1
+    }
+    const exchangeRegionCorrection = vi.fn(async () => ({ v: 1, window }))
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { assign, exchangeRegionCorrection } as never,
+      drain: vi.fn(),
+      ready: async () => true
+    })
+    const regionCorrection = { v: 1, action: 'issue-window' }
+    const response = await app.request(
+      '/v1/assign',
+      assignmentRequest('abcdefghijklmnop', {
+        preferredRegion: 'asia-east2',
+        regionCorrection
+      })
+    )
+    expect(response.status).toBe(200)
+    expect(assign).toHaveBeenCalledWith(
+      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
+      'asia-east2',
+      'asia-east2'
+    )
+    expect(exchangeRegionCorrection).toHaveBeenCalledWith(
+      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
+      regionCorrection,
+      7
+    )
+    expect(((await response.json()) as { regionCorrection: unknown }).regionCorrection).toEqual({
+      v: 1,
+      window
+    })
+  })
+
+  it('returns successful placement when optional window storage is unavailable', async () => {
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {
+        assign: async () => ({
+          cellId: 'asia-c1',
+          region: 'asia-east2',
+          cellUrl: 'https://asia-c1.relay.example.test',
+          assignmentEpoch: 7
+        }),
+        exchangeRegionCorrection: async () => {
+          throw new Error('database unavailable')
+        }
+      } as never,
+      drain: vi.fn(),
+      ready: async () => true
+    })
+    const response = await app.request(
+      '/v1/assign',
+      assignmentRequest('abcdefghijklmnop', {
+        preferredRegion: 'asia-east2',
+        regionCorrection: { v: 1, action: 'issue-window' }
+      })
+    )
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      cellUrl: 'https://asia-c1.relay.example.test',
+      assignmentEpoch: 7
+    })
+  })
+
+  it('does not place or write a legacy hint when reporting migration evidence', async () => {
+    const current = {
+      userId: 'user-1',
+      relayHostId: 'abcdefghijklmnop',
+      cellId: 'asia-c1',
+      cellUrl: 'https://asia-c1.relay.example.test',
+      region: 'asia-east2',
+      assignmentEpoch: 7,
+      leaseExpiresAt: Date.now() + 300_000
+    }
+    const assign = vi.fn()
+    const resolve = vi.fn(async () => current)
+    const exchangeRegionCorrection = vi.fn(async () => ({ v: 1, reportStatus: 'accepted' }))
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { assign, resolve, exchangeRegionCorrection } as never,
+      drain: vi.fn(),
+      ready: async () => true
+    })
+    const regionCorrection = {
+      v: 1,
+      action: 'report',
+      generation: 2,
+      assignmentEpoch: 7,
+      policyVersion: 1,
+      outcome: 'conclusive',
+      measurements: { 'us-central1': 40, 'asia-east2': 180 }
+    }
+    const response = await app.request(
+      '/v1/assign',
+      assignmentRequest('abcdefghijklmnop', {
+        preferredRegion: 'us-central1',
+        regionCorrection
+      })
+    )
+    expect(response.status).toBe(200)
+    expect(assign).not.toHaveBeenCalled()
+    expect(exchangeRegionCorrection).toHaveBeenCalledWith(
+      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
+      regionCorrection,
+      7
+    )
+    expect(((await response.json()) as { assignmentEpoch: number }).assignmentEpoch).toBe(7)
+  })
+
+  it('does not manufacture an assignment for a report whose assignment disappeared', async () => {
+    const assign = vi.fn()
+    const exchangeRegionCorrection = vi.fn()
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { assign, resolve: async () => null, exchangeRegionCorrection } as never,
+      drain: vi.fn(),
+      ready: async () => true
+    })
+    const response = await app.request(
+      '/v1/assign',
+      assignmentRequest('abcdefghijklmnop', {
+        regionCorrection: {
+          v: 1,
+          action: 'report',
+          generation: 2,
+          assignmentEpoch: 7,
+          policyVersion: 1,
+          outcome: 'inconclusive',
+          reason: 'timeout'
+        }
+      })
+    )
+    expect(response.status).toBe(409)
+    expect(assign).not.toHaveBeenCalled()
+    expect(exchangeRegionCorrection).not.toHaveBeenCalled()
   })
 
   it('exposes only the store-provided healthy catalog from directors', async () => {

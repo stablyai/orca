@@ -336,7 +336,7 @@ describe('hasUnreadAgentCompletionForTerminalTab', () => {
   it('changes only the owning tab when immutable marker snapshots add and clear unread', () => {
     const before = { [`tab-2:${SECOND_LEAF_ID}`]: true }
     const added = { ...before, [`${TAB_ID}:${FIRST_LEAF_ID}`]: true }
-    const cleared = { ...added, [`${TAB_ID}:${FIRST_LEAF_ID}`]: false }
+    const cleared = { ...added, [`${TAB_ID}:${FIRST_LEAF_ID}`]: undefined }
 
     expect(hasUnreadAgentCompletionForTerminalTab(before, TAB_ID)).toBe(false)
     expect(hasUnreadAgentCompletionForTerminalTab(added, TAB_ID)).toBe(true)
@@ -390,6 +390,29 @@ describe('resolveTerminalTabAttentionBadge', () => {
 })
 
 describe('terminalTabHasUnreadActivity', () => {
+  it.each(['terminal-bell', 'agent-completion', 'manual-mark-unread', 'legacy'] as const)(
+    'recognizes a classified %s tab marker without a completion pane',
+    (reason) => {
+      expect(
+        terminalTabHasUnreadActivity({
+          terminalTabId: TAB_ID,
+          unreadTerminalTabs: { [TAB_ID]: reason },
+          unreadAgentCompletionPanes: {}
+        })
+      ).toBe(true)
+    }
+  )
+
+  it.each([false, undefined])('ignores a cleared tab marker (%s)', (marker) => {
+    expect(
+      terminalTabHasUnreadActivity({
+        terminalTabId: TAB_ID,
+        unreadTerminalTabs: { [TAB_ID]: marker },
+        unreadAgentCompletionPanes: {}
+      })
+    ).toBe(false)
+  })
+
   it('is true for a tab bell or completion pane', () => {
     expect(
       terminalTabHasUnreadActivity({

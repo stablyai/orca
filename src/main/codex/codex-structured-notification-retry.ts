@@ -6,7 +6,7 @@ const MAX_RETRY_EVENTS = 256
 const MAX_RETRY_BYTES = 8 * 1024 * 1024
 const RETRY_DELAY_MS = 25
 
-type PendingNotification = { method: string; params: unknown; bytes: number }
+type PendingNotification = { method: string; params: unknown; bytes: number; observedAt?: number }
 type RetryState = {
   connection: CodexAppServerConnection
   events: PendingNotification[]
@@ -22,7 +22,8 @@ export function createCodexStructuredNotificationRetry(deps: {
     sessionId: string,
     session: CodexSession,
     method: string,
-    params: unknown
+    params: unknown,
+    observedAt?: number
   ) => CodexJournalTranslationAdmission
 }) {
   const states = new Map<string, RetryState>()
@@ -48,7 +49,13 @@ export function createCodexStructuredNotificationRetry(deps: {
           fail(sessionId, state, 'notification retry owner is no longer live')
           break
         }
-        const admission = deps.translate(sessionId, session, pending.method, pending.params)
+        const admission = deps.translate(
+          sessionId,
+          session,
+          pending.method,
+          pending.params,
+          pending.observedAt
+        )
         if (!admission.accepted) {
           if (admission.reason === 'backpressure') {
             state.timer = setTimeout(() => {
@@ -97,7 +104,8 @@ export function createCodexStructuredNotificationRetry(deps: {
     sessionId: string,
     connection: CodexAppServerConnection,
     method: string,
-    params: unknown
+    params: unknown,
+    observedAt: number | undefined
   ): void => {
     const bytes = Buffer.byteLength(JSON.stringify({ method, params }), 'utf8')
     let state = states.get(sessionId)
@@ -111,7 +119,12 @@ export function createCodexStructuredNotificationRetry(deps: {
       fail(sessionId, state, 'notification retry queue overflow')
       return
     }
-    state.events.push({ method, params, bytes })
+    state.events.push({
+      method,
+      params,
+      bytes,
+      ...(observedAt !== undefined ? { observedAt } : {})
+    })
     state.bytes += bytes
     connection.pauseReading?.()
   }
@@ -120,7 +133,8 @@ export function createCodexStructuredNotificationRetry(deps: {
     handle: (
       sessionId: string,
       method: string,
-      params: unknown
+      params: unknown,
+      observedAt?: number
     ): CodexJournalTranslationAdmission => {
       const session = deps.sessionFor(sessionId)
       if (!session) {
@@ -128,13 +142,13 @@ export function createCodexStructuredNotificationRetry(deps: {
       }
       const state = states.get(sessionId)
       if (state && state.events.length > 0) {
-        enqueue(sessionId, state.connection, method, params)
+        enqueue(sessionId, state.connection, method, params, observedAt)
         retry(sessionId, state.connection)
         return { accepted: false, reason: 'backpressure' }
       }
-      const admission = deps.translate(sessionId, session, method, params)
+      const admission = deps.translate(sessionId, session, method, params, observedAt)
       if (!admission.accepted) {
-        enqueue(sessionId, session.connection, method, params)
+        enqueue(sessionId, session.connection, method, params, observedAt)
         retry(sessionId, session.connection)
       }
       return admission

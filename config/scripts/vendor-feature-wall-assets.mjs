@@ -20,8 +20,8 @@ const TILES = [
   {
     id: 'tile-01',
     sourceRoot: ROOT,
-    gifRelativePath: 'docs/assets/feature-wall/parallel-worktrees.gif',
-    posterRelativePath: 'docs/assets/feature-wall/parallel-worktrees.jpg'
+    gifRelativePath: 'docs/site/public/docs/tab-split.gif',
+    posterRelativePath: 'docs/site/public/docs/posters/tab-split.jpg'
   },
   {
     id: 'tile-02',

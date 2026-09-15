@@ -17,6 +17,7 @@ const viewMode = { isTabChatView: (_tabId: string) => true }
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
 const structuredSendWithOutcome = vi.fn()
 const structuredCancel = vi.fn()
+const structuredCancelPrompt = vi.fn(async () => true)
 const structuredRespondPermission = vi.fn(async () => true)
 const structuredRespondQuestion = vi.fn(async () => true)
 const structuredSetOption = vi.fn(async () => true)
@@ -55,6 +56,7 @@ const structuredQuestion = {
   allowOther: true,
   optionTokens: ['choice-a', 'choice-b']
 }
+const structuredActivity = { isWorking: false, turnId: null as string | null }
 const structuredSessionState = {
   messages: [] as unknown[],
   status: 'ready',
@@ -86,10 +88,10 @@ vi.mock('./use-mobile-native-chat-session', () => ({
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
     session: structuredSessionState,
-    isWorking: false,
-    turnId: null,
+    ...structuredActivity,
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
+    cancelPrompt: structuredCancelPrompt,
     permission: structuredPermission,
     question: structuredQuestion,
     optionSnapshot: structuredOptionSnapshot,
@@ -227,6 +229,10 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     controller = null
   })
 
+  it('leaves structured prompt cancellation unavailable on the legacy bridge lane', () => {
+    expect(controller?.handleNativeChatCancelPrompt).toBeUndefined()
+  })
+
   it('clears an orphaned image paste before a question-card answer (#10228)', async () => {
     // The chat overlay wires the question card straight to this send, bypassing
     // the image hook that used to own the only heal.
@@ -339,6 +345,37 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(structuredSendWithOutcome).toHaveBeenCalledWith('look')
     expect(sendWithOutcome).not.toHaveBeenCalled()
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('separates structured working status from provider cancellation availability', async () => {
+    const props = {
+      tab: {
+        type: 'agent-session',
+        id: 'agent-tab-1',
+        title: 'Chat',
+        sessionId: 'session-structured',
+        agent: 'codex',
+        isActive: true
+      },
+      activeHandle: null,
+      inputLeaseReady: false
+    }
+    structuredActivity.isWorking = true
+    try {
+      await act(async () => {
+        renderer?.update(createElement(Harness, props))
+      })
+      expect(controller?.nativeChatAgentWorking).toBe(true)
+      expect(controller?.nativeChatCanStop).toBe(false)
+      structuredActivity.turnId = 'provider-turn'
+      await act(async () => {
+        renderer?.update(createElement(Harness, props))
+      })
+      expect(controller?.nativeChatCanStop).toBe(true)
+    } finally {
+      structuredActivity.isWorking = false
+      structuredActivity.turnId = null
+    }
   })
 
   it('exposes structured prompt cards and session options on structured tabs', async () => {

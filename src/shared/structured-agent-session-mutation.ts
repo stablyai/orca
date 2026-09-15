@@ -26,6 +26,18 @@ export function structuredAgentSessionPayloadFingerprint(input: {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+export function structuredAgentSessionDomainFingerprint(input: {
+  domain: string
+  sessionId: string
+  fields: Record<string, unknown>
+}): string {
+  return structuredAgentSessionPayloadFingerprint({
+    method: input.domain,
+    sessionId: input.sessionId,
+    fields: input.fields
+  })
+}
+
 export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string

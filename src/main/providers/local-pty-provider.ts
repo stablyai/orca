@@ -9,9 +9,11 @@ import {
   confirmLocalPtyForegroundProcess,
   confirmLocalPtyShellForeground,
   getLocalPtyForegroundProcess,
-  hasLocalPtyChildProcesses
+  hasLocalPtyChildProcesses,
+  inspectLocalPtyChildProcesses
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
+import type { PtyProcessInspection } from './pty-process-inspection'
 import {
   advanceLoadGeneration,
   clearPtyState,
@@ -125,6 +127,16 @@ export class LocalPtyProvider implements IPtyProvider {
 
   hasChildProcesses(id: string): Promise<boolean> {
     return hasLocalPtyChildProcesses(id)
+  }
+
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    const foregroundProcess = await getLocalPtyForegroundProcess(id)
+    const childProcessEvidence = inspectLocalPtyChildProcesses(id)
+    return {
+      foregroundProcess,
+      hasChildProcesses: childProcessEvidence === 'children',
+      childProcessEvidence
+    }
   }
 
   getForegroundProcess(id: string): Promise<string | null> {

@@ -68,6 +68,9 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
+  // Why a ref, not state: the cold-activation pass runs during render, where a
+  // setState would be a render-phase update; the pass returns the count instead.
+  const activationDeferralPlanRevisionRef = useRef(0)
 
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
@@ -163,7 +166,8 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     forceParkedCaptureDoneRef,
     backgroundMountTabIdsByWorktreeRef,
     activationDeferredMountTabIdsByWorktreeRef,
-    lastActivationWorktreeIdRef
+    lastActivationWorktreeIdRef,
+    activationDeferralPlanRevisionRef
   }
 }
 

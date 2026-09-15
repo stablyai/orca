@@ -1,3 +1,6 @@
+vi.mock('../notifications/push-registration', () => ({
+  attachPushRegistration: () => () => {}
+}))
 import { createElement, Fragment, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

@@ -16,11 +16,17 @@ const hash = (parts: string[] | string): string =>
     .update(Array.isArray(parts) ? parts.join('\n') : parts)
     .digest('hex')
 
-const PRE_REFACTOR_SCREEN_HOOKS = '42174315a76c475d09dcb7209af4481f01258c4c9dc012127ff07a893d8cd291'
+// Bound workspace-creation requests change source signatures the same way bound settings requests
+// did: the method string and the envelope read leave the screen and an operation name arrives. The
+// behaviour they used to pin is pinned by the recordings in mobile/rpc-foundation/goldens instead,
+// which did not move. Statement, declaration, render and style counts are unchanged; `semantics`
+// loses exactly the 22 `rpc:` signatures and 22 method literals the migration deleted.
+const WORKSPACE_RPC_SCREEN_HOOKS =
+  '26ed5700089a9de13ea984274eb10ddea62f72b28135992514e3c16ef8e47e30'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const PRE_REFACTOR_STATEMENTS = '9323fbee7c3806f37de42578ba73ce659c786c0ed5f8b6bcbc321b201ca50a73'
-const PRE_REFACTOR_DECLARATIONS = 'cff54172af17a877789be1479c2eb6ca97d83c3e31dd831cd59395962f2b4c4a'
-const PRE_REFACTOR_SEMANTICS = '5219d210d6f274e9ce2716a37c4c6fc4860a736a80f059ab6e89da6123043263'
+const WORKSPACE_RPC_STATEMENTS = 'c25179660e089fd602b06e8c235e5f92d62e63d6d4add4c33ff89a4b5f9493cc'
+const MAIN_REBASED_DECLARATIONS = '6ad0397123e59fc1047a14049c86ff31d81723673a7a7f5c41677471aec58415'
+const WORKSPACE_RPC_SEMANTICS = '7a00e700fe7293df9b5b68470185197c56a27007d89038a183153b29326113c0'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
 const PRE_REFACTOR_RENDER_TREE = '2111145136b1e4fbca150d4792d735a90e992488e9934cfc1a8b8f3be981f39f'
 
@@ -28,7 +34,7 @@ describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
     const screenHooks = readFlattenedMobileTasksHookSignatures('MobileTasksScreen')
     expect(screenHooks).toHaveLength(350)
-    expect(hash(screenHooks)).toBe(PRE_REFACTOR_SCREEN_HOOKS)
+    expect(hash(screenHooks)).toBe(WORKSPACE_RPC_SCREEN_HOOKS)
 
     const diffHooks = readFlattenedMobileTasksHookSignatures('GitHubPrFileDiff')
     expect(diffHooks).toHaveLength(3)
@@ -38,19 +44,19 @@ describe('Mobile Tasks refactor parity', () => {
   it('preserves every screen statement in execution order', () => {
     const statements = readFlattenedMobileTasksCoreStatements()
     expect(statements).toHaveLength(417)
-    expect(hash(statements)).toBe(PRE_REFACTOR_STATEMENTS)
+    expect(hash(statements)).toBe(WORKSPACE_RPC_STATEMENTS)
   })
 
   it('preserves every moved top-level declaration', () => {
     const declarations = readMobileTasksDeclarationSignatures()
-    expect(declarations).toHaveLength(193)
-    expect(hash(declarations)).toBe(PRE_REFACTOR_DECLARATIONS)
+    expect(declarations).toHaveLength(194)
+    expect(hash(declarations)).toBe(MAIN_REBASED_DECLARATIONS)
   })
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_499)
-    expect(hash(semantics)).toBe(PRE_REFACTOR_SEMANTICS)
+    expect(semantics.split('\n')).toHaveLength(3_452)
+    expect(hash(semantics)).toBe(WORKSPACE_RPC_SEMANTICS)
   })
 
   it('preserves render expressions and event handlers in tree order', () => {

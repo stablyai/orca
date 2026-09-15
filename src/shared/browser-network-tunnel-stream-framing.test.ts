@@ -171,4 +171,45 @@ describe('browser network tunnel stream framing', () => {
     expect(writer.queuedBytes).toBe(0)
     expect(onError).not.toHaveBeenCalled()
   })
+
+  it('rejects saturated writer frames before encoding and copying their payloads', () => {
+    const writer = new BrowserNetworkTunnelStreamFrameWriter(
+      () => {},
+      () => {},
+      { maxQueuedFrames: 1 }
+    )
+    const frame = new Uint8Array(65536)
+    expect(writer.send(frame)).toBe(true)
+    const set = vi.spyOn(Uint8Array.prototype, 'set')
+    try {
+      for (let index = 0; index < 1000; index += 1) {
+        expect(writer.send(frame)).toBe(false)
+      }
+      expect(set.mock.calls.length).toBe(0)
+      expect(writer.queuedBytes).toBe(65540)
+    } finally {
+      set.mockRestore()
+      writer.close()
+    }
+  })
+
+  it('admits a frame that exactly fills the byte cap and rejects one byte past it', () => {
+    const writer = new BrowserNetworkTunnelStreamFrameWriter(
+      () => {},
+      () => {},
+      { maxQueuedBytes: 158 }
+    )
+    expect(writer.send(new Uint8Array(100))).toBe(true)
+    expect(writer.queuedBytes).toBe(104)
+    expect(writer.send(new Uint8Array(51))).toBe(false)
+    expect(writer.send(new Uint8Array(50))).toBe(true)
+    expect(writer.queuedBytes).toBe(158)
+    writer.close()
+  })
+
+  it('encodes exactly the byte count writer admission reserves', () => {
+    for (const size of [1, 2, 255, 4096, 65536, 64 * 1024 + 16]) {
+      expect(encodeBrowserNetworkTunnelStreamFrame(new Uint8Array(size)).byteLength).toBe(4 + size)
+    }
+  })
 })

@@ -9,6 +9,7 @@ import {
   boundInlineText,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { boundJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import {
   CLAUDE_APPROVAL_DECISIONS,
@@ -119,7 +120,7 @@ export function claudeQuestionItems(input: {
         sessionId: input.sessionId,
         promptKey: input.prompt.promptKey
       }),
-      body: {
+      body: boundJournalPromptBody({
         kind: 'question',
         question: legacyCompatible
           ? first.question
@@ -128,7 +129,7 @@ export function claudeQuestionItems(input: {
         ...(legacyCompatible ? { freeTextQuestionId: first.freeTextQuestionId } : {}),
         questions,
         resolution: { ...PENDING }
-      }
+      })
     }
   ]
 }

@@ -11,20 +11,12 @@ import type { ActivityPortalReadinessStatus } from './activity-portal-readiness-
 
 export type { ActivityGroupBy, ThreadReadFilter } from '../../../../shared/ui-chrome-types'
 
-export type ActivityEventState = Extract<AgentStatusState, 'done' | 'blocked' | 'waiting'>
+export type ActivityEventState = AgentStatusState
 export type ActivityHookLiveAgentState = Extract<
   AgentStatusState,
   'working' | 'blocked' | 'waiting'
 >
 export type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring'
-export type ActivityStatusGroupId =
-  | 'working'
-  | 'monitoring'
-  | 'blocked'
-  | 'waiting'
-  | 'done'
-  | 'interrupted'
-
 export type ActivityEvent = {
   id: string
   state: ActivityEventState
@@ -69,7 +61,6 @@ export type AgentPaneThread = {
 
 export type ActivityThreadGroup = {
   key: string
-  id?: ActivityStatusGroupId
   label: string
   state?: AgentDotState
   threads: AgentPaneThread[]

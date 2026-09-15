@@ -7,7 +7,6 @@ import type { SendParams } from '../schemas'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
-import { sweepSettledWorkerResumeFences } from '../../settled-worker-resume-fence-sweep'
 import type { SendRecipientWarning } from './recipient-routing'
 import type { z } from 'zod'
 
@@ -150,11 +149,6 @@ export function sendPointToPointMessage(args: {
       ? db.commitWorkerDoneMessageMutation(commitMessage)
       : commitMessage()
   committed.nudge()
-  if (messageType === 'worker_done') {
-    // Settlement is what makes the pane fenceable; without this the fence only appeared at the
-    // next app start and reopening the pane in the same session respawned the agent.
-    sweepSettledWorkerResumeFences(runtime)
-  }
   return committed.receipt
 }
 

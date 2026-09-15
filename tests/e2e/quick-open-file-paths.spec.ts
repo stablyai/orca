@@ -42,19 +42,20 @@ test('cmd+p quick open prioritizes the filename and reveals the full path on hov
     rowText?.indexOf('packages/orca/src/renderer/src/components/navigation/') ?? -1
   )
 
-  // Two hovers on purpose: results stream in and remount the row, and Radix only
-  // opens on a pointermove it actually receives. A single hover can land before
-  // the remount and leave the cursor sitting still over a row that never saw it.
-  await row.hover({ position: { x: 20, y: 12 } })
-  await orcaPage.waitForTimeout(250)
-  await row.hover({ position: { x: 40, y: 12 } })
+  const tooltip = orcaPage
+    .locator('[data-slot="tooltip-content"]')
+    .filter({ hasText: relativeFilePath })
+  // Streaming results can remount the row under a stationary pointer.
+  await expect(async () => {
+    await row.hover({ position: { x: 20, y: 12 }, timeout: 1_000 })
+    await row.hover({ position: { x: 40, y: 12 }, timeout: 1_000 })
+    await expect(tooltip).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 10_000, intervals: [100, 250, 500] })
 
   // Exact cursor placement is arithmetic, unit-tested via cursorTooltipOffsets.
   // Asserting it here measures the app mid-reflow and is flaky; what E2E is
   // uniquely good for is that the tooltip really opens with the whole path.
-  await expect(
-    orcaPage.locator('[data-slot="tooltip-content"]').filter({ hasText: relativeFilePath })
-  ).toBeVisible()
+  await expect(tooltip).toBeVisible()
 
   const proofPath = process.env.ORCA_QUICK_OPEN_PROOF_PATH
   if (proofPath) {

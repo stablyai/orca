@@ -400,3 +400,30 @@ after checkout and authentication, before package installation, revision checks,
 Their typed confirmations are `PAUSE_REGIONAL_REHOMING` and `DISABLE_REGIONAL_REHOMING`. Keep the
 default 3,600,000 ms drain grace so existing splices can finish. The job summary contains only fresh
 aggregate active, receipt, registration, completion, and abort counts.
+
+## Mobile push gateway
+
+`Deploy Push Gateway Production` (`.github/workflows/cloud-push-deploy.yml`) is the deploy path
+for `orca-cloud-push`, the mobile push gateway. It is the one `cloud-*` workflow that is not a
+relay operation, and it is here because it shares the Artifact Registry repository and rollout
+lease. Push uses a dedicated Cloud SQL instance.
+
+It authenticates through `PRODUCTION_GCP_PUSH_DEPLOY_WORKLOAD_IDENTITY_PROVIDER` and
+`PRODUCTION_GCP_PUSH_DEPLOY_SERVICE_ACCOUNT`. The dedicated identity has Artifact Registry writer,
+Cloud Run developer on the push service, and impersonation of only the push runtime account.
+Its provider pins the repository, production environment, main branch, and exact dispatch workflow;
+its distinct principal attribute cannot assume the shared Relay deploy account.
+
+Foundation grants the dedicated account access to the rollout-lock prefix and bucket metadata.
+Apply that companion grant and publish the identity outputs before running the workflow. See
+[push gateway deployment setup](./push-gateway.md#deploying) for the activation steps.
+
+The run builds the exact reviewed image digest before taking the lease and rejects images
+without validation-mode support using a network-isolated container. Under the lease it boots
+an inert, read-only validation revision, checks readiness, mode, scaling and FCM credentials,
+then deletes it before deliberately activating the same digest in a new revision. Activation
+starts schema writes, pruners and queue consumers before HTTP promotion. Rollback requires
+restoring traffic, deleting the rejected active revision, and restoring the service template to
+the known-good image in normal mode. The untagged template-recovery revision can run known-good
+workers and is retired before lease release; see the
+[deployment and rollback contract](./push-gateway.md#deploying).

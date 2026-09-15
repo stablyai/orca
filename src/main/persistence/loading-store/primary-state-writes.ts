@@ -231,6 +231,12 @@ export function writeToDiskSync(
     !opts.force &&
     stateHash === owner[primaryStateWriteOperationsContext].runtime.lastWrittenStateHash
   ) {
+    // Why: flushOrThrow already bumped writeGeneration; the file holds this state, so record it
+    // durable or persistPtyBinding's fast lane stays parked one generation behind forever.
+    owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration = Math.max(
+      owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration,
+      owner[primaryStateWriteOperationsContext].runtime.writeGeneration
+    )
     return
   }
   const dataFile = owner[primaryStateWriteOperationsContext].runtime.dataFile

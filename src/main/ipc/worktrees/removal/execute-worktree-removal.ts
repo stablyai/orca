@@ -8,8 +8,9 @@ import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktree'
 import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 import { resolveWorktreeRemovalMetadata } from '../../../worktree-removal-repo-owner'
+import { isPrunableGitFileWorktree } from '../../../worktree-prunable-git-file'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
-import { removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval } from '../../../local-worktree-removal-recovery'
+import { removeStaleLocalWorktreeRegistration } from '../../../local-worktree-removal-recovery'
 import { runHook } from '../../../hooks'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import {
@@ -85,13 +86,14 @@ export async function executeWorktreeRemoval(
 
   if (
     !repo.connectionId &&
-    args.force === true &&
-    process.platform === 'win32' &&
-    (isWindowsAbsolutePathLike(canonicalWorktreePath) || !!localWorktreeGitOptions.wslDistro) &&
-    removedMeta &&
-    (await isAlreadyRemovedWorktreePath(repo, canonicalWorktreePath, localWorktreeGitOptions))
+    ((await isPrunableGitFileWorktree(registeredWorktree, localWorktreeGitOptions)) ||
+      (args.force === true &&
+        process.platform === 'win32' &&
+        (isWindowsAbsolutePathLike(canonicalWorktreePath) || !!localWorktreeGitOptions.wslDistro) &&
+        removedMeta &&
+        (await isAlreadyRemovedWorktreePath(repo, canonicalWorktreePath, localWorktreeGitOptions))))
   ) {
-    const removalResult = await removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+    const removalResult = await removeStaleLocalWorktreeRegistration({
       canonicalWorktreePath,
       repoPath: repo.path,
       localWorktreeGitOptions,

@@ -137,7 +137,7 @@ describe('orchestration fleet projection', () => {
       host: { kind: 'local' },
       liveness: { verdict: 'unverifiable', reason: 'missing_status' },
       resource: { state: 'absent', reason: 'unsupervised' },
-      nextAction: { kind: 'inspect' }
+      nextAction: { kind: 'none' }
     })
   })
 
@@ -229,6 +229,7 @@ describe('orchestration fleet projection', () => {
     expect(second.workers.at(-1)?.id).toBe('dispatch-109')
   })
 
+  // Cleanup still earns a command when liveness is unverifiable.
   it('suggests release only for reclaimable ownership', () => {
     const result = projectOrchestrationFleet({
       workers: [worker('done', { terminalState: 'reclaimable' })],
@@ -236,6 +237,7 @@ describe('orchestration fleet projection', () => {
       now: 1
     })
 
+    expect(result.workers[0]?.liveness.verdict).toBe('unverifiable')
     expect(result.workers[0]?.nextAction).toEqual({
       kind: 'release',
       argv: ['orchestration', 'worker-release', '--dispatch', 'done']
@@ -487,7 +489,8 @@ describe('fleet liveness and attention after a host verdict', () => {
       verdict: 'unverifiable',
       reason: 'missing_status'
     })
-    expect(projected.workers[0]!.nextAction.kind).toBe('inspect')
+    // `recover` is reserved for a proven exit; worker-show would only restate this row.
+    expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
 
   it('certifies a process_exited stage whose exit was observed', () => {
@@ -519,15 +522,19 @@ describe('fleet liveness and attention after a host verdict', () => {
     expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
 
-  it('keeps an unverifiable worker on inspect: absence is never authority to stop', () => {
+  // worker-show repeats this projection, so inspecting again would loop.
+  it('asks nothing of an unverifiable worker instead of looping on worker-show', () => {
     const now = 10 * AGENT_STATUS_STALE_AFTER_MS
     const projected = projectOrchestrationFleet({
       workers: [worker('1')],
       statuses: [status('1', now - AGENT_STATUS_STALE_AFTER_MS - 60_000)],
       now
     })
-    expect(projected.workers[0]!.liveness.verdict).toBe('unverifiable')
-    expect(projected.workers[0]!.nextAction.kind).toBe('inspect')
+    expect(projected.workers[0]!.liveness).toMatchObject({
+      verdict: 'unverifiable',
+      reason: 'stale_status'
+    })
+    expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
 
   it('leaves a worker blocked on a question inspectable rather than recoverable', () => {
@@ -538,6 +545,22 @@ describe('fleet liveness and attention after a host verdict', () => {
     })
     expect(projected.workers[0]!.nextAction.kind).toBe('inspect')
   })
+
+  it.each([{ pendingInput: true }, { pendingApproval: true }])(
+    'keeps an unverifiable worker with %o inspectable',
+    (pending) => {
+      const projected = projectOrchestrationFleet({
+        workers: [worker('1', pending)],
+        statuses: [],
+        now: 10_000
+      })
+      expect(projected.workers[0]!.liveness.verdict).toBe('unverifiable')
+      expect(projected.workers[0]!.nextAction).toEqual({
+        kind: 'inspect',
+        argv: ['orchestration', 'worker-show', '--dispatch', '1']
+      })
+    }
+  )
 
   // The live worker-list row from a stopped worker: the same receipt proved the exit,
   // called it absence, and pointed back at the command that reported the settlement.

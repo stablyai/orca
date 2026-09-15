@@ -56,27 +56,30 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
  *  twice. A group left with no twin prints its own: the wire admits a roster that
  *  arrived without one, and dropping that would lose the sentence altogether. */
 function claimSubagentGroupTwins(blocks: NativeChatMessage['blocks']): Map<number, string> {
-  const twins: string[] = []
+  const twins = new Map<string, number>()
+  let remainingTwins = 0
   const groups: { index: number; sentence: string }[] = []
   blocks.forEach((block, index) => {
     if (block.type === 'text' && isSubagentGroupFallbackText(block.text)) {
-      twins.push(block.text)
+      twins.set(block.text, (twins.get(block.text) ?? 0) + 1)
+      remainingTwins += 1
     } else if (block.type === 'subagent-group') {
       groups.push({ index, sentence: subagentGroupFallbackText(block.agents) })
     }
   })
   const standIns = new Map<number, string>()
   const unclaimed = groups.filter((group) => {
-    const exact = twins.indexOf(group.sentence)
-    if (exact === -1) {
+    const count = twins.get(group.sentence) ?? 0
+    if (count === 0) {
       return true
     }
-    twins.splice(exact, 1)
+    twins.set(group.sentence, count - 1)
+    remainingTwins -= 1
     return false
   })
   for (const group of unclaimed) {
-    if (twins.length > 0) {
-      twins.pop()
+    if (remainingTwins > 0) {
+      remainingTwins -= 1
       continue
     }
     standIns.set(group.index, `[subagents] ${group.sentence}`)

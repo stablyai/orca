@@ -27,7 +27,7 @@ import {
 } from './ai-vault-session-projects'
 import {
   resolveAiVaultSessionResumeActions,
-  resolveAiVaultSessionResumeState
+  resolveAiVaultHistorySessionResumeState
 } from './ai-vault-session-resume'
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
@@ -263,9 +263,8 @@ export default function AiVaultPanel(): React.JSX.Element {
 
   const getSessionResumeState = useCallback(
     (session: AiVaultSession) =>
-      resolveAiVaultSessionResumeState({
-        sessionFilePath: session.filePath,
-        sessionExecutionHostId: session.executionHostId,
+      resolveAiVaultHistorySessionResumeState({
+        session,
         worktreeInfo: getSessionWorktreeInfo(session),
         activeWorktreeId: effectiveActiveWorktreeId,
         worktrees: allWorktrees,

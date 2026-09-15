@@ -713,7 +713,6 @@
       "useComposerState": {
         "7eb3f44ff7": "El agente seleccionado está deshabilitado. Elige un agente habilitado antes de crear.",
         "b2ead86962": "No se pudo resolver la base del PR.",
-        "a9ff236145": "Algunos archivos adjuntos no se pudieron cargar.",
         "3db83fc58a": "No hay ninguna ruta de proyecto remoto disponible para los archivos adjuntos.",
         "ba6cb77082": "No se pudo conectar al proyecto.",
         "chooseOrAddProjectBeforeWorkspace": "Elige o agrega un proyecto antes de crear un espacio de trabajo.",
@@ -2218,6 +2217,10 @@
                 "7c302f8174": "Sin título"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "Esta vista aún no tiene elementos.",
+            "7e4a2f80c6": "Los elementos añadidos recientemente pueden tardar un poco en aparecer."
           }
         },
         "GitHubMarkdownComposer": {
@@ -4412,7 +4415,6 @@
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
           "spaces": "Espacios",
           "views": "Vista de la barra lateral",
-          "createMenu": "Crear",
           "addProject": "Agregar proyecto"
         },
         "SidebarNav": {
@@ -14188,8 +14190,6 @@
           "5651b216c6": "Proyecto desconocido",
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
           "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar.",
-          "compactModeDescription": "Muestra filas de hilo más cortas con títulos de una línea y mensajes de estado de dos líneas.",
-          "unreadOnlyDescription": "Filtra la lista de actividad para mostrar solo hilos con actualizaciones sin leer.",
           "clearCompleted": "Borrar completados",
           "none": "Ninguno",
           "search": "Buscar",
@@ -14207,7 +14207,9 @@
             "idle": "Inactivo",
             "unverifiable": "Sin actualizaciones recientes",
             "permission": "Requiere atención"
-          }
+          },
+          "filtersSection": "Filtros",
+          "viewSection": "Vista"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "Mostrar todos los hosts y proyectos"
@@ -14616,7 +14618,8 @@
         "chooseInAgentPicker": "Elegir en el selector del agente…",
         "toggleOption": "Alternar {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "Valor actual desconocido — elige Activado o Desactivado",
+        "valueIsDefault": "Predeterminado",
+        "valueNotReported": "No informado",
         "sentNotConfirmed": "Enviado al agente — sin confirmar",
         "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
@@ -14629,9 +14632,7 @@
           "high": "Alto",
           "xhigh": "Muy alto",
           "max": "Máximo",
-          "ultra": "Supremo",
-          "on": "Activado",
-          "off": "Desactivado"
+          "ultra": "Supremo"
         },
         "noCommandsOrSkills": "No hay comandos o habilidades coincidentes",
         "commands": "Comandos",
@@ -14922,6 +14923,14 @@
       "hide": "Ocultar Agentes",
       "action": "Probar Agentes",
       "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "necesita información",
+      "working": "trabajando",
+      "stopped": "detenido",
+      "finished": "finalizado"
     }
   }
 }
