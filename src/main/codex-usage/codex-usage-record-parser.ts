@@ -15,6 +15,9 @@ type CodexUsageRawRecord = {
 
 export type CodexUsageParseContext = {
   sessionId: string
+  rootThreadId?: string | null
+  currentTurnId?: string | null
+  usageEventIndex?: number
   sessionCwd: string | null
   currentCwd: string | null
   currentModel: string | null
@@ -77,6 +80,13 @@ export function parseCodexUsageRecord(
 
   if (parsed.type === 'session_meta') {
     context.sessionId = extractString(parsed.payload.id) ?? context.sessionId
+    const rootThreadId =
+      extractString(parsed.payload.session_id) ??
+      extractString(parsed.payload.forked_from_id) ??
+      context.sessionId
+    if (rootThreadId) {
+      context.rootThreadId = rootThreadId
+    }
     context.sessionCwd = extractString(parsed.payload.cwd)
     if (!context.currentCwd && context.sessionCwd) {
       context.currentCwd = context.sessionCwd
@@ -85,6 +95,7 @@ export function parseCodexUsageRecord(
   }
 
   if (parsed.type === 'turn_context') {
+    context.currentTurnId = extractString(parsed.payload.turn_id)
     context.currentCwd =
       extractString(parsed.payload.cwd) ?? context.currentCwd ?? context.sessionCwd
     context.currentModel = extractModel(parsed.payload) ?? context.currentModel
@@ -106,6 +117,7 @@ export function parseCodexUsageRecord(
   const record = info as Record<string, unknown>
   const totalUsage = normalizeRawUsage(record.total_token_usage)
   const lastUsage = normalizeRawUsage(record.last_token_usage)
+  context.usageEventIndex = (context.usageEventIndex ?? 0) + 1
   if (context.totalOnlyBaselinePending) {
     context.totalOnlyBaselinePending = false
     if (totalUsage && !lastUsage && !context.previousTotals) {
@@ -148,7 +160,16 @@ export function parseCodexUsageRecord(
   return {
     sessionId: context.sessionId,
     timestamp: parsed.timestamp,
-    eventKey: buildCodexUsageEventKey(parsed.timestamp, totalUsage, lastUsage),
+    eventKey: buildCodexUsageEventKey(
+      JSON.stringify([
+        context.rootThreadId ?? context.sessionId,
+        context.currentTurnId ?? null,
+        // Without cumulative totals, equal deltas can be independent requests.
+        totalUsage ? null : [context.sessionId, parsed.timestamp, context.usageEventIndex]
+      ]),
+      totalUsage,
+      lastUsage
+    ),
     cwd: context.currentCwd ?? context.sessionCwd,
     model: resolvedModel,
     hasInferredPricing,
