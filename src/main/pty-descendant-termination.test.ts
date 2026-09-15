@@ -15,10 +15,6 @@ import {
   type ProcessTableCapture,
   type ProcessTableRow
 } from './pty-descendant-termination'
-import {
-  terminateDescendantSnapshotAndWait,
-  terminateDescendantSnapshotWithVerdict
-} from './pty-descendant-exit-verification'
 
 const CAPTURED_AT_MS = Date.parse('Tue Jul 14 12:00:00 2026')
 
@@ -309,13 +305,102 @@ describe('terminateDescendantSnapshot', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('resolves its returned promise only once the grace-window escalation check finishes', async () => {
+    const readTable = vi.fn().mockResolvedValue(tableCapture([]))
+    let settled = false
+    void terminateDescendantSnapshot(snapshot([row(20, 10, 20)]), {
+      sendSignal: vi.fn(),
+      readTable
+    }).then(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(DESCENDANT_KILL_GRACE_MS - 1)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled).toBe(true)
+  })
+
+  it('resolves immediately for an empty descendant set (no grace window to wait out)', async () => {
+    await expect(
+      terminateDescendantSnapshot(snapshot([]), { sendSignal: vi.fn(), readTable: vi.fn() })
+    ).resolves.toBeUndefined()
+  })
+
+  it("leaves the grace-window and escalation deadline timers unref'd for a fire-and-forget caller (no awaitEscalation)", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    try {
+      const readTable = vi.fn().mockResolvedValue(tableCapture([]))
+      void terminateDescendantSnapshot(snapshot([row(20, 10, 20)]), {
+        sendSignal: vi.fn(),
+        readTable
+      })
+
+      const graceTimer = setTimeoutSpy.mock.results[0]?.value as NodeJS.Timeout
+      expect(graceTimer.hasRef()).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(DESCENDANT_KILL_GRACE_MS)
+      const escalationTimer = setTimeoutSpy.mock.results[1]?.value as NodeJS.Timeout
+      expect(escalationTimer.hasRef()).toBe(false)
+    } finally {
+      setTimeoutSpy.mockRestore()
+    }
+  })
+
+  // Regression (codex review): a daemon-shutdown caller awaits this promise
+  // expecting Node to stay alive for it, but an unref'd timer does not keep
+  // the event loop open — if nothing else in the process is ref'd, Node can
+  // exit before the timer this await depends on ever fires. awaitEscalation
+  // must make that liveness real, not just change what the JS awaits.
+  it("keeps the grace-window and escalation deadline timers ref'd when awaitEscalation is set", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    try {
+      const readTable = vi.fn().mockResolvedValue(tableCapture([]))
+      void terminateDescendantSnapshot(snapshot([row(20, 10, 20)]), {
+        sendSignal: vi.fn(),
+        readTable,
+        awaitEscalation: true
+      })
+
+      const graceTimer = setTimeoutSpy.mock.results[0]?.value as NodeJS.Timeout
+      expect(graceTimer.hasRef()).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(DESCENDANT_KILL_GRACE_MS)
+      const escalationTimer = setTimeoutSpy.mock.results[1]?.value as NodeJS.Timeout
+      expect(escalationTimer.hasRef()).toBe(true)
+    } finally {
+      setTimeoutSpy.mockRestore()
+    }
+  })
+
+  it('bounds the awaited escalation to DESCENDANT_KILL_GRACE_MS + DESCENDANT_SNAPSHOT_TIMEOUT_MS even when the identity re-read hangs (shutdown budget)', async () => {
+    let settled = false
+    void terminateDescendantSnapshot(snapshot([row(20, 10, 20)]), {
+      sendSignal: vi.fn(),
+      readTable: vi.fn().mockReturnValue(new Promise<ProcessTableCapture>(() => {})),
+      awaitEscalation: true
+    }).then(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(DESCENDANT_KILL_GRACE_MS + DESCENDANT_SNAPSHOT_TIMEOUT_MS - 1)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled).toBe(true)
+    // No leftover ref'd timer must survive past the bound — that would hold
+    // a real daemon process open beyond the intended shutdown budget.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it("uses each row's capture boundary when escalating a merged snapshot", async () => {
     const oldBoundary = CAPTURED_AT_MS + 900
     const refreshBoundary = CAPTURED_AT_MS + 2_100
     const retained = row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')
     const fresh = row(30, 10, 30, 'Tue Jul 14 12:00:01 2026')
     const sendSignal = vi.fn()
-    terminateDescendantSnapshot(
+    void terminateDescendantSnapshot(
       {
         ...snapshot([retained, fresh], 10, refreshBoundary),
         capturedAtMsByPid: { '20': oldBoundary, '30': refreshBoundary }
@@ -333,149 +418,6 @@ describe('terminateDescendantSnapshot', () => {
     // capture second; PID 30 was newly observed by the refresh and is old
     // enough for a bounded forced cleanup.
     expect(sendSignal.mock.calls).toEqual([[30, 'SIGKILL']])
-  })
-})
-
-describe('terminateDescendantSnapshotAndWait', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('escalates an identity-matched survivor and verifies its exit', async () => {
-    const survivor = row(20, 10, 20)
-    const sendSignal = vi.fn()
-    const readTable = vi
-      .fn()
-      .mockResolvedValueOnce(tableCapture([survivor]))
-      .mockResolvedValueOnce(tableCapture([]))
-
-    const pending = terminateDescendantSnapshotAndWait(snapshot([survivor]), {
-      sendSignal,
-      readTable,
-      graceMs: 0,
-      verifyMs: 200
-    })
-    await vi.advanceTimersByTimeAsync(50)
-
-    await expect(pending).resolves.toBe(true)
-    expect(sendSignal.mock.calls).toEqual([
-      [20, 'SIGTERM'],
-      [20, 'SIGKILL']
-    ])
-  })
-
-  it('does not claim exit when the verification table is unavailable', async () => {
-    const sendSignal = vi.fn()
-    const pending = terminateDescendantSnapshotAndWait(snapshot([row(20, 10, 20)]), {
-      sendSignal,
-      readTable: vi.fn().mockRejectedValue(new Error('ps exploded')),
-      verifyMs: 200
-    })
-    await vi.advanceTimersByTimeAsync(400)
-
-    await expect(pending).resolves.toBe(false)
-    expect(sendSignal).toHaveBeenCalledWith(20, 'SIGTERM')
-  })
-
-  it('keeps polling past a read that missed its deadline rather than surrendering', async () => {
-    const survivor = row(20, 10, 20)
-    const readTable = vi
-      .fn()
-      // A loaded host can miss one read's deadline with the window still open.
-      .mockRejectedValueOnce(new Error('ps timed out'))
-      .mockResolvedValueOnce(tableCapture([survivor]))
-      .mockResolvedValueOnce(tableCapture([]))
-    const sendSignal = vi.fn()
-
-    const pending = terminateDescendantSnapshotWithVerdict(snapshot([survivor]), {
-      sendSignal,
-      readTable,
-      graceMs: 0,
-      verifyMs: 2_000
-    })
-    await vi.advanceTimersByTimeAsync(500)
-
-    await expect(pending).resolves.toBe('exited')
-    expect(sendSignal.mock.calls).toEqual([
-      [20, 'SIGTERM'],
-      [20, 'SIGKILL']
-    ])
-  })
-
-  it('names a survivor seen at the deadline live, never unverifiable', async () => {
-    const survivor = row(20, 10, 20)
-    const pending = terminateDescendantSnapshotWithVerdict(snapshot([survivor]), {
-      sendSignal: vi.fn(),
-      readTable: vi.fn().mockResolvedValue(tableCapture([survivor])),
-      graceMs: 0,
-      verifyMs: 100
-    })
-    await vi.advanceTimersByTimeAsync(200)
-
-    await expect(pending).resolves.toBe('live')
-  })
-
-  it('names an unreadable verification table unverifiable', async () => {
-    const pending = terminateDescendantSnapshotWithVerdict(snapshot([row(20, 10, 20)]), {
-      sendSignal: vi.fn(),
-      readTable: vi.fn().mockRejectedValue(new Error('ps exploded')),
-      verifyMs: 200
-    })
-    await vi.advanceTimersByTimeAsync(400)
-
-    await expect(pending).resolves.toBe('unverifiable')
-  })
-
-  it('does not signal a recycled descendant when identity validation is required', async () => {
-    const sendSignal = vi.fn()
-    const recycled = row(20, 10, 20, 'Tue Jul 14 13:00:00 2026')
-    const pending = terminateDescendantSnapshotWithVerdict(
-      snapshot([row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')]),
-      {
-        sendSignal,
-        readTable: vi.fn().mockResolvedValue(tableCapture([recycled])),
-        requireIdentityBeforeSignal: true,
-        verifyMs: 100
-      }
-    )
-
-    await vi.advanceTimersByTimeAsync(200)
-    await expect(pending).resolves.toBe('exited')
-    expect(sendSignal).not.toHaveBeenCalled()
-  })
-
-  it('uses row-scoped boundaries for forced cleanup in the exit verifier', async () => {
-    const oldBoundary = CAPTURED_AT_MS + 900
-    const refreshBoundary = CAPTURED_AT_MS + 2_100
-    const retained = row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')
-    const fresh = row(30, 10, 30, 'Tue Jul 14 12:00:01 2026')
-    const sendSignal = vi.fn()
-    const pending = terminateDescendantSnapshotWithVerdict(
-      {
-        ...snapshot([retained, fresh], 10, refreshBoundary),
-        capturedAtMsByPid: { '20': oldBoundary, '30': refreshBoundary },
-        // What a merge produces: only the refresh re-derived 30; 20 is retained.
-        reDerivedPids: new Set([30])
-      },
-      {
-        sendSignal,
-        readTable: vi.fn().mockResolvedValue(tableCapture([retained, fresh])),
-        requireIdentityBeforeSignal: true,
-        graceMs: 0,
-        verifyMs: 100
-      }
-    )
-    await vi.advanceTimersByTimeAsync(200)
-
-    await expect(pending).resolves.toBe('live')
-    expect(sendSignal.mock.calls).toEqual([
-      [20, 'SIGTERM'],
-      [30, 'SIGTERM'],
-      [30, 'SIGKILL']
-    ])
   })
 })
 
@@ -617,7 +559,7 @@ describe('killWithDescendantSweep', () => {
     expect(killRoot).toHaveBeenCalledOnce()
   })
 
-  it('on Windows taskkills the process tree before killRoot (#10004)', async () => {
+  it('on Windows taskkills the process tree and still kills the root (#10004)', async () => {
     const events: string[] = []
     const killWindowsTree = vi.fn(async () => {
       events.push('tree-kill')
@@ -638,7 +580,90 @@ describe('killWithDescendantSweep', () => {
     expect(killRoot).toHaveBeenCalledOnce()
     expect(sendSignal).not.toHaveBeenCalled()
     expect(readTable).not.toHaveBeenCalled()
+    // This mock resolves synchronously (no internal await), so tree-kill still
+    // lands first here; killRoot no longer *waits* on it, see the shutdown-budget
+    // regressions below for that.
     expect(events).toEqual(['tree-kill', 'root-kill'])
+  })
+
+  // Regression (Codex P2): killRoot used to sit behind `await killTree(...)` in
+  // a `finally`, so a wedged/slow taskkill (bounded only by its own
+  // WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS = 5s) stacked on top of the identity
+  // probe's WINDOWS_ROOT_IDENTITY_TIMEOUT_MS = 3s could push the native root
+  // force-kill past a caller's shutdown budget (the daemon's 5s
+  // SHUTDOWN_TIMEOUT_MS) and skip it entirely if the outer deadline won the race.
+  it('on Windows, kills the root without waiting for a slow taskkill to resolve (shutdown-budget regression)', async () => {
+    const events: string[] = []
+    const killTreeGate = deferred<void>()
+    const killWindowsTree = vi.fn(() => {
+      events.push('tree-kill-started')
+      return killTreeGate.promise
+    })
+    const killRoot = vi.fn(() => events.push('root-kill'))
+
+    await killWithDescendantSweep(4242, killRoot, {
+      platform: 'win32',
+      killWindowsTree,
+      verifyTreeKillTarget: async () => 'own'
+    })
+
+    expect(events).toEqual(['tree-kill-started', 'root-kill'])
+    expect(killRoot).toHaveBeenCalledOnce()
+
+    killTreeGate.resolve()
+  })
+
+  it('on Windows with awaitEscalation, still kills the root immediately but does not resolve until taskkill settles', async () => {
+    const killTreeGate = deferred<void>()
+    const killWindowsTree = vi.fn(() => killTreeGate.promise)
+    const killRoot = vi.fn()
+
+    const pending = killWithDescendantSweep(4242, killRoot, {
+      platform: 'win32',
+      killWindowsTree,
+      verifyTreeKillTarget: async () => 'own',
+      awaitEscalation: true
+    })
+    let settled = false
+    void pending.then(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(killRoot).toHaveBeenCalledOnce()
+    expect(settled).toBe(false)
+
+    killTreeGate.resolve()
+    await pending
+    expect(settled).toBe(true)
+  })
+
+  // WSL sessions run their guest process tree inside the WSL2 VM, which is
+  // never a member of the wsl.exe root's Windows job object — so
+  // terminateOwnedTree always reports `unavailable` for them and they take the
+  // same identity-probe + taskkill fallback as a job-less native Windows pty.
+  it('on Windows (WSL fallback: no job covers the guest tree), kills the root without waiting for taskkill', async () => {
+    const events: string[] = []
+    const terminateOwnedTree = vi.fn(() => 'unavailable' as const)
+    const killTreeGate = deferred<void>()
+    const killWindowsTree = vi.fn(() => {
+      events.push('tree-kill-started')
+      return killTreeGate.promise
+    })
+    const killRoot = vi.fn(() => events.push('root-kill'))
+
+    await killWithDescendantSweep(4242, killRoot, {
+      platform: 'win32',
+      terminateOwnedTree,
+      killWindowsTree,
+      verifyTreeKillTarget: async () => 'own'
+    })
+
+    expect(terminateOwnedTree).toHaveBeenCalledOnce()
+    expect(events).toEqual(['tree-kill-started', 'root-kill'])
+    expect(killRoot).toHaveBeenCalledOnce()
+
+    killTreeGate.resolve()
   })
 
   it('on Windows still kills the root when ownership is lost mid-sweep', async () => {
@@ -777,6 +802,74 @@ describe('killWithDescendantSweep', () => {
 
     expect(ownsRoot).toHaveBeenCalledOnce()
     expect(sendSignal).not.toHaveBeenCalled()
+    expect(killRoot).toHaveBeenCalledOnce()
+  })
+
+  // Regression (codex review): an immediate process.exit right after this
+  // resolves must not be able to cut off the grace-window SIGKILL escalation
+  // for a SIGTERM-ignoring descendant — daemon shutdown needs awaitEscalation
+  // to make that wait part of what it awaits, without blocking unboundedly.
+  it('without awaitEscalation, resolves right after killRoot and leaves the grace-window escalation to finish on its own', async () => {
+    const events: string[] = []
+    const sendSignal = vi.fn((pid: number, signal: string) => events.push(`${signal}:${pid}`))
+    const readTable = vi.fn().mockResolvedValue(tableCapture([row(10, 1, 10), row(20, 10, 20)]))
+    const killRoot = vi.fn(() => events.push('root-kill'))
+
+    const pending = killWithDescendantSweep(10, killRoot, {
+      readTable,
+      sendSignal,
+      platform: 'darwin'
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    await pending
+    expect(events).toEqual(['SIGTERM:20', 'root-kill'])
+
+    await vi.advanceTimersByTimeAsync(DESCENDANT_KILL_GRACE_MS)
+    expect(events).toEqual(['SIGTERM:20', 'root-kill', 'SIGKILL:20'])
+  })
+
+  it('with awaitEscalation, still kills the root immediately but does not resolve until the grace-window SIGKILL escalation runs', async () => {
+    const events: string[] = []
+    const sendSignal = vi.fn((pid: number, signal: string) => events.push(`${signal}:${pid}`))
+    const readTable = vi.fn().mockResolvedValue(tableCapture([row(10, 1, 10), row(20, 10, 20)]))
+    const killRoot = vi.fn(() => events.push('root-kill'))
+
+    const pending = killWithDescendantSweep(10, killRoot, {
+      readTable,
+      sendSignal,
+      platform: 'darwin',
+      awaitEscalation: true
+    })
+    let settled = false
+    void pending.then(() => {
+      settled = true
+    })
+
+    // The grace window hasn't elapsed yet: the promise must still be pending
+    // (this is what lets a caller await it instead of exiting past it).
+    await vi.advanceTimersByTimeAsync(DESCENDANT_KILL_GRACE_MS - 1)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await pending
+    expect(settled).toBe(true)
+    // root-kill lands between the SIGTERM sweep and the SIGKILL escalation,
+    // proving awaitEscalation delays only killWithDescendantSweep's own
+    // resolution, not killRoot's timing.
+    expect(events).toEqual(['SIGTERM:20', 'root-kill', 'SIGKILL:20'])
+  })
+
+  it('with awaitEscalation on an empty descendant tree, resolves without waiting out the grace window', async () => {
+    const killRoot = vi.fn()
+    const readTable = vi.fn().mockResolvedValue(tableCapture([row(10, 1, 10)]))
+    await expect(
+      killWithDescendantSweep(10, killRoot, {
+        readTable,
+        sendSignal: vi.fn(),
+        platform: 'darwin',
+        awaitEscalation: true
+      })
+    ).resolves.toBeUndefined()
     expect(killRoot).toHaveBeenCalledOnce()
   })
 })
