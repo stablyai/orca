@@ -18,13 +18,26 @@ function countFirings(detector: ReturnType<typeof armedDetector>, writes: string
   return writes.filter((write) => detector.observe(write)).length
 }
 
-/** Replays a transcript the way a PTY delivers it, so the rolling window is exercised. */
-function countFiringsOverChunks(transcript: string, chunkSize: number): number {
-  const chunks: string[] = []
-  for (let index = 0; index < transcript.length; index += chunkSize) {
-    chunks.push(transcript.slice(index, index + chunkSize))
+/**
+ * Replays a transcript the way a PTY delivers it, so the rolling window is exercised. `inputAt`
+ * marks where the user answered, since only input can close a modal.
+ */
+function countFiringsOverChunks(transcript: string, chunkSize: number, inputAt?: number): number {
+  const detector = armedDetector()
+  const split = inputAt ?? transcript.length
+  let firings = 0
+  for (const [start, end] of [
+    [0, split],
+    [split, transcript.length]
+  ]) {
+    if (start === inputAt) {
+      detector.observeInput()
+    }
+    for (let index = start; index < end; index += chunkSize) {
+      firings += countFirings(detector, [transcript.slice(index, Math.min(index + chunkSize, end))])
+    }
   }
-  return countFirings(armedDetector(), chunks)
+  return firings
 }
 
 describe('Bob approval prompt detection', () => {
@@ -69,7 +82,24 @@ describe('Bob approval prompt detection', () => {
     // Bob repaints the modal every frame; the row must not re-fire.
     expect(countFirings(detector, [COMMAND_APPROVAL, COMMAND_APPROVAL, COMMAND_APPROVAL])).toBe(1)
     // Answering it repaints the composer with no menu, which disarms.
+    detector.observeInput()
     expect(countFirings(detector, [IDLE_COMPOSER, SUBAGENT_SPAWN_APPROVAL])).toBe(1)
+  })
+
+  // Why: the spawn modal stays open under a repainting composer, and a resize repaints it.
+  it('does not re-fire when the composer repaints under a modal nobody answered', () => {
+    const detector = armedDetector()
+    const writes = [SUBAGENT_SPAWN_APPROVAL, IDLE_COMPOSER, SUBAGENT_SPAWN_APPROVAL]
+    expect(countFirings(detector, writes)).toBe(1)
+  })
+
+  // Why: ↑↓ moves the menu cursor, which repaints the modal without closing it.
+  it('does not re-fire after input that repaints the still-open modal', () => {
+    const detector = armedDetector()
+    expect(countFirings(detector, [SUBAGENT_SPAWN_APPROVAL])).toBe(1)
+    detector.observeInput()
+    const writes = [SUBAGENT_SPAWN_APPROVAL, IDLE_COMPOSER, SUBAGENT_SPAWN_APPROVAL]
+    expect(countFirings(detector, writes)).toBe(0)
   })
 
   // Why: output between repaints (spinner, subagent rows) says nothing about the modal leaving.
@@ -93,7 +123,9 @@ describe('Bob approval prompt detection', () => {
   // Why: the carried tail still holds the first modal when the second completes across writes.
   it('fires for a split second modal while the tail still holds the first', () => {
     const detector = armedDetector()
-    expect(countFirings(detector, [SUBAGENT_SPAWN_APPROVAL, IDLE_COMPOSER])).toBe(1)
+    expect(countFirings(detector, [SUBAGENT_SPAWN_APPROVAL])).toBe(1)
+    detector.observeInput()
+    expect(countFirings(detector, [IDLE_COMPOSER])).toBe(0)
     expect(countFirings(detector, ['  Subagent (general)\n  → Ap', 'pro', 've Once\n'])).toBe(1)
   })
 
@@ -130,7 +162,15 @@ describe('Bob approval prompt detection', () => {
     (size) => {
       const transcript = readFixture('bob-approval-subagent')
       expect(stripTerminalControl(transcript)).toContain('Approve subagent tools for task')
-      expect(countFiringsOverChunks(transcript, size)).toBe(2)
+      // Why: the capture accepted the spawn with Enter; Bob then paints the subagent executing.
+      const acceptedAt = transcript.indexOf(
+        'executing...',
+        transcript.indexOf('Approve subagent tools for task')
+      )
+      expect(acceptedAt).toBeGreaterThan(0)
+      expect(countFiringsOverChunks(transcript, size, acceptedAt)).toBe(2)
+      // Without the answer, the still-open spawn modal keeps the row armed.
+      expect(countFiringsOverChunks(transcript, size)).toBe(1)
     }
   )
 })
