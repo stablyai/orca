@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applySlashSuggestion,
+  classifyNativeChatSend,
   filterSlashCommands,
   getAgentSlashCommands,
   isSlashCommandDraft,
@@ -22,6 +23,25 @@ describe('getAgentSlashCommands', () => {
     expect(names).toContain('clear')
     expect(names).toContain('compact')
     expect(names).not.toContain('model')
+  })
+
+  it('offers verified OMP commands without generic or invented aliases', () => {
+    const names = getAgentSlashCommands('omp').map((command) => command.name)
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'model',
+        'switch',
+        'plan',
+        'compact',
+        'context',
+        'usage',
+        'git',
+        'hotkeys'
+      ])
+    )
+    for (const name of ['help', 'smol', 'reset', 'tokens', 'cost', 'diff', 'review']) {
+      expect(names).not.toContain(name)
+    }
   })
 
   it('falls back to a small common set for an unknown agent (never empty)', () => {
@@ -54,6 +74,20 @@ describe('filterSlashCommands', () => {
     const names = filterSlashCommands(codex, 'mod').map((c) => c.name)
     expect(names).toEqual(['model'])
     expect(filterSlashCommands(codex, 'MOD').map((c) => c.name)).toEqual(['model'])
+  })
+
+  it('finds the OMP model selector case-insensitively', () => {
+    const omp = getAgentSlashCommands('omp')
+    expect(filterSlashCommands(omp, 'MOD').map((command) => command.name)).toEqual(['model'])
+  })
+})
+
+describe('classifyNativeChatSend', () => {
+  it('distinguishes OMP model selectors from commands without a skill profile', () => {
+    const commands = getAgentSlashCommands('omp')
+    expect(classifyNativeChatSend('/switch @smol', commands, null, null)).toBe('command')
+    expect(classifyNativeChatSend('/smol', commands, null, null)).toBe('unknown-token')
+    expect(classifyNativeChatSend(' /switch @smol', commands, null, null)).toBe('chat')
   })
 })
 
