@@ -31,6 +31,7 @@ import type { PtyBindingPersistenceOperations } from './pty-binding-persistence'
 import type { SshProfileOperations } from './ssh-profile-operations'
 import type { RetiredWorktreeNamePersistence } from './retired-worktree-name-persistence'
 import type { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations'
+import type { OpenWithRecentApplicationPersistence } from './open-with-recent-application-persistence'
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 
 export type StoreOptions = StoreRuntimeOptions
@@ -122,6 +123,7 @@ export interface Store
     SshProfileOperations,
     RetiredWorktreeNamePersistence,
     SshLeaseRecoveryOperations,
+    OpenWithRecentApplicationPersistence,
     WriteFlushBarrierOperations {}
 
 for (const OperationClass of STORE_DOMAIN_OPERATION_CLASSES) {

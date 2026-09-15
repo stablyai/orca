@@ -5,6 +5,8 @@ import { pathToFileURL } from 'node:url'
 const {
   getSpawnArgsForWindowsMock,
   handleMock,
+  launchOpenWithApplicationMock,
+  listOpenWithApplicationsMock,
   openPathMock,
   resolveCliCommandMock,
   showItemInFolderMock,
@@ -14,6 +16,8 @@ const {
 } = vi.hoisted(() => ({
   getSpawnArgsForWindowsMock: vi.fn(),
   handleMock: vi.fn(),
+  launchOpenWithApplicationMock: vi.fn(),
+  listOpenWithApplicationsMock: vi.fn(),
   openPathMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
   showItemInFolderMock: vi.fn(),
@@ -53,6 +57,11 @@ vi.mock('../codex-cli/command', () => ({
 vi.mock('../win32-utils', () => ({
   getCmdExePath: () => 'C:\\Windows\\System32\\cmd.exe',
   getSpawnArgsForWindows: getSpawnArgsForWindowsMock
+}))
+
+vi.mock('../open-with/open-with-applications', () => ({
+  launchOpenWithApplication: launchOpenWithApplicationMock,
+  listOpenWithApplications: listOpenWithApplicationsMock
 }))
 
 import { EXTERNAL_EDITOR_CLI_COMMAND, registerShellHandlers } from './shell'
@@ -95,9 +104,13 @@ function createSshTarget(overrides: Partial<SshTarget> = {}): SshTarget {
 describe('registerShellHandlers', () => {
   const settings = { activeRuntimeEnvironmentId: null as string | null }
   const sshTargets = new Map<string, SshTarget>()
+  const getOpenWithRecentApplicationIdsMock = vi.fn()
+  const recordOpenWithApplicationLaunchMock = vi.fn()
   const store = {
     getSettings: () => settings,
-    getSshTarget: (id: string) => sshTargets.get(id)
+    getSshTarget: (id: string) => sshTargets.get(id),
+    getOpenWithRecentApplicationIds: getOpenWithRecentApplicationIdsMock,
+    recordOpenWithApplicationLaunch: recordOpenWithApplicationLaunchMock
   }
 
   beforeEach(() => {
@@ -119,6 +132,11 @@ describe('registerShellHandlers', () => {
     }))
     spawnMock.mockReturnValue(createSpawnedProcess())
     statMock.mockResolvedValue({ isDirectory: () => true })
+    launchOpenWithApplicationMock.mockReset()
+    listOpenWithApplicationsMock.mockReset()
+    getOpenWithRecentApplicationIdsMock.mockReset()
+    getOpenWithRecentApplicationIdsMock.mockReturnValue([])
+    recordOpenWithApplicationLaunchMock.mockReset()
   })
 
   function getHandler(channel: string): (event: unknown, ...args: unknown[]) => Promise<unknown> {
@@ -254,6 +272,100 @@ describe('registerShellHandlers', () => {
 
       await expect(handler({}, workspacePath)).resolves.toEqual({ ok: true })
       expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
+    })
+  })
+
+  describe('shell:listOpenWithApplications', () => {
+    it('blocks discovery while a remote runtime is active', async () => {
+      settings.activeRuntimeEnvironmentId = 'runtime-1'
+      const handler = getHandler('shell:listOpenWithApplications')
+
+      await expect(handler({}, resolve('notes.md'))).resolves.toEqual({
+        ok: false,
+        reason: 'remote-runtime-unsupported'
+      })
+      expect(listOpenWithApplicationsMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects relative paths', async () => {
+      const handler = getHandler('shell:listOpenWithApplications')
+
+      await expect(handler({}, 'relative/notes.md')).resolves.toEqual({
+        ok: false,
+        reason: 'not-absolute'
+      })
+      expect(listOpenWithApplicationsMock).not.toHaveBeenCalled()
+    })
+
+    it('returns the discovered applications for existing files', async () => {
+      const filePath = resolve('notes.md')
+      getOpenWithRecentApplicationIdsMock.mockReturnValue(['windows:c:\\recent.exe'])
+      listOpenWithApplicationsMock.mockResolvedValue({
+        applications: [{ id: 'windows:c:\\app.exe', name: 'App', isDefault: true }],
+        supportsChooserDialog: true
+      })
+      const handler = getHandler('shell:listOpenWithApplications')
+
+      await expect(handler({}, filePath)).resolves.toEqual({
+        ok: true,
+        applications: [{ id: 'windows:c:\\app.exe', name: 'App', isDefault: true }],
+        supportsChooserDialog: true
+      })
+      expect(getOpenWithRecentApplicationIdsMock).toHaveBeenCalledWith('.md')
+      expect(listOpenWithApplicationsMock).toHaveBeenCalledWith(normalize(filePath), {
+        recentApplicationIds: ['windows:c:\\recent.exe']
+      })
+    })
+  })
+
+  describe('shell:openPathWithApplication', () => {
+    it('blocks launches while a remote runtime is active', async () => {
+      settings.activeRuntimeEnvironmentId = 'runtime-1'
+      const handler = getHandler('shell:openPathWithApplication')
+
+      await expect(
+        handler({}, { path: resolve('notes.md'), applicationId: 'windows:c:\\app.exe' })
+      ).resolves.toEqual({ ok: false, reason: 'remote-runtime-unsupported' })
+      expect(launchOpenWithApplicationMock).not.toHaveBeenCalled()
+    })
+
+    it('maps unknown applications and spawn errors to launch-failed', async () => {
+      launchOpenWithApplicationMock.mockResolvedValue(false)
+      const handler = getHandler('shell:openPathWithApplication')
+
+      await expect(
+        handler({}, { path: resolve('notes.md'), applicationId: 'windows:c:\\missing.exe' })
+      ).resolves.toEqual({ ok: false, reason: 'launch-failed' })
+    })
+
+    it('launches the selected application and records the recency choice', async () => {
+      const filePath = resolve('notes.md')
+      launchOpenWithApplicationMock.mockResolvedValue(true)
+      const handler = getHandler('shell:openPathWithApplication')
+
+      await expect(
+        handler({}, { path: filePath, applicationId: 'windows:c:\\app.exe' })
+      ).resolves.toEqual({ ok: true })
+      expect(launchOpenWithApplicationMock).toHaveBeenCalledWith(
+        'windows:c:\\app.exe',
+        normalize(filePath)
+      )
+      expect(recordOpenWithApplicationLaunchMock).toHaveBeenCalledWith('.md', 'windows:c:\\app.exe')
+    })
+
+    it('does not record recency for failed launches or the chooser dialog', async () => {
+      const filePath = resolve('notes.md')
+      const handler = getHandler('shell:openPathWithApplication')
+
+      launchOpenWithApplicationMock.mockResolvedValue(false)
+      await handler({}, { path: filePath, applicationId: 'windows:c:\\app.exe' })
+      expect(recordOpenWithApplicationLaunchMock).not.toHaveBeenCalled()
+
+      launchOpenWithApplicationMock.mockResolvedValue(true)
+      await expect(
+        handler({}, { path: filePath, applicationId: 'system:open-with-chooser' })
+      ).resolves.toEqual({ ok: true })
+      expect(recordOpenWithApplicationLaunchMock).not.toHaveBeenCalled()
     })
   })
 
