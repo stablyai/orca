@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import type mermaidNamespace from 'mermaid'
-import DOMPurify from 'dompurify'
 import { getMermaidConfig } from './mermaid-config'
+import { sanitizeMermaidSvg } from './mermaid-sanitize'
 import { translate } from '@/i18n/i18n'
 
 type MermaidApi = typeof mermaidNamespace
@@ -50,7 +50,7 @@ function enqueueRender(fn: () => Promise<void>): void {
 export default function MermaidBlock({
   content,
   isDark,
-  htmlLabels = false
+  htmlLabels = true
 }: MermaidBlockProps): React.JSX.Element {
   const id = useId().replace(/:/g, '_')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -68,17 +68,15 @@ export default function MermaidBlock({
         // Why: Mermaid stores initialize() config in global module state. Apply
         // the config inside the same serialized render task so another
         // MermaidBlock cannot overwrite htmlLabels/theme between initialize()
-        // and render(), which would make markdown preview fall back to the
-        // broken foreignObject label path again.
+        // and render().
         mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
         if (!cancelled && containerRef.current) {
-          // Why: although mermaid uses DOMPurify internally, we add an explicit
-          // sanitization pass as defense-in-depth against XSS in case upstream
-          // behaviour changes or a mermaid version ships without sanitization.
-          containerRef.current.innerHTML = DOMPurify.sanitize(svg, {
-            USE_PROFILES: { svg: true }
-          })
+          // Why: mermaid already sanitizes with securityLevel "strict"; this
+          // second pass is defense-in-depth. Use mermaid's own DOMPurify options
+          // (HTML_INTEGRATION_POINTS.foreignobject) so XHTML labels survive —
+          // USE_PROFILES svg/html alone empties foreignObject on Chromium (#12414).
+          containerRef.current.innerHTML = sanitizeMermaidSvg(svg)
           setError(null)
         }
       } catch (err) {
