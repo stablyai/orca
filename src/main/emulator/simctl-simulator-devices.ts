@@ -47,7 +47,13 @@ function parseSimctlDevices(stdout: string): SimulatorDevice[] {
   return devices
 }
 
-function mapSimctlError(error: ExecFileException, stderr?: string | Buffer): EmulatorError {
+/**
+ * Maps simctl failures to stable emulator error codes.
+ * @param error Process execution failure.
+ * @param stderr Optional diagnostic output from simctl.
+ * @returns An emulator error suitable for RPC transport.
+ */
+export function mapSimctlError(error: ExecFileException, stderr?: string | Buffer): EmulatorError {
   const raw = `${error.message}\n${stderr?.toString() ?? ''}`
   const lower = raw.toLowerCase()
   if (

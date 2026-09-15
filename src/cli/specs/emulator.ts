@@ -114,8 +114,10 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'logcat'],
-    summary: 'Capture a one-shot logcat dump from the Android device',
-    usage: 'orca emulator logcat [--lines <n>] [--device <id>] [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'lines']
+    summary: 'Capture a one-shot device log dump (Android logcat or iOS unified log)',
+    usage:
+      'orca emulator logcat [--lines <n>] [--filter <value>] [--device <id>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'lines', 'filter'],
+    notes: ['iOS requires --filter and defaults to the last 10 minutes and 500 lines.']
   }
 ]

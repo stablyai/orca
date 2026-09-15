@@ -3,7 +3,7 @@ name: orca-emulator
 description: >-
   iOS Simulator control from inside Orca, with the live device view in Orca's
   emulator pane. Use when driving a booted Apple Simulator on macOS: taps,
-  gestures, typing, hardware buttons, rotation, and the accessibility tree, or
+  gestures, typing, hardware buttons, rotation, filtered logs, and the accessibility tree, or
   when an iOS change needs simulator evidence. For an Android device or emulator
   use the Android emulator skill; build and install the app with xcodebuild or
   simctl first.
