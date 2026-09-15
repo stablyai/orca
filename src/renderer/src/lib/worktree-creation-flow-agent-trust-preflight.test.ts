@@ -4,10 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow-execute.ts'), 'utf8')
 const PREFLIGHT_SOURCE = readFileSync(join(__dirname, 'agent-trust-preflight.ts'), 'utf8')
-const STRUCTURED_SOURCE = readFileSync(
-  join(__dirname, 'worktree-creation-structured-session.ts'),
-  'utf8'
-)
+const LAUNCHER_SOURCE = readFileSync(join(__dirname, 'launch-agent-session-terminal.ts'), 'utf8')
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -32,7 +29,9 @@ describe('worktree creation flow agent trust preflight', () => {
     expect(createFlow).toContain('repo.id === worktree.repoId')
     expect(createFlow).toContain('await preflightAgentTrust({')
     expect(createFlow).toContain('connectionId: repoConnectionId')
-    expect(STRUCTURED_SOURCE).toContain('await preflightAgentTrust({')
-    expect(STRUCTURED_SOURCE).toContain('workspacePath: worktree.path')
+    // Structured creation now delegates terminal fallback trust to the shared launcher rather
+    // than carrying a second preflight in the caller.
+    expect(LAUNCHER_SOURCE).toContain('await preflightAgentTrust({')
+    expect(LAUNCHER_SOURCE).toContain('workspacePath: worktree?.path')
   })
 })

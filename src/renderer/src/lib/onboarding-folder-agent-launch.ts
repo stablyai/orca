@@ -11,6 +11,7 @@ import {
   type OnboardingFolderAgentStartup
 } from '@/lib/onboarding-folder-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { launchAgentSession } from '@/lib/launch-agent-session'
 
 export type OnboardingFolderAgentLaunch = {
   agent: TuiAgent | null
@@ -59,30 +60,33 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   executionHostId: ExecutionHostId | undefined
   launch: OnboardingFolderAgentLaunch
 }): Promise<void> {
-  const reveal = (
-    startup: OnboardingFolderAgentStartup | undefined,
-    providesInitialSurface = false
-  ) =>
+  const { plan } = args.launch
+  const structured = plan?.route === 'structured-native-chat'
+  if (!structured) {
     activateAndRevealWorktree(args.worktreeId, {
       sidebarRevealBehavior: 'auto',
       ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
-      ...(startup ? { startup } : {}),
-      ...(providesInitialSurface ? { providesInitialSurface: true } : {})
+      ...(args.launch.startup ? { startup: args.launch.startup } : {})
     })
-  const { plan } = args.launch
-  const structured = plan?.route === 'structured-native-chat'
-  reveal(args.launch.startup, structured)
-  if (!structured) {
     return
   }
-  // Why: the outcome is not consumed; the workspace is already revealed and the launch layer toasts.
-  await plan.launch(
-    {
-      legacyFallback: async () => {
-        const activation = reveal(args.launch.fallbackStartup)
-        return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
-      }
-    },
-    { worktreeId: args.worktreeId }
-  )
+  // The launcher owns activation and the terminal refusal fallback for structured routes.
+  if (!args.launch.agent) {
+    return
+  }
+  // Why: folder creation has no pending surface, so reveal before the launch can fail or cancel.
+  activateAndRevealWorktree(args.worktreeId, {
+    sidebarRevealBehavior: 'auto',
+    ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
+    providesInitialSurface: true
+  })
+  await launchAgentSession({
+    agent: args.launch.agent,
+    workspaceId: args.worktreeId,
+    ...(plan ? { launchPlan: plan } : {}),
+    ...(args.launch.fallbackStartup ? { terminalStartup: args.launch.fallbackStartup } : {}),
+    initialSessionOptions: (args.launch.startup ?? args.launch.fallbackStartup)?.sessionOptions,
+    visibility: 'reveal',
+    launchSource: 'onboarding'
+  })
 }

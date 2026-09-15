@@ -25,12 +25,12 @@ const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
 const ROUTE_RESOLVER_DEFINITION = 'src/renderer/src/lib/agent-launch-routing.ts'
 const ROUTE_PLANNER = 'src/renderer/src/lib/agent-session-launch-plan.ts'
 const DIRECT_ROUTE_RESOLVER_CALL = /\b(?:resolveAgentLaunchRoute|structuredAgentLaunchSupported)\(/
-// Why: adopting a verdict bypasses the resolver by design (a persisted quick-create request, a
-// resume whose gate already planned), so each adopter is pinned rather than trusted by convention.
-const VERDICT_ADOPTERS = [
-  'src/renderer/src/components/right-sidebar/ai-vault-session-resume-in-chat-launch.ts',
-  'src/renderer/src/lib/worktree-creation-structured-session.ts'
-]
+// Why: adopting a persisted quick-create verdict bypasses the resolver by design, so each adopter
+// is pinned rather than trusted by convention.
+// Why: every launch site now routes through launchAgentSession. Quick create is the one adopter
+// left, because it persists its verdict across worktree creation and re-enters on recovery; that
+// two-phase re-entry is deleted with the verdict types, not here.
+const VERDICT_ADOPTERS = ['src/renderer/src/lib/worktree-creation-structured-session.ts']
 
 async function productionFiles(): Promise<string[]> {
   return glob(['src/**/*.ts', 'src/**/*.tsx'], {

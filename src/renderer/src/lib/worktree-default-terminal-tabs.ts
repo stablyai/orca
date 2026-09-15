@@ -48,25 +48,30 @@ export function applyDefaultTerminalTabs(
         : isStartupTab && startup?.telemetry
           ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
           : undefined
-    const tab = store.createTab(worktreeId, undefined, undefined, {
-      pendingActivationSpawn: true,
-      recordInteraction: false,
-      ...(launchAgent
-        ? {
-            launchAgent,
-            ...initialAgentTabViewModeProps(store.settings ?? null, {
-              agent: launchAgent,
-              ...draftViewModeProps(
-                isStartupTab ? resolveStartupLaunchDraftText(startup) : undefined
-              ),
-              nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                getConnectionId(worktreeId)
-              )
-            })
-          }
-        : {}),
-      ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
-    })
+    const tab = store.createTab(
+      worktreeId,
+      index === 0 ? opts?.targetGroupId : undefined,
+      undefined,
+      {
+        pendingActivationSpawn: true,
+        recordInteraction: false,
+        ...(launchAgent
+          ? {
+              launchAgent,
+              ...initialAgentTabViewModeProps(store.settings ?? null, {
+                agent: launchAgent,
+                ...draftViewModeProps(
+                  isStartupTab ? resolveStartupLaunchDraftText(startup) : undefined
+                ),
+                nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+                  getConnectionId(worktreeId)
+                )
+              })
+            }
+          : {}),
+        ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
+      }
+    )
     if (index === 0) {
       firstTabId = tab.id
     }

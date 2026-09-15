@@ -61,6 +61,18 @@ describe('planAgentSessionLaunch', () => {
     expect(mocks.resolveAgentLaunchRoute).toHaveBeenCalledOnce()
   })
 
+  it('honors explicit route intent without consulting the default-route resolver', () => {
+    const plan = planAgentSessionLaunch(store, {
+      agent: 'codex',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+      routeIntent: 'structured-native-chat'
+    })
+
+    expect(plan.route).toBe('structured-native-chat')
+    expect(mocks.buildAgentLaunchRouteInput).not.toHaveBeenCalled()
+    expect(mocks.resolveAgentLaunchRoute).not.toHaveBeenCalled()
+  })
+
   it('hands the settle loop exactly the prompt, mode, resume source, and delivery hook it planned on', async () => {
     const onPromptDelivered = vi.fn()
     const resumeFrom = { providerSessionId: 'provider-1' }

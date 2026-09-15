@@ -2,7 +2,6 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
-import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structured-session'
 
 export function markStructuredWorktreeLaunchUnconfirmed(
@@ -39,7 +38,6 @@ export async function retryStructuredWorktreeLaunch(
     agentLaunchRoute,
     worktreeId,
     shouldActivateOnCompletion: true,
-    fallbackStartupOpt: buildWorktreeCreationStartupOpt(request, false),
     activation: false,
     primaryTabId: null,
     recoverUnknownLaunch: true

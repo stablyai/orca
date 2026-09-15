@@ -203,7 +203,7 @@ describe('forkAgentSessionFromPane', () => {
       tabId: null,
       startupPlan: {},
       pasteDraftAfterLaunch: false,
-      structuredSettlement: Promise.resolve({ kind: 'refused-then-legacy', primaryTabId: 'tab-2' })
+      structuredSettlement: Promise.resolve({ kind: 'terminal', tabId: 'tab-2', viaRefusal: true })
     })
     const { startAgentSessionFork, prepareAgentSessionForkFromPane } =
       await import('./terminal-agent-session-fork')
@@ -227,7 +227,7 @@ describe('forkAgentSessionFromPane', () => {
       tabId: null,
       startupPlan: {},
       pasteDraftAfterLaunch: false,
-      structuredSettlement: Promise.resolve({ kind: 'refused-then-legacy', primaryTabId: null })
+      structuredSettlement: Promise.resolve({ kind: 'terminal', tabId: null, viaRefusal: true })
     })
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 

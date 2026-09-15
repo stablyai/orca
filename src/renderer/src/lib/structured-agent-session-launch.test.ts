@@ -326,6 +326,16 @@ describe('startStructuredAgentLaunch', () => {
     expect(toast.error).toHaveBeenCalledWith('Could not open Claude chat', expect.anything())
   })
 
+  it('allows a caller-owned failure message to suppress the generic toast', async () => {
+    const worktreeId = 'wt-caller-owned-failure'
+    mocks.launch.mockRejectedValue(new Error('caller-owned'))
+
+    startStructuredAgentLaunch(worktreeId, 'codex', { notifyFailure: false })
+    await flushLaunchSettlement()
+
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   it('completes from the host-emitted projection without listing inventory', async () => {
     const worktreeId = 'wt-host-frame'
     const intent = launchIntent(worktreeId, 'session-host-frame')

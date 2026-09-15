@@ -15,6 +15,10 @@ export type StructuredAgentLaunchOptions = {
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
+  /** False when the caller owns a more specific failure notification. */
+  notifyFailure?: boolean
+  /** Reconcile an in-memory launch whose publication was previously unconfirmed. */
+  reconcileUnknownLaunch?: boolean
   /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
    *  identity, not a preference — see `launchIdentity`. */
   resumeFrom?: StructuredAgentSessionResumeSource

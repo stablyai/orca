@@ -16,6 +16,8 @@ export type WorktreeActivationSurfaceSelection = {
 }
 
 export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
+  /** Prefer this existing split group when creating an explicit startup terminal. */
+  targetGroupId?: string
   startup?: WorktreeStartupPayload
   initialCwd?: string
   setup?: WorktreeSetupLaunch
