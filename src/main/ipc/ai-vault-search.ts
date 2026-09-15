@@ -15,12 +15,20 @@ import type {
   AiVaultSearchStatus
 } from '../../shared/ai-vault-search-types'
 import {
+  ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  toSshExecutionHostId,
   type ParsedExecutionHost
 } from '../../shared/execution-host'
 import { requestActiveSshSessionSearch } from './ssh'
 import { clearSessionSearchInService } from '../ai-vault/session-scanner-service-spawn'
+import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
+import {
+  getActiveRuntimeAiVaultHostInfosResult,
+  getActiveSshAiVaultHostInfosResult
+} from './ai-vault'
+import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
 
 export type RuntimeSessionSearchCall = (
   environmentId: string,
@@ -42,8 +50,12 @@ export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptio
   handlerOptions = options
   // Async so a refused scope reaches the renderer as a rejection, like every other parse failure.
   ipcMain.handle('aiVault:searchSessions', async (_event, raw: unknown, rawScope?: unknown) => {
-    const scope = requestedSearchScope(rawScope)
-    return searchByExecutionHostScope(AiVaultSearchRequestSchema.parse(raw), scope)
+    const request = AiVaultSearchRequestSchema.parse(raw)
+    // Only the desktop fans out: a runtime or CLI caller would make it two hops.
+    if (scopeSchema.parse(rawScope) === ALL_EXECUTION_HOSTS_SCOPE) {
+      return searchAllExecutionHosts(request, allExecutionHostLegs())
+    }
+    return searchByExecutionHostScope(request, requestedSearchScope(rawScope))
   })
   ipcMain.handle('aiVault:searchStatus', async (_event, rawScope?: unknown) => {
     const scope = requestedSearchScope(rawScope)
@@ -85,6 +97,41 @@ async function searchByExecutionHostScope(
   return response.kind === 'results'
     ? { ...response, hits: response.hits.map((hit) => ({ ...hit, executionHostId: scope.id })) }
     : response
+}
+
+/**
+ * Every host the session list's `all` scope would enumerate, in one leg each.
+ * A broken enumerator already degrades to an empty list rather than throwing,
+ * so one unusable host class costs its own rows and not the merge.
+ */
+function allExecutionHostLegs(): SessionSearchHostLeg[] {
+  const localLeg: SessionSearchHostLeg = {
+    executionHostId: LOCAL_EXECUTION_HOST_ID,
+    search: (request) => searchSessionService(request, 'ipc')
+  }
+  const sshLegs = getActiveSshAiVaultHostInfosResult().hostInfos.map(({ targetId }) =>
+    remoteHostLeg({ kind: 'ssh', id: toSshExecutionHostId(targetId), targetId })
+  )
+  const runtimeLegs = getActiveRuntimeAiVaultHostInfosResult().hostInfos.map((hostInfo) =>
+    remoteHostLeg({
+      kind: 'runtime',
+      id: hostInfo.executionHostId,
+      environmentId: hostInfo.environmentId
+    })
+  )
+  return [localLeg, ...sshLegs, ...runtimeLegs]
+}
+
+function remoteHostLeg(host: ParsedExecutionHost): SessionSearchHostLeg {
+  const client = remoteSearchClient(host, handlerOptions.callRuntimeSearch)
+  return {
+    executionHostId: host.id,
+    timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.search,
+    search: (request) =>
+      client
+        ? client.searchSessions(request)
+        : Promise.resolve({ kind: 'unavailable', reason: 'no-service' })
+  }
 }
 
 function statusByExecutionHost(scope: ParsedExecutionHost): Promise<AiVaultSearchStatus> {

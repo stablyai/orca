@@ -61,6 +61,14 @@ export const AiVaultSearchTruncationSchema = z.object({
   query: z.boolean(),
   freshness: z.boolean()
 })
+/**
+ * Per-host outcomes of an all-computers merge. Additive and desktop-only: no
+ * host publishes this, and a reader that does not know it simply drops it.
+ */
+export const AiVaultSearchHostOutcomeSchema = z.object({
+  executionHostId: executionHostIdSchema,
+  outcome: z.enum(['searched', 'stale', 'disabled', 'not-ready', 'no-service', 'unreachable'])
+})
 const routeSchema = z.enum(['phrase', 'and', 'or', 'typo+phrase', 'typo+and', 'typo+or'])
 export const AiVaultSearchPlannerReportSchema = z.object({
   route: routeSchema,
@@ -80,7 +88,8 @@ export const AiVaultSearchResponseSchema = z.discriminatedUnion('kind', [
     generation: z.number().int().nonnegative(),
     truncated: AiVaultSearchTruncationSchema,
     durationMs: z.number().nonnegative(),
-    debug: AiVaultSearchDebugSchema.optional()
+    debug: AiVaultSearchDebugSchema.optional(),
+    hosts: z.array(AiVaultSearchHostOutcomeSchema).optional()
   }),
   z.object({
     kind: z.literal('stale-cursor'),

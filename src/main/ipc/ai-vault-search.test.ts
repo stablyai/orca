@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { clearSearch, handlers, sshSearch, runtimeSearch } = vi.hoisted(() => ({
+const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch } = vi.hoisted(() => ({
   clearSearch: vi.fn(),
   handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
   sshSearch: vi.fn(),
+  sshHostInfos: vi.fn<() => { targetId: string }[]>(() => []),
   runtimeSearch: vi.fn()
 }))
 vi.mock('../ai-vault/session-scanner-service-spawn', () => ({
@@ -17,17 +18,24 @@ vi.mock('electron', () => ({
   ipcRenderer: { invoke: (name: string, ...args: unknown[]) => handlers.get(name)!(null, ...args) }
 }))
 vi.mock('./ssh', () => ({
-  requestActiveSshSessionSearch: sshSearch
+  requestActiveSshSessionSearch: sshSearch,
+  getActiveSshAiVaultHostInfos: sshHostInfos
 }))
 
 import { registerAiVaultSearchHandlers } from './ai-vault-search'
 import { aiVaultApi } from '../../preload/api/ai-vault-bridge'
 import { setSessionSearchService } from '../ai-vault-search/session-search-service-registry'
 import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
-import { fakeSearchService, searchResults } from '../../shared/ai-vault-search-test-fixture'
+import {
+  fakeSearchService,
+  searchHit,
+  searchResults
+} from '../../shared/ai-vault-search-test-fixture'
 beforeEach(() => {
   handlers.clear()
   sshSearch.mockReset()
+  sshHostInfos.mockReset()
+  sshHostInfos.mockReturnValue([])
   runtimeSearch.mockReset()
   clearSearch.mockReset()
   registerAiVaultSearchHandlers({
@@ -138,7 +146,7 @@ describe('desktop IPC and preload search boundary', () => {
   it('refuses an unroutable host instead of widening it to every host', async () => {
     const local = fakeSearchService()
     setSessionSearchService(local)
-    for (const scope of ['all', 'nope', 'ssh:', 'runtime:a|b']) {
+    for (const scope of ['nope', 'ssh:', 'runtime:a|b']) {
       await expect(
         handlers.get('aiVault:searchSessions')!(null, { query: 'needle' }, scope)
       ).rejects.toThrow('not available for this execution host')
@@ -150,5 +158,33 @@ describe('desktop IPC and preload search boundary', () => {
     expect(local.status).not.toHaveBeenCalled()
     expect(sshSearch).not.toHaveBeenCalled()
     expect(runtimeSearch).not.toHaveBeenCalled()
+  })
+  it('merges every enumerated host under the all scope, and still refuses an all status', async () => {
+    setSessionSearchService(fakeSearchService())
+    sshHostInfos.mockReturnValue([{ targetId: 'box' }])
+    sshSearch.mockResolvedValue({
+      ...searchResults(),
+      hits: [{ ...searchHit(), sessionId: 'far' }]
+    })
+    const merged = await aiVaultApi.searchSessions({ query: 'needle' }, 'all')
+    expect(merged).toMatchObject({
+      kind: 'results',
+      hosts: [
+        { executionHostId: 'local', outcome: 'searched' },
+        { executionHostId: 'ssh:box', outcome: 'searched' }
+      ]
+    })
+    expect(
+      merged.kind === 'results'
+        ? merged.hits.map((hit) => [hit.executionHostId, hit.sessionId])
+        : null
+    ).toEqual([
+      ['local', 'host-session'],
+      ['ssh:box', 'far']
+    ])
+    // A merged status would have to reconcile six phases into one; it stays refused.
+    await expect(handlers.get('aiVault:searchStatus')!(null, 'all')).rejects.toThrow(
+      'not available for this execution host'
+    )
   })
 })
