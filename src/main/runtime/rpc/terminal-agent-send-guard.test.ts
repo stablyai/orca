@@ -103,6 +103,7 @@ describe('terminal agent send guard', () => {
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       getTerminalAgentStatus,
+      isTerminalForegroundStatusUnavailable: vi.fn().mockResolvedValue(false),
       sendTerminal
     })
     const responsePromise = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS }).dispatch(
@@ -123,5 +124,66 @@ describe('terminal agent send guard', () => {
     })
     expect(getTerminalAgentStatus).toHaveBeenCalledTimes(8)
     expect(sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it('refuses with status-unavailable when foreground membership cannot be read (#12946)', async () => {
+    vi.useFakeTimers()
+    const getTerminalAgentStatus = vi.fn().mockResolvedValue({
+      handle: 'terminal-1',
+      isRunningAgent: false,
+      status: null
+    })
+    const isTerminalForegroundStatusUnavailable = vi.fn().mockResolvedValue(true)
+    const sendTerminal = vi.fn()
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
+      getTerminalAgentStatus,
+      isTerminalForegroundStatusUnavailable,
+      sendTerminal
+    })
+    const responsePromise = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS }).dispatch(
+      guardedSendRequest()
+    )
+
+    await vi.advanceTimersByTimeAsync(1_050)
+
+    await expect(responsePromise).resolves.toMatchObject({
+      ok: true,
+      result: {
+        send: {
+          accepted: false,
+          bytesWritten: 0,
+          refusedReason: 'status-unavailable'
+        }
+      }
+    })
+    expect(isTerminalForegroundStatusUnavailable).toHaveBeenCalledWith('terminal-1')
+    expect(sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it('bounds the final foreground-status probe', async () => {
+    vi.useFakeTimers()
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
+      getTerminalAgentStatus: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        isRunningAgent: false,
+        status: null
+      }),
+      isTerminalForegroundStatusUnavailable: vi.fn().mockReturnValue(new Promise(() => {})),
+      sendTerminal: vi.fn()
+    })
+    const responsePromise = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS }).dispatch(
+      guardedSendRequest()
+    )
+
+    await vi.advanceTimersByTimeAsync(2_100)
+
+    await expect(responsePromise).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, refusedReason: 'status-unavailable' } }
+    })
   })
 })
