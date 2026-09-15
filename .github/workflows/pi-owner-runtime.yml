@@ -2,8 +2,9 @@ name: Pi owner runtime verification
 on:
   pull_request:
     paths:
-      - 'src/main/pi/agent-status-handler-source.ts'
+      - 'src/main/pi/**'
       - 'tests/tools/pi-owner-runtime-smoke.mjs'
+      - 'tests/tools/omp-completion-runtime-smoke.mjs'
       - '.github/workflows/pi-owner-runtime.yml'
   workflow_dispatch:
 permissions:
@@ -27,3 +28,5 @@ jobs:
         run: npm install --prefix .cache/pi-owner --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@0.83.0
       - name: Verify real owner exit and hook delivery
         run: node tests/tools/pi-owner-runtime-smoke.mjs .cache/pi-owner/node_modules/@earendil-works/pi-coding-agent
+      - name: Verify OMP completion over native HTTP
+        run: node tests/tools/omp-completion-runtime-smoke.mjs

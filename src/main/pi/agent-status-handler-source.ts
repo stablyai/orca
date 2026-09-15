@@ -114,6 +114,20 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  const selfPid = String(process.pid)',
     '  if (ownerPid && ownerPid !== selfPid && isStatusOwnerAlive(ownerPid)) return',
     `  process.env.${ownerEnv} = selfPid`,
+    '  resetPostQueue()',
+    ...(kind !== 'pi'
+      ? ["  pi.on('session_shutdown', () => { resetPostQueue(); clearPendingAgentEndCheck() })"]
+      : []),
+    ...(kind !== 'prime-agent'
+      ? [
+          "  pi.on('session_switch', (_event, ctx) => {",
+          '    if (!isOmpRuntime()) return',
+          '    resetPostQueue()',
+          '    clearPendingAgentEndCheck()',
+          '    updateRuntimeOmpSessionMetadata(ctx)',
+          '  })'
+        ]
+      : []),
     ...sessionStartHandler,
     `  pi.on('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,

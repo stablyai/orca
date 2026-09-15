@@ -32,6 +32,8 @@ export function getPiAgentStatusUiPromptHandlerSourceLines(kind: PiAgentKind): s
     '  })',
     '',
     "  pi.on('session_shutdown', () => {",
+    '    resetPostQueue()',
+    '    clearPendingAgentEndCheck()',
     '    if (isOmpRuntime()) return',
     '    // Why: pi tears an open dialog down through resetExtensionUI without resolving its',
     '    // promise, so a replaced session never emits the matching ui_prompt_end and the wait',

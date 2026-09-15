@@ -349,6 +349,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     expect(command).toBe('/mnt/c/Windows/System32/curl.exe')
     expect(args).toEqual([
       '-sS',
+      '--fail',
       '--connect-timeout',
       '3',
       '--max-time',
