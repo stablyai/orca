@@ -37,6 +37,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'copilot',
       'cursor',
       'kimi',
+      'omp',
       'opencode',
       'pi'
     ])

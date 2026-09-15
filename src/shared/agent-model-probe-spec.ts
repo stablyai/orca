@@ -26,5 +26,17 @@ const MODEL_DISCOVERY_ONLY_SPECS: Partial<Record<TuiAgent, AgentModelProbeSpec>>
 }
 
 export function getAgentModelProbeSpec(agentId: TuiAgent): AgentModelProbeSpec | undefined {
-  return getCommitMessageAgentSpec(agentId) ?? MODEL_DISCOVERY_ONLY_SPECS[agentId]
+  const spec = getCommitMessageAgentSpec(agentId) ?? MODEL_DISCOVERY_ONLY_SPECS[agentId]
+  if (!spec) {
+    return undefined
+  }
+  // OMP's `default` means the provider configured in its own settings, not a selectable model.
+  if (agentId !== 'omp') {
+    return spec
+  }
+  return {
+    ...spec,
+    models: spec.models.filter((model) => model.id !== 'default'),
+    defaultModelId: spec.defaultModelId === 'default' ? '' : spec.defaultModelId
+  }
 }
