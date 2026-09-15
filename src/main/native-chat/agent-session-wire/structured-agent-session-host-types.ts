@@ -9,6 +9,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
+import type { StructuredAgentSessionTaskStall } from './structured-agent-session-task-queue'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
@@ -69,6 +70,9 @@ export type StructuredAgentSessionHostDeps = {
   /** How long a session outlives its last surface. Tests drive this; production takes the default. */
   releaseGraceMs?: number
   onEventSinkError?: (input: { sessionId: string; error: unknown }) => void
+  /** A per-session mutation that has not settled past the queue's stall threshold; later
+   *  mutations for that session are parked behind it. Reported, never cancelled. */
+  onSessionTaskStalled?: (stall: StructuredAgentSessionTaskStall) => void
   /** Every status projection this host publishes. `replay` marks a re-projection of state the host
    *  already knew (restore, an arriving subscriber) rather than a fresh journal edge. */
   onSessionStatusChanged?: (

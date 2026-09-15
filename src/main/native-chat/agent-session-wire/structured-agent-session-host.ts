@@ -66,7 +66,9 @@ export class StructuredAgentSessionHost {
     () => this.deps
   )
   private readonly subscribers = this.clientDelivery.subscribers
-  private readonly tasks = new StructuredAgentSessionTaskQueue()
+  private readonly tasks = new StructuredAgentSessionTaskQueue({
+    onStalled: (stall) => this.deps.onSessionTaskStalled?.(stall)
+  })
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
   private readonly reconcileLeases: (
     sessionId: string
