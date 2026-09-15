@@ -136,3 +136,23 @@ export function makeWindowsWriteFileCommand(
     options?.executable ?? 'powershell.exe'
   )
 }
+
+/** Create the private ACL before SFTP or stdin can write any clipboard bytes. */
+export function makeWindowsCreatePrivateStagingFileCommand(stagingPath: string): string {
+  return powerShellCommand(
+    [
+      '$ErrorActionPreference = "Stop"',
+      `$path = ${powerShellLiteral(stagingPath)}`,
+      '$parent = [System.IO.Path]::GetDirectoryName($path)',
+      'if ($parent) { $null = [System.IO.Directory]::CreateDirectory($parent) }',
+      '$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().User',
+      '$security = [System.Security.AccessControl.FileSecurity]::new()',
+      '$security.SetOwner($identity)',
+      '$security.SetAccessRuleProtection($true,$false)',
+      '$rule = [System.Security.AccessControl.FileSystemAccessRule]::new($identity,[System.Security.AccessControl.FileSystemRights]::FullControl,[System.Security.AccessControl.AccessControlType]::Allow)',
+      '$security.AddAccessRule($rule)',
+      '$stream = [System.IO.FileStream]::new($path,[System.IO.FileMode]::CreateNew,[System.Security.AccessControl.FileSystemRights]::Write,[System.IO.FileShare]::None,4096,[System.IO.FileOptions]::None,$security)',
+      '$stream.Dispose()'
+    ].join('; ')
+  )
+}

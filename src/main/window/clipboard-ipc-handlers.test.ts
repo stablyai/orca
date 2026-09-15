@@ -17,6 +17,7 @@ const {
   fsAccessMock,
   fsLstatMock,
   fsMkdirMock,
+  fsMkdtempMock,
   fsOpendirMock,
   fsRmMock,
   fsWriteFileMock,
@@ -53,6 +54,7 @@ const {
   fsAccessMock: vi.fn(),
   fsLstatMock: vi.fn(),
   fsMkdirMock: vi.fn(),
+  fsMkdtempMock: vi.fn(),
   fsOpendirMock: vi.fn(),
   fsRmMock: vi.fn(),
   fsWriteFileMock: vi.fn(),
@@ -78,6 +80,7 @@ vi.mock('node:fs/promises', () => ({
   access: fsAccessMock,
   lstat: fsLstatMock,
   mkdir: fsMkdirMock,
+  mkdtemp: fsMkdtempMock,
   opendir: fsOpendirMock,
   rm: fsRmMock,
   open: fsOpenMock,
@@ -85,6 +88,9 @@ vi.mock('node:fs/promises', () => ({
   realpath: vi.fn(), // unused here; only satisfies filesystem-path-containment's named import
   writeFile: fsWriteFileMock,
   default: {
+    mkdir: fsMkdirMock,
+    mkdtemp: fsMkdtempMock,
+    rm: fsRmMock,
     writeFile: fsWriteFileMock
   }
 }))
@@ -212,6 +218,8 @@ describe('registerClipboardHandlers', () => {
     })
     fsMkdirMock.mockReset()
     fsMkdirMock.mockResolvedValue(undefined)
+    fsMkdtempMock.mockReset()
+    fsMkdtempMock.mockResolvedValue('/tmp/orca-clipboard-images-private')
     fsOpendirMock.mockReset()
     // Why: handler registration kicks off the expired-staging sweep; an empty temp root keeps it inert.
     fsOpendirMock.mockImplementation(async () => ({
@@ -554,6 +562,35 @@ describe('registerClipboardHandlers', () => {
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readImageThumbnail')
   })
 
+  it('saves clipboard images to a local temp file when no connection is provided', async () => {
+    const png = Buffer.from([0, 1, 2, 3])
+    const expectedPath = join(
+      '/tmp',
+      'orca-clipboard-images-private',
+      'orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
+    )
+    clipboardReadImageMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: 1 }),
+      isEmpty: () => false,
+      toPNG: () => png
+    })
+
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
+    ).resolves.toBe(expectedPath)
+    expect(fsMkdtempMock).toHaveBeenCalledWith(join('/tmp', 'orca-clipboard-images-'))
+    expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png, {
+      flag: 'wx',
+      mode: 0o600
+    })
+    expect(clipboardReadBufferMock).not.toHaveBeenCalled()
+    expect(fsOpenMock).not.toHaveBeenCalled()
+    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+  })
+
   it('does not inspect FileNameW when an empty image clipboard is read outside Windows', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
@@ -600,10 +637,10 @@ describe('registerClipboardHandlers', () => {
       isEmpty: () => false,
       toPNG: () => png
     })
-    const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
+    const writePrivateFileBase64 = vi.fn().mockResolvedValue(undefined)
     getSshFilesystemProviderMock.mockReturnValue({
       getTempDir: vi.fn().mockResolvedValue('/var/tmp'),
-      writeFileBase64
+      writePrivateFileBase64
     })
 
     try {
@@ -618,7 +655,7 @@ describe('registerClipboardHandlers', () => {
       expect(fsOpenMock).toHaveBeenCalledWith(sourcePath, 'r')
       expect(nativeImageCreateFromBufferMock).toHaveBeenCalledWith(source)
       expect(close).toHaveBeenCalled()
-      expect(writeFileBase64).toHaveBeenCalledWith(
+      expect(writePrivateFileBase64).toHaveBeenCalledWith(
         '/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
         png.toString('base64')
       )
@@ -662,50 +699,28 @@ describe('registerClipboardHandlers', () => {
     const handlers = getRegisteredHandlers()
     await expect(
       handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
-        runtimeEnvironmentId: 'remote-host-1'
+        runtimeEnvironmentId: 'remote-host-1',
+        includeLocalPreview: true
       })
-    ).resolves.toBe('/tmp/orca-paste-remote.png')
-    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
-      1,
-      '/tmp',
-      'remote-host-1',
+    ).resolves.toEqual({
+      path: '/tmp/orca-paste-remote.png',
+      previewSrc:
+        '/tmp/orca-clipboard-images-private/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
+    })
+    expect(callRuntimeEnvironmentMock.mock.calls.map(([, , method]) => method)).toEqual([
       'clipboard.startImageUpload',
-      { expectedBase64Length: contentBase64.length, connectionId: null },
-      30_000
-    )
-    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
-      2,
-      '/tmp',
-      'remote-host-1',
       'clipboard.appendImageUploadChunk',
-      {
-        uploadId: 'upload-1',
-        offset: 0,
-        contentBase64: contentBase64.slice(0, 512 * 1024)
-      },
-      30_000
-    )
-    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
-      3,
-      '/tmp',
-      'remote-host-1',
       'clipboard.appendImageUploadChunk',
-      {
-        uploadId: 'upload-1',
-        offset: 512 * 1024,
-        contentBase64: contentBase64.slice(512 * 1024, 1024 * 1024)
-      },
-      30_000
+      'clipboard.commitImageUpload'
+    ])
+    expect(fsWriteFileMock).toHaveBeenCalledWith(
+      '/tmp/orca-clipboard-images-private/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
+      png,
+      { flag: 'wx', mode: 0o600 }
     )
-    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
-      4,
-      '/tmp',
-      'remote-host-1',
-      'clipboard.commitImageUpload',
-      { uploadId: 'upload-1' },
-      30_000
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith(
+      '/tmp/orca-clipboard-images-private/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
     )
-    expect(fsWriteFileMock).not.toHaveBeenCalled()
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
 
@@ -753,14 +768,14 @@ describe('registerClipboardHandlers', () => {
 
   it('uploads clipboard images to the SSH host when a connection is provided', async () => {
     const png = Buffer.from([0, 1, 2, 3])
-    const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
+    const writePrivateFileBase64 = vi.fn().mockResolvedValue(undefined)
     const getTempDir = vi.fn().mockResolvedValue('/var/tmp')
     clipboardReadImageMock.mockReturnValue({
       getSize: () => ({ height: 1, width: 1 }),
       isEmpty: () => false,
       toPNG: () => png
     })
-    getSshFilesystemProviderMock.mockReturnValue({ getTempDir, writeFileBase64 })
+    getSshFilesystemProviderMock.mockReturnValue({ getTempDir, writePrivateFileBase64 })
 
     registerClipboardHandlers({} as never)
 
@@ -772,7 +787,7 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toBe('/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png')
     expect(getSshFilesystemProviderMock).toHaveBeenCalledWith('ssh-1')
     expect(getTempDir).toHaveBeenCalled()
-    expect(writeFileBase64).toHaveBeenCalledWith(
+    expect(writePrivateFileBase64).toHaveBeenCalledWith(
       '/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
       png.toString('base64')
     )
@@ -781,7 +796,7 @@ describe('registerClipboardHandlers', () => {
 
   it('uses Windows path joining for Windows SSH temp directories', async () => {
     const png = Buffer.from([0, 1, 2, 3])
-    const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
+    const writePrivateFileBase64 = vi.fn().mockResolvedValue(undefined)
     clipboardReadImageMock.mockReturnValue({
       getSize: () => ({ height: 1, width: 1 }),
       isEmpty: () => false,
@@ -789,7 +804,7 @@ describe('registerClipboardHandlers', () => {
     })
     getSshFilesystemProviderMock.mockReturnValue({
       getTempDir: vi.fn().mockResolvedValue('C:\\Users\\alice\\AppData\\Local\\Temp'),
-      writeFileBase64
+      writePrivateFileBase64
     })
 
     registerClipboardHandlers({} as never)
@@ -802,7 +817,7 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toBe(
       'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
     )
-    expect(writeFileBase64).toHaveBeenCalledWith(
+    expect(writePrivateFileBase64).toHaveBeenCalledWith(
       'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
       png.toString('base64')
     )

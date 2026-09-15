@@ -102,6 +102,7 @@ export type KeybindingActionId =
   | 'terminal.copySelection'
   | 'terminal.selectAll'
   | 'terminal.paste'
+  | 'terminal.richInput.toggle'
   | 'terminal.search'
   | 'terminal.clear'
   | 'terminal.focusNextPane'

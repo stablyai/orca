@@ -618,13 +618,14 @@ describe('spawnSystemSsh', () => {
     spawnMock.mockReturnValue(proc)
 
     const promise = writeBufferViaSystemSsh(createTarget(), '/tmp/file', Buffer.from('png'), {
-      exclusive: true
+      exclusive: true,
+      mode: 0o600
     })
     proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
     const args = spawnMock.mock.calls[0][1] as string[]
-    expect(args.at(-1)).toContain('set -C; cat >')
+    expect(args.at(-1)).toContain('umask 077; set -C; cat >')
     expect(args.at(-1)).toContain('/tmp/file')
     expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('png'))
   })

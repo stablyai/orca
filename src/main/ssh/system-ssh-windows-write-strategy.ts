@@ -15,6 +15,7 @@ import {
 import { quoteSftpBatchArgument, toSftpRemotePath } from './system-ssh-sftp-path'
 import { getWindowsRemoteWriteCapabilities } from './system-ssh-windows-write-capabilities'
 import {
+  makeWindowsCreatePrivateStagingFileCommand,
   makeWindowsDiscardStagedFileCommand,
   makeWindowsPublishStagedFileCommand,
   makeWindowsStagingPath,
@@ -42,6 +43,7 @@ export type WindowsWriteOptions = Parameters<
   signal?: AbortSignal
   append?: boolean
   exclusive?: boolean
+  mode?: number
 }
 
 /** Bytes to write, plus a way to present them to sftp, which can only send a local file. */
@@ -75,6 +77,9 @@ export async function writeWindowsRemoteFile(
   options: WindowsWriteOptions
 ): Promise<void> {
   throwIfAborted(options.signal)
+  if (options.mode === 0o600 && (options.append || options.exclusive !== true)) {
+    throw new Error('Private Windows writes require exclusive creation without append')
+  }
   const capabilities = getWindowsRemoteWriteCapabilities(target)
   await capabilities.runWithFallback(
     'sftp-subsystem',
@@ -101,12 +106,25 @@ async function stageThenPublish(
 ): Promise<void> {
   const stagingPath = makeWindowsStagingPath(remotePath)
   try {
+    if (options.mode === 0o600) {
+      try {
+        await runWindowsCommandWithoutStdin(
+          target,
+          makeWindowsCreatePrivateStagingFileCommand(stagingPath),
+          `create private staging file for ${remotePath}`,
+          options
+        )
+      } catch (error) {
+        // Never classify an ACL failure as transport unavailability and retry without protection.
+        throw new Error('Failed to create private Windows staging file', { cause: error })
+      }
+    }
     await stage(stagingPath)
     await publishStagedWrite(target, stagingPath, remotePath, options)
   } catch (error) {
     // A transport that declined before it moved any bytes has nothing to sweep, and sweeping
     // anyway would spend a round trip on every write to a host that has no sftp subsystem.
-    if (!nothingStaged(error)) {
+    if (options.mode === 0o600 || !nothingStaged(error)) {
       await discardStagedWrite(target, stagingPath, options)
     }
     throw error

@@ -1,50 +1,65 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { authorizeExternalPathMock, writeFileMock, getPathMock, writeFileBase64Mock } = vi.hoisted(
-  () => ({
-    authorizeExternalPathMock: vi.fn(),
-    writeFileMock: vi.fn(),
-    getPathMock: vi.fn(() => '/var/folders/ab/T'),
-    writeFileBase64Mock: vi.fn()
-  })
-)
+const { tempRoot } = vi.hoisted(() => ({ tempRoot: { value: '' } }))
 
-vi.mock('node:fs/promises', () => ({ default: { writeFile: writeFileMock } }))
-vi.mock('node:crypto', () => ({ randomUUID: () => 'uuid-1' }))
 vi.mock('../../shared/app-environment', () => ({
-  getAppEnvironment: () => ({ getPath: getPathMock })
+  getAppEnvironment: () => ({ getPath: () => tempRoot.value })
 }))
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  requireSshFilesystemProvider: () => ({
-    getTempDir: async () => '/remote/tmp',
-    writeFileBase64: writeFileBase64Mock
-  })
-}))
+const { authorizeExternalPathMock } = vi.hoisted(() => ({ authorizeExternalPathMock: vi.fn() }))
 vi.mock('../ipc/filesystem-auth', () => ({ authorizeExternalPath: authorizeExternalPathMock }))
 
+vi.mock('../providers/ssh-filesystem-dispatch', () => ({
+  requireSshFilesystemProvider: vi.fn()
+}))
+
+import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { saveClipboardImageBufferAsTempFile } from './clipboard-image-temp-file'
 
-beforeEach(() => {
+it('keeps SSH image paths remote and never authorizes them as client-local files', async () => {
   vi.clearAllMocks()
-})
+  const writePrivateFileBase64 = vi.fn().mockResolvedValue(undefined)
+  vi.mocked(requireSshFilesystemProvider).mockReturnValue({
+    getTempDir: async () => '/remote/tmp',
+    writePrivateFileBase64
+  } as never)
 
-describe('saveClipboardImageBufferAsTempFile', () => {
-  it('authorizes the local temp file so the composer can preview what it just wrote', async () => {
-    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from([1, 2, 3]))
-
-    expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
-    // The OS temp dir is outside every allowed root, so an unauthorized path
-    // makes fs:readFile deny the preview read of Orca's own file.
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith(savedPath)
+  const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('png'), {
+    connectionId: 'ssh-1'
   })
 
-  it('does not authorize a local path for an SSH save', async () => {
-    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from([1]), {
-      connectionId: 'conn-1'
-    })
+  expect(savedPath.startsWith('/remote/tmp/')).toBe(true)
+  expect(writePrivateFileBase64).toHaveBeenCalledWith(
+    savedPath,
+    Buffer.from('png').toString('base64')
+  )
+  expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+})
 
-    expect(savedPath.startsWith('/remote/tmp/')).toBe(true)
-    expect(writeFileBase64Mock).toHaveBeenCalled()
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+describe.runIf(process.platform !== 'win32')('saveClipboardImageBufferAsTempFile', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    tempRoot.value = mkdtempSync(join(tmpdir(), 'orca-clipboard-image-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(tempRoot.value, { recursive: true, force: true })
+  })
+
+  it('uses an unpredictable private directory and exclusive private file', async () => {
+    const victim = join(tempRoot.value, 'victim')
+    mkdirSync(victim)
+    symlinkSync(victim, join(tempRoot.value, 'orca-clipboard-images'))
+
+    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('png'))
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith(savedPath)
+    const privateDir = join(savedPath, '..')
+
+    expect(privateDir).toMatch(/orca-clipboard-images-[^/]+$/)
+    expect(readdirSync(victim)).toEqual([])
+    expect(statSync(privateDir).mode & 0o777).toBe(0o700)
+    expect(statSync(savedPath).mode & 0o777).toBe(0o600)
   })
 })

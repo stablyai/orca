@@ -10,7 +10,7 @@ import {
 type SaveClipboardImageAsTempFile = (args?: {
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
-}) => Promise<string | null>
+}) => Promise<string | { path: string; previewSrc?: string } | null>
 
 type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
@@ -79,7 +79,8 @@ export async function pasteTerminalClipboard({
   }
 
   try {
-    const filePath = await saveClipboardImageAsTempFile({ connectionId, runtimeEnvironmentId })
+    const savedImage = await saveClipboardImageAsTempFile({ connectionId, runtimeEnvironmentId })
+    const filePath = typeof savedImage === 'string' ? savedImage : savedImage?.path
     if (!filePath) {
       return { status: 'skipped', reason: 'empty' }
     }

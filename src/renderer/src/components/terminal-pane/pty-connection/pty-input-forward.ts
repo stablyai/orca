@@ -22,6 +22,7 @@ import { FOREGROUND_GRID_DRIFT_CHECK_MIN_MS } from './foreground-output-budgets'
 import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreground-output-scan'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isCodexPaneStale } from './codex-pane-stale'
+import { installTuiRepaintResizeReassert } from './tui-repaint-resize-reassert'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -242,6 +243,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
     session.onHeldPtyResizeFlush
   )
+
+  installTuiRepaintResizeReassert(session)
 
   session.onResizeDisposable = session.pane.terminal.onResize(({ cols, rows }) => {
     if (session.suppressStructuralReplayPtyResize || session.suppressViewportClaimTerminalResize) {

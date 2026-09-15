@@ -225,6 +225,56 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
   })
 
+  it('routes native drop paths through the resolver when rich input is open', () => {
+    const { onFileDrop, manager } = useMountForFileDrop()
+    const dispatchEvent = vi.fn()
+    manager.getPanes.mockReturnValue([
+      {
+        leafId: 'leaf-1',
+        container: { dataset: { terminalRichInputOpen: '' }, dispatchEvent }
+      }
+    ])
+    const data = {
+      paths: ['/tmp/image.png'],
+      target: 'terminal',
+      tabId: 'tab-1',
+      paneLeafId: 'leaf-1'
+    }
+
+    onFileDrop(data)
+    const args = mocks.handleTerminalFileDrop.mock.calls[0][0]
+    expect(args.onResolvedPaths(['/remote/.orca/drops/image.png'])).toBe(true)
+
+    expect(dispatchEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'terminal-rich-input-native-drop',
+        detail: {
+          phase: 'resolved',
+          paths: ['/remote/.orca/drops/image.png']
+        }
+      })
+    )
+  })
+
+  it('declines resolved paths after rich input closes so the drop can fall back to the PTY', () => {
+    const { onFileDrop, manager } = useMountForFileDrop()
+    const dispatchEvent = vi.fn()
+    const dataset: Record<string, string> = { terminalRichInputOpen: '' }
+    manager.getPanes.mockReturnValue([{ leafId: 'leaf-1', container: { dataset, dispatchEvent } }])
+
+    onFileDrop({
+      paths: ['/tmp/image.png'],
+      target: 'terminal',
+      tabId: 'tab-1',
+      paneLeafId: 'leaf-1'
+    })
+    delete dataset.terminalRichInputOpen
+    const args = mocks.handleTerminalFileDrop.mock.calls[0][0]
+
+    expect(args.onResolvedPaths(['/remote/.orca/drops/image.png'])).toBe(false)
+    expect(dispatchEvent).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps handling legacy terminal file drops without a terminal tab id', () => {
     const { onFileDrop, manager, paneTransports } = useMountForFileDrop()
 

@@ -162,6 +162,31 @@ describe('handleOscLink', () => {
     })
   })
 
+  it('pins explicitly owned SSH links inside the worktree after route changes', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-replacement')
+
+    openDetectedFilePath('/home/me/repo/src/main.ts', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo',
+      connectionId: 'ssh-original'
+    })
+    await flushAsyncWork()
+
+    expect(statMock).toHaveBeenCalledWith({
+      filePath: '/home/me/repo/src/main.ts',
+      connectionId: 'ssh-original'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/home/me/repo/src/main.ts',
+        relativePath: 'src/main.ts',
+        externalSshTargetId: 'ssh-original'
+      }),
+      { forceContentReload: true }
+    )
+  })
+
   it('pins SSH links outside the worktree to their target host', async () => {
     setPlatform('Macintosh')
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')
