@@ -37,6 +37,8 @@ function createPane(options: { webglAddon?: FakeWebglAddon | null } = {}): Manag
     hasComplexScriptOutput: false,
     webglAddon: (options.webglAddon ?? null) as never,
     ligaturesAddon: null,
+    imageAddon: null,
+    imageCursorAdvanceDisposable: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
     pendingWebglRefreshRafId: null,

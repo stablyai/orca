@@ -24,6 +24,8 @@ function createPane(): ManagedPaneInternal {
       dispose: vi.fn()
     } as never,
     ligaturesAddon: null,
+    imageAddon: null,
+    imageCursorAdvanceDisposable: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
     fitAddon: {
