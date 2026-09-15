@@ -14,6 +14,7 @@ import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
 import { AutomationPrecheckFields } from './AutomationPrecheckFields'
+import { AutomationExtraProjectsField } from './AutomationExtraProjectsField'
 import AutomationProjectCombobox from './AutomationProjectCombobox'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { AutomationSessionField } from './AutomationSessionField'
@@ -28,6 +29,7 @@ type AutomationEditorSettingsSidebarProps = {
   destination?: AutomationCreateDestinationControl
   isHermesTarget: boolean
   isHermesCreate: boolean
+  isOrcaCreate: boolean
   repos: readonly Repo[]
   projectHostSetups: readonly ProjectHostSetup[]
   automationYamlHooksByRepoKey: Record<string, OrcaHooks | null>
@@ -51,6 +53,7 @@ export function AutomationEditorSettingsSidebar({
   destination,
   isHermesTarget,
   isHermesCreate,
+  isOrcaCreate,
   repos,
   projectHostSetups,
   automationYamlHooksByRepoKey,
@@ -141,6 +144,15 @@ export function AutomationEditorSettingsSidebar({
             allowAddProject={allowAddProject}
           />
         </Field>
+        {isOrcaCreate ? (
+          <AutomationExtraProjectsField
+            repos={repos}
+            draft={draft}
+            pickerTriggerClassName={pickerTriggerClassName}
+            getRepoHostLabel={getRepoHostLabel}
+            onDraftChange={onDraftChange}
+          />
+        ) : null}
         <div className="mb-4">
           <AutomationWorkspaceField
             draft={draft}

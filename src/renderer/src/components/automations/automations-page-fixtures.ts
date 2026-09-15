@@ -152,7 +152,7 @@ export function makeScopedExternalManager(
   return { scope, manager: makeExternalManager(overrides) }
 }
 
-function makeRepo(): Repo {
+export function makeRepo(): Repo {
   return {
     id: REPO_ID,
     displayName: 'orca',
@@ -164,7 +164,7 @@ function makeRepo(): Repo {
 }
 
 /** Ready and local, so the editor can build a run context and state a Self destination. */
-function makeProjectHostSetup(): ProjectHostSetup {
+export function makeProjectHostSetup(): ProjectHostSetup {
   return {
     id: 'setup-1',
     projectId: 'project-1',
