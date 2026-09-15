@@ -27,6 +27,8 @@ export function resolveAgentLaunchCommand(args: {
   platform: NodeJS.Platform
   shell: AgentStartupShell
   agentArgs?: string | null
+  /** Launch-only arguments omitted from persisted resume configuration. */
+  transientAgentArgs?: readonly string[]
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
@@ -37,9 +39,9 @@ export function resolveAgentLaunchCommand(args: {
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
       isRemote: args.isRemote
     })
-  const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
-  if (!suffix.ok) {
-    return suffix
+  const persistedSuffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
+  if (!persistedSuffix.ok) {
+    return persistedSuffix
   }
   const trailingTokens = args.agentArgs?.trim()
     ? tokenizeStartupCommand(args.agentArgs.trim(), args.shell)
@@ -47,6 +49,8 @@ export function resolveAgentLaunchCommand(args: {
   if (!trailingTokens.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${trailingTokens.error}` }
   }
+  const launchTokens = insertBeforeTerminator(trailingTokens.tokens, args.transientAgentArgs ?? [])
+  const launchSuffix = launchTokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')
   const resolvedOptions = resolveAgentSessionOptionLaunch(
     args.agent,
     args.sessionOptions,
@@ -77,12 +81,17 @@ export function resolveAgentLaunchCommand(args: {
     }
   }
   const optionSuffix = resolvedOptions.args.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')
-  const commandWithoutSessionOptions = suffix.suffix ? `${command} ${suffix.suffix}` : command
+  const commandWithoutSessionOptions = persistedSuffix.suffix
+    ? `${command} ${persistedSuffix.suffix}`
+    : command
   const commandWithOptions = optionSuffix ? `${command} ${optionSuffix}` : command
   const overrideTokens = args.sessionOptionsOverrideAgentArgs
     ? insertBeforeTerminator(
-        removeOverriddenAgentSessionArgs(args.agent, args.sessionOptions, trailingTokens.tokens),
-        resolvedOptions.args
+        insertBeforeTerminator(
+          removeOverriddenAgentSessionArgs(args.agent, args.sessionOptions, trailingTokens.tokens),
+          resolvedOptions.args
+        ),
+        args.transientAgentArgs ?? []
       )
     : []
   const commandWithOverrides = overrideTokens.length
@@ -92,8 +101,8 @@ export function resolveAgentLaunchCommand(args: {
     ok: true,
     command: args.sessionOptionsOverrideAgentArgs
       ? commandWithOverrides
-      : suffix.suffix
-        ? `${commandWithOptions} ${suffix.suffix}`
+      : launchSuffix
+        ? `${commandWithOptions} ${launchSuffix}`
         : commandWithOptions,
     commandWithoutSessionOptions,
     appliedSessionOptions: resolvedOptions.appliedValues
