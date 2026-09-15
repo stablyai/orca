@@ -215,7 +215,8 @@ describe('sibling process-death attribution', () => {
     await vi.waitFor(() => expect(siblingAttaches(store)).toHaveLength(2))
     expect(siblingAttaches(store)[0]).toMatchObject({ crashAttribution: CONCURRENT })
     expect(siblingAttaches(store)[1]).toMatchObject({ siblingProcessDeathRepeats: 1 })
-    expect(siblingAttaches(store)[1]).not.toHaveProperty('crashAttribution')
+    // Null withdraws the label the first attach wrote: a merge alone can never take it back.
+    expect(siblingAttaches(store)[1]).toMatchObject({ crashAttribution: null })
   })
 
   it('does not erase recorded sibling evidence during unrelated child churn', async () => {
