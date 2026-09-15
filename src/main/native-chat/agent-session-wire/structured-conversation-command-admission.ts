@@ -1,5 +1,8 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  hasUnansweredStructuredAgentSessionDispatch
+} from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 export function conversationCommandBlocked(
@@ -47,11 +50,12 @@ export function conversationCommandBlocked(
       ? 'Stop background tasks before using this command.'
       : 'Wait for background tasks to finish before using this command.'
   }
-  if (
-    ctx.journal
-      .submissions()
-      .some((entry) => entry.dispatchState === 'pending' || entry.dispatchState === 'unknown')
-  ) {
+  // Only a dispatch this generation still owes an answer on. A recovered `unknown`
+  // outlived the host that sent it and nothing re-derives it, so refusing on one
+  // named a step the user could never take for the rest of the session. The fence
+  // says the same thing about a dead generation's rows: no live provider will
+  // answer them and no user action settles them.
+  if (hasUnansweredStructuredAgentSessionDispatch(ctx.journal.submissions(), ctx.fence)) {
     return 'Resolve pending or unconfirmed messages before using this command.'
   }
   return null
