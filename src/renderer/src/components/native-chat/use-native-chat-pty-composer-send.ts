@@ -74,6 +74,7 @@ export function useNativeChatPtyComposerSend(args: {
       pendingHandle = sendNativeChatMessageWithImageAttachments(
         target.settings,
         target.ptyId,
+        args.agent,
         text,
         imagePaths,
         sendOptions

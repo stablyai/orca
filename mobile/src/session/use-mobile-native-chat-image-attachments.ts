@@ -65,6 +65,9 @@ type Args = {
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured sessions send attachments without the terminal paste path. */
   readonly structuredNativeChat: boolean
+  /** Agent on the tab the paste targets, read at send time (a ref, because the
+   *  active tab can change between render and submit). Picks the attachment form. */
+  readonly agentRef: CurrentRef<string | null>
   /** Launch-context text parked on the agent's TUI input line, or null. The
    *  paste's leading clear must cover every line of it, or the draft's earlier
    *  lines survive and ride along with the image. */
@@ -101,6 +104,7 @@ export function useMobileNativeChatImageAttachments({
   onSendError,
   baseSend,
   structuredNativeChat,
+  agentRef,
   readSeededLaunchDraft,
   onAttachSuccess,
   onError,
@@ -240,6 +244,7 @@ export function useMobileNativeChatImageAttachments({
             terminal: handle,
             deviceToken: deviceTokenRef.current,
             imagePaths: pendingImages.map((attachment) => attachment.path),
+            agent: agentRef.current,
             followedByText: text.trim().length > 0,
             deadline,
             ...(seededLaunchDraft
@@ -313,6 +318,7 @@ export function useMobileNativeChatImageAttachments({
     },
     [
       activeHandleRef,
+      agentRef,
       attachmentsByScope,
       baseSend,
       client,

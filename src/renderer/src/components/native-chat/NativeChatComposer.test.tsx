@@ -433,6 +433,32 @@ describe('NativeChatComposer', () => {
     expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
       {},
       'pty-1',
+      'codex',
+      'hello',
+      ['/tmp/pasted.png'],
+      undefined
+    )
+  })
+
+  // The composer owns which agent the send path branches on; a dropped prop
+  // would silently give every agent the image-paste form again.
+  it('forwards the pane agent so the send path can pick the attachment form', () => {
+    mocks.imageAttachments = [{ id: 'image-1', path: '/tmp/pasted.png' }]
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="omp"
+      />
+    )
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      'omp',
       'hello',
       ['/tmp/pasted.png'],
       undefined

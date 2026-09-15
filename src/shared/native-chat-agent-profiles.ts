@@ -1,6 +1,12 @@
 import type { AgentType } from './agent-status-types'
 import { getAgentSlashCommands, type SlashCommandSuggestion } from './native-chat-slash-commands'
 
+/** How an agent takes a composer attachment. `image-paste` bracket-pastes the
+ *  raw path, which only agents with a verified image-paste gesture turn into an
+ *  attachment chip; `file-reference` sends the portable `@path` mention, which
+ *  every other agent reads as a file to open rather than as prose. */
+export type NativeChatAttachmentForm = 'image-paste' | 'file-reference'
+
 export type NativeChatAgentProfile = {
   skillPrefix: '$' | '/'
   /** OpenClaude reads Claude-owned roots, so this can differ from the agent. */
@@ -11,6 +17,7 @@ export type NativeChatAgentProfile = {
   /** Catalog commands the model acts on when they arrive as prose, even though
    *  the runtime has no slash parser of its own. */
   textDrivenCommands?: readonly string[]
+  attachmentForm: NativeChatAttachmentForm
 }
 
 const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfile>> = {
@@ -19,21 +26,25 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     skillSourceOwner: 'codex',
     // The app-server has no slash parser, but the model owns goal tools and
     // calls create_goal itself when `/goal <objective>` reaches it as prose.
-    textDrivenCommands: ['goal']
+    textDrivenCommands: ['goal'],
+    attachmentForm: 'image-paste'
   },
   claude: {
     skillPrefix: '/',
     skillSourceOwner: 'claude',
-    expandsSlashCommandsFromText: true
+    expandsSlashCommandsFromText: true,
+    attachmentForm: 'image-paste'
   },
   openclaude: {
     skillPrefix: '/',
     skillSourceOwner: 'claude',
-    expandsSlashCommandsFromText: true
+    expandsSlashCommandsFromText: true,
+    attachmentForm: 'image-paste'
   },
   grok: {
     skillPrefix: '/',
-    skillSourceOwner: 'grok'
+    skillSourceOwner: 'grok',
+    attachmentForm: 'image-paste'
   }
 }
 
@@ -41,6 +52,15 @@ export function getNativeChatAgentProfile(
   agent: AgentType | null | undefined
 ): NativeChatAgentProfile | null {
   return agent ? (NATIVE_CHAT_AGENT_PROFILES[agent] ?? null) : null
+}
+
+/** Attachment form for an agent. Agents without a verified profile fall back to
+ *  `@path`: an unverified TUI has no image-paste gesture, so a bracketed raw
+ *  path would land in its composer as text the model reads as prose. */
+export function getNativeChatAttachmentForm(
+  agent: AgentType | null | undefined
+): NativeChatAttachmentForm {
+  return getNativeChatAgentProfile(agent)?.attachmentForm ?? 'file-reference'
 }
 
 /** The catalog that send classification, collision detection, and transcript
