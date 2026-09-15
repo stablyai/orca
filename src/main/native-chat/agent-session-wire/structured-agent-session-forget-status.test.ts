@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { AgentHookServer } from '../../agent-hooks/server'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
@@ -40,6 +42,51 @@ const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: { kind: 'codex', threadId: SESSION }
 }
 
+const SUBJECT = makeStructuredAgentStatusSubject(
+  {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: IDENTITY.workspaceId,
+    workspaceKind: 'git-worktree'
+  },
+  SESSION
+)
+
+function ownerRecord(): AgentSessionRecord {
+  return {
+    schemaVersion: 2,
+    sessionId: SESSION,
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: IDENTITY.workspaceId,
+      workspaceKind: 'git-worktree'
+    },
+    provider: 'codex',
+    providerHandleChain: [],
+    accountHome: { variable: 'CODEX_HOME', path: '/fixture/codex' },
+    createdAt: 1,
+    updatedAt: 1,
+    lease: {
+      sessionId: SESSION,
+      runtimeKind: 'native',
+      runtimeFence: 1,
+      handoffStage: null,
+      provenHandleLinkId: null,
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      leaseDeadlineAt: 100,
+      lastRenewedAt: 1,
+      handoffOperationId: null,
+      journalCheckpoint: null,
+      claimKeyId: 'fixture-key',
+      claimStatus: 'live',
+      unreconciled: false,
+      deathEvidence: null
+    }
+  }
+}
+
 let root: string
 const journals = createTrackedJournalOpener()
 
@@ -58,6 +105,7 @@ async function workingSession(): Promise<{
   feed: StructuredAgentSessionStatusFeed
   sessions: Map<string, StructuredAgentSessionHostSession>
   journal: AgentSessionJournal
+  records: Map<string, AgentSessionRecord>
 }> {
   const journal = await journals.open({ identity: IDENTITY, journalDir: join(root, SESSION) })
   await journal.appendItem(
@@ -75,28 +123,41 @@ async function workingSession(): Promise<{
       SESSION,
       {
         journal,
-        params: { location: { workspaceId: IDENTITY.workspaceId }, provider: 'codex' },
+        params: {
+          envelope: {
+            sessionId: SESSION,
+            clientOperationId: 'fixture-attach',
+            expectedRuntimeFence: 1,
+            payloadFingerprint: 'fixture-payload'
+          },
+          location: ownerRecord().location,
+          provider: 'codex',
+          agent: 'codex',
+          accountHome: ownerRecord().accountHome,
+          runtimeKind: 'native'
+        },
         fence: 1,
         hasProviderChild: true,
         acquisitionGeneration: null
-      } as unknown as StructuredAgentSessionHostSession
+      }
     ]
   ])
   const server = new AgentHookServer()
+  const records = new Map([[SESSION, ownerRecord()]])
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,
-    getRecord: () => null,
+    getRecord: (sessionId) => records.get(sessionId) ?? null,
     now: () => 1,
     statusSink: () => ({
-      publish: (summary) => server.ingestStructuredStatus(summary),
-      forget: (sessionId) => server.dropStructuredStatus(sessionId)
+      publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
+      forget: (subject) => server.dropStructuredStatus(subject)
     })
   })
   feed.publish(SESSION, journal)
   expect(server.getStatusSnapshot()).toEqual([
     expect.objectContaining({ state: 'working', structuredHost: 'owned' })
   ])
-  return { server, feed, sessions, journal }
+  return { server, feed, sessions, journal, records }
 }
 
 function attachContext(
@@ -133,6 +194,37 @@ const attachParams = {
 } as unknown as Parameters<typeof attachStructuredAgentSession>[2]
 
 describe('a session that leaves the host without an explicit close', () => {
+  it('forgets the retained exact subject after the record and live session are deleted first', async () => {
+    const { server, feed, sessions, records } = await workingSession()
+    const otherSubject = { ...SUBJECT, executionHostId: 'ssh:other-host' as const }
+    const original = server.getCanonicalStatusSnapshot().parents[0]
+    expect(original?.subject).toEqual(SUBJECT)
+    server.ingestStructuredStatus(
+      {
+        sessionId: SESSION,
+        workspaceId: IDENTITY.workspaceId,
+        agent: 'codex',
+        status: 'working',
+        latestPrompt: 'other host',
+        updatedAt: 10
+      },
+      otherSubject
+    )
+    const drop = vi.spyOn(server, 'dropStructuredStatus')
+    const paneLookup = vi.spyOn(server, 'getStatusSnapshotForPane')
+    records.delete(SESSION)
+    sessions.delete(SESSION)
+
+    feed.close(SESSION)
+
+    expect(drop).toHaveBeenCalledExactlyOnceWith(SUBJECT)
+    expect(paneLookup).not.toHaveBeenCalled()
+    expect(server.getCanonicalStatusSnapshot().parents.map((row) => row.subject)).toEqual([
+      otherSubject
+    ])
+    expect(server.getStatusSnapshot()).toEqual([expect.objectContaining({ prompt: 'other host' })])
+  })
+
   it('leaves the agent-status store with it when an attach fails', async () => {
     const { server, feed, sessions } = await workingSession()
 

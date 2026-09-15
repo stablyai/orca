@@ -28,7 +28,7 @@ import { parseAgentStatusSubject } from './agent-status-subject'
 import { measureUtf8ByteLength } from './utf8-byte-limits'
 
 const MAX_EPOCH_LENGTH = 256
-const MAX_TOMBSTONE_KEY_LENGTH = 4_096
+const MAX_TOMBSTONE_KEY_LENGTH = 32_768
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -150,7 +150,8 @@ export function parseAgentStatusStoreMutation(value: unknown): AgentStatusStoreM
     'removeAliases',
     'facts',
     'removeFacts',
-    'tombstones'
+    'tombstones',
+    'reopenStructuredParent'
   ]
   if (
     !isWithinSerializedLimit(value) ||
@@ -187,6 +188,12 @@ export function parseAgentStatusStoreMutation(value: unknown): AgentStatusStoreM
     value.tombstones === undefined
       ? undefined
       : parseMutationArray(value.tombstones, parseAgentStatusTombstoneInput)
+  const reopenStructuredParent =
+    value.reopenStructuredParent === undefined
+      ? undefined
+      : value.reopenStructuredParent === true && parent?.subject.kind === 'structured-session'
+        ? true
+        : null
   const parsedValues = [
     parent,
     removeParent,
@@ -196,7 +203,8 @@ export function parseAgentStatusStoreMutation(value: unknown): AgentStatusStoreM
     removeAliases,
     facts,
     removeFacts,
-    tombstones
+    tombstones,
+    reopenStructuredParent
   ]
   const sourceValues = optionalKeys.map((key) => value[key])
   if (sourceValues.some((item, index) => item !== undefined && !parsedValues[index])) {
@@ -216,6 +224,7 @@ export function parseAgentStatusStoreMutation(value: unknown): AgentStatusStoreM
   }
   return {
     ...(parent ? { parent } : {}),
+    ...(reopenStructuredParent ? { reopenStructuredParent: true as const } : {}),
     ...(removeParent ? { removeParent } : {}),
     ...(children ? { children } : {}),
     ...(removeChildren ? { removeChildren } : {}),

@@ -119,6 +119,15 @@ export function admitLegacyAgentStatus(
   return legacyStatusAdapter(state).admit(caller, mode, entry, options)
 }
 
+export function canAdmitLegacyAgentStatusEntry(
+  state: HookListenerState,
+  caller: AgentStatusLegacyIngressCaller,
+  entry: AgentHookEventPayload,
+  mode: AgentStatusLegacyAdmissionMode
+): boolean {
+  return legacyStatusAdapter(state).canAdmit(caller, mode, entry)
+}
+
 export function deleteLegacyAgentStatus(state: HookListenerState, paneKey: string): boolean {
   return legacyStatusAdapter(state).delete(paneKey)
 }

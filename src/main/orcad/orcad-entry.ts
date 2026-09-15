@@ -236,8 +236,8 @@ async function startOrcadRuntime(
     // read, so a row observed under one process otherwise acquires whatever process owns the pane now.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
     structuredAgentStatusSink: {
-      publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
-      forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
+      publish: (summary, subject) => agentHookServer.ingestStructuredStatus(summary, subject),
+      forget: (subject) => agentHookServer.dropStructuredStatus(subject)
     },
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),

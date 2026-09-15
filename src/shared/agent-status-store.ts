@@ -1,5 +1,10 @@
 import { agentChildWorkBelongsTo, type AgentChildWorkRecord } from './agent-status-child-work'
 import { parseAgentChildWorkRecord } from './agent-status-child-work-codec'
+import type {
+  AgentChildWorkAliasInput,
+  AgentChildWorkAliasRecord
+} from './agent-status-child-work-alias'
+import { resolveAgentStatusChildBindings } from './agent-status-store-child-queries'
 import type { AgentStatusStoreSnapshot } from './agent-status-store-contract'
 import {
   isAgentStatusStoreEpoch,
@@ -32,6 +37,9 @@ export type AgentStatusStoreMode = 'authority' | 'replica'
 export type AgentStatusStore = {
   getParent(subject: AgentStatusSubject): AgentStatusParentRecord | null
   getChildren(subject: AgentStatusSubject): AgentChildWorkRecord[]
+  getChild(childWorkId: string): AgentChildWorkRecord | null
+  getChildAliases(childWorkId: string): AgentChildWorkAliasRecord[]
+  resolveChildAliases(aliases: AgentChildWorkAliasInput[]): AgentChildWorkAliasRecord[]
   getSnapshot(): AgentStatusStoreSnapshot
   applyMutation(mutation: unknown): AgentStatusMutationEnvelope | null
   applySnapshot(snapshot: unknown): boolean
@@ -51,6 +59,15 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
   let snapshotApplied = options.mode === 'authority'
 
   const store: AgentStatusStore = {
+    getChild(childWorkId) {
+      return state.children.get(childWorkId) ?? null
+    },
+    getChildAliases(childWorkId) {
+      return [...state.aliases.values()].filter((alias) => alias.childWorkId === childWorkId)
+    },
+    resolveChildAliases(aliases) {
+      return resolveAgentStatusChildBindings(state, aliases)
+    },
     getParent(subject) {
       const parsed = parseAgentStatusSubject(subject)
       if (!parsed) {

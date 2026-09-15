@@ -145,7 +145,7 @@ describe('resolveAgentChildWorkFreshness', () => {
     }
   )
 
-  it('does not turn live idle into settled or rewrite settled history on contact loss', () => {
+  it('preserves idle evidence and settled history on contact loss', () => {
     expect(
       resolveAgentChildWorkFreshness({
         state: 'idle',
@@ -153,7 +153,7 @@ describe('resolveAgentChildWorkFreshness', () => {
         parentEvidenceFresh: false,
         transportObservation: 'live'
       })
-    ).toBe('unverifiable')
+    ).toBe('idle')
     expect(
       resolveAgentChildWorkFreshness({
         state: 'done',

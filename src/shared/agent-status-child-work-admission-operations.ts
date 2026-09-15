@@ -1,6 +1,5 @@
-import { serializeAgentChildWorkAliasKey } from './agent-status-child-work-alias'
+import { serializeAgentChildWorkBindingKey } from './agent-status-child-work-binding'
 import {
-  AGENT_CHILD_WORK_INVOCATION_HISTORY_MAX,
   agentChildWorkFencesEqual,
   type AgentChildWorkId,
   type AgentChildWorkRecord
@@ -21,7 +20,6 @@ import type {
   AgentChildWorkAdoptRequest,
   AgentChildWorkAnnounceRequest,
   AgentChildWorkReparentRequest,
-  AgentChildWorkResumeRequest,
   AgentChildWorkStopRequest
 } from './agent-status-child-work-admission'
 import {
@@ -76,14 +74,22 @@ export function announceAgentChildWork(
       ? commitAgentChildWork(store, child, aliases, true)
       : rejectAgentChildWorkAdmission('invalid')
   }
-  if (bindings.length !== exact.length || exactIds.size > 1) {
+  if ((exact.length === 0 && bindings.length > 0) || exactIds.size > 1) {
     return rejectAgentChildWorkAdmission(exactIds.size > 1 ? 'ambiguous' : 'stale-invocation')
   }
   const existingId = exact[0]?.childWorkId
   if (existingId) {
     const child = findAgentChildWork(store, existingId)
-    if (!child) {
+    if (
+      !child ||
+      !agentStatusSubjectsEqual(child.parent, parent) ||
+      child.provider !== request.provider ||
+      child.kind !== request.kind
+    ) {
       return rejectAgentChildWorkAdmission('ambiguous')
+    }
+    if (!agentChildWorkFencesEqual(child.invocation, fence)) {
+      return rejectAgentChildWorkAdmission('stale-invocation')
     }
     const aliases = buildAgentChildWorkAliases(
       parent,
@@ -149,7 +155,7 @@ export function adoptAgentChildWork(
   const oldAliases = agentChildWorkAliasesForChild(store, child.childWorkId)
   const removeAliases = oldAliases
     .filter((alias) => alias.kind !== request.kind)
-    .map(serializeAgentChildWorkAliasKey)
+    .map(serializeAgentChildWorkBindingKey)
   const reclassified = oldAliases.map((alias) => ({
     parent: alias.parent,
     provider: alias.provider,
@@ -161,7 +167,7 @@ export function adoptAgentChildWork(
     fence: alias.fence
   }))
   const unique = new Map(
-    [...reclassified, ...aliases].map((alias) => [serializeAgentChildWorkAliasKey(alias), alias])
+    [...reclassified, ...aliases].map((alias) => [serializeAgentChildWorkBindingKey(alias), alias])
   )
   const reclassifiedCollisions = resolveAgentChildWorkAliasRecords(store, [
     ...unique.values()
@@ -170,61 +176,6 @@ export function adoptAgentChildWork(
     return rejectAgentChildWorkAdmission('ambiguous')
   }
   return updateExistingAgentChildWork(store, request, child, [...unique.values()], removeAliases)
-}
-
-export function resumeAgentChildWork(
-  store: AgentStatusStore,
-  request: AgentChildWorkResumeRequest
-): AgentChildWorkAdmissionResult {
-  const child = findAgentChildWork(store, request.childWorkId)
-  const invalid = validateExistingAgentChildWork(
-    child,
-    request.parent,
-    request.provider,
-    request.expectedFence
-  )
-  const nextFence = parseAgentChildWorkInvocationFence(request.nextFence)
-  if (invalid || !child) {
-    return invalid ?? rejectAgentChildWorkAdmission('unknown-child')
-  }
-  if (!nextFence || agentChildWorkFencesEqual(child.invocation, nextFence)) {
-    return rejectAgentChildWorkAdmission('invalid')
-  }
-  const aliases = buildAgentChildWorkAliases(
-    request.parent,
-    request.provider,
-    request.kind,
-    request.aliases,
-    child.childWorkId,
-    nextFence
-  )
-  if (!aliases) {
-    return rejectAgentChildWorkAdmission('invalid')
-  }
-  const collisions = resolveAgentChildWorkAliasRecords(store, aliases).filter(
-    (binding) => binding.childWorkId !== child.childWorkId
-  )
-  if (collisions.length > 0) {
-    return rejectAgentChildWorkAdmission('ambiguous')
-  }
-  const previousInvocations = [
-    ...(child.previousInvocations ?? []),
-    {
-      fence: child.invocation,
-      ...(child.outcome !== undefined ? { outcome: child.outcome } : {}),
-      ...(child.membership === 'settled' ? { settledAt: child.observedAt } : {})
-    }
-  ].slice(-AGENT_CHILD_WORK_INVOCATION_HISTORY_MAX)
-  const resumed = buildAgentChildWork(
-    request,
-    child.childWorkId,
-    child.firstObservedAt,
-    nextFence,
-    previousInvocations
-  )
-  return resumed
-    ? commitAgentChildWork(store, resumed, aliases, false)
-    : rejectAgentChildWorkAdmission('invalid')
 }
 
 export function reparentAgentChildWork(
@@ -270,7 +221,7 @@ export function reparentAgentChildWork(
         moved,
         aliases,
         false,
-        oldAliases.map(serializeAgentChildWorkAliasKey)
+        oldAliases.map(serializeAgentChildWorkBindingKey)
       )
     : rejectAgentChildWorkAdmission('invalid')
 }

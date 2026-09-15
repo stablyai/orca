@@ -213,7 +213,18 @@ describe('AgentSessionSubscribers', () => {
       sessions: new Map([
         [
           SESSION,
-          { journal, params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' } }
+          {
+            journal,
+            params: {
+              location: {
+                executionHostId: 'local',
+                wslDistro: null,
+                workspaceId: 'workspace-1',
+                workspaceKind: 'git-worktree'
+              },
+              provider: 'codex'
+            }
+          }
         ]
       ]),
       getRecord: () => null,

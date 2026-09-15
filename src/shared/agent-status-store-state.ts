@@ -1,15 +1,18 @@
 import {
-  deserializeAgentChildWorkAliasKey,
   parseAgentChildWorkAliasRecord,
-  serializeAgentChildWorkAliasKey,
   type AgentChildWorkAliasRecord
 } from './agent-status-child-work-alias'
+import {
+  deserializeAgentChildWorkBindingKey,
+  serializeAgentChildWorkBindingKey
+} from './agent-status-child-work-binding'
 import {
   agentChildWorkBelongsTo,
   agentChildWorkFencesEqual,
   type AgentChildWorkRecord
 } from './agent-status-child-work'
 import { parseAgentChildWorkRecord } from './agent-status-child-work-codec'
+import { agentStatusStoreFitsByteBudget } from './agent-status-store-byte-budget'
 import {
   AGENT_STATUS_STORE_LIMITS,
   AGENT_STATUS_STORE_SNAPSHOT_VERSION,
@@ -133,7 +136,7 @@ export function validateAgentStatusStoreState(state: AgentStatusStoreState): boo
     const child = state.children.get(alias.childWorkId)
     const tombstone = state.tombstones.get(agentStatusTombstoneMapKey('alias', key))
     if (
-      key !== serializeAgentChildWorkAliasKey(alias) ||
+      key !== serializeAgentChildWorkBindingKey(alias) ||
       alias.revision > state.revision ||
       !child ||
       !agentChildWorkBelongsTo(child, alias.parent) ||
@@ -160,13 +163,13 @@ export function validateAgentStatusStoreState(state: AgentStatusStoreState): boo
     if (
       item.revision > state.revision ||
       (item.entity === 'parent' && !deserializeAgentStatusSubject(item.key)) ||
-      (item.entity === 'alias' && !deserializeAgentChildWorkAliasKey(item.key)) ||
+      (item.entity === 'alias' && !deserializeAgentChildWorkBindingKey(item.key)) ||
       (item.entity === 'fact' && !deserializeAgentStatusFactKey(item.key))
     ) {
       return false
     }
   }
-  return true
+  return agentStatusStoreFitsByteBudget(state)
 }
 
 export function snapshotFromAgentStatusStoreState(
@@ -217,7 +220,7 @@ export function agentStatusStoreStateFromSnapshot(
     if (!record) {
       return null
     }
-    const key = serializeAgentChildWorkAliasKey(record)
+    const key = serializeAgentChildWorkBindingKey(record)
     if (state.aliases.has(key)) {
       return null
     }

@@ -320,18 +320,20 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()).toEqual([expect.objectContaining({ subagents: undefined })])
   })
 
-  it('keeps quiet live children authoritative and reconfirms them per session after reconnect', async () => {
+  it('requires fresh parent evidence as well as a reconfirmed feed after reconnect', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
     const live = summary({ backgroundTasks: [{ id: 'child', kind: 'agent', state: 'working' }] })
+    let parentIsFresh = false
     const childState = () =>
       buildSubagentChildRows({
         parentEntry: statuses()[0],
         tab: structuredTab as never,
-        parentIsFresh: false
+        parentIsFresh
       })[0]?.state
     act(() => feed().emit({ type: 'snapshot', sessions: [live] }))
-    // A hook's evidence window has expired, but the host has not retracted its live task.
+    expect(childState()).toBe('unverifiable')
+    parentIsFresh = true
     expect(childState()).toBe('working')
     act(() => feed().emit({ type: 'end' }))
     expect(childState()).toBe('unverifiable')
@@ -340,6 +342,8 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(childState()).toBe('unverifiable')
     act(() => feed(1).emit({ type: 'status', session: live }))
     expect(childState()).toBe('working')
+    parentIsFresh = false
+    expect(childState()).toBe('unverifiable')
     const writes = mocks.setAgentStatus.mock.calls.length
     act(() => feed(1).emit({ type: 'status', session: live }))
     expect(mocks.setAgentStatus).toHaveBeenCalledTimes(writes)

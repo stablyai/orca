@@ -367,7 +367,14 @@ describe('a chat that closes', () => {
       claimStatus: 'released',
       ownerProcess: null
     })
-    expect(statusSink.forget).toHaveBeenCalledWith(SESSION)
+    expect(statusSink.forget).toHaveBeenCalledWith({
+      kind: 'structured-session',
+      sessionId: SESSION,
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'git-worktree'
+    })
 
     await expect(host.close(SESSION)).resolves.toBeUndefined()
     expect(host.hasSession(SESSION)).toBe(false)

@@ -1,8 +1,8 @@
+import { parseAgentChildWorkAliasRecord } from './agent-status-child-work-alias'
 import {
-  deserializeAgentChildWorkAliasKey,
-  parseAgentChildWorkAliasRecord,
-  serializeAgentChildWorkAliasKey
-} from './agent-status-child-work-alias'
+  deserializeAgentChildWorkBindingKey,
+  serializeAgentChildWorkBindingKey
+} from './agent-status-child-work-binding'
 import { parseAgentChildWorkRecord } from './agent-status-child-work-codec'
 import type {
   AgentStatusStoreMutation,
@@ -91,7 +91,7 @@ function applyExplicitTombstone(
   if (tombstone.entity === 'child') {
     removeChild(state, tombstone.key, revision)
   } else if (tombstone.entity === 'alias') {
-    if (!deserializeAgentChildWorkAliasKey(tombstone.key)) {
+    if (!deserializeAgentChildWorkBindingKey(tombstone.key)) {
       return false
     }
     removeAlias(state, tombstone.key, revision)
@@ -105,12 +105,15 @@ function applyExplicitTombstone(
 function upsertParent(
   state: AgentStatusStoreState,
   input: NonNullable<AgentStatusStoreMutation['parent']>,
-  revision: number
+  revision: number,
+  reopenStructuredParent: boolean
 ): boolean {
   const key = serializeAgentStatusSubject(input.subject)
-  if (state.tombstones.has(agentStatusTombstoneMapKey('parent', key))) {
+  const tombstoneKey = agentStatusTombstoneMapKey('parent', key)
+  if (state.tombstones.has(tombstoneKey) && !reopenStructuredParent) {
     return false
   }
+  state.tombstones.delete(tombstoneKey)
   const previous = state.parents.get(key)
   const record = parseAgentStatusParentRecord({
     ...input,
@@ -161,7 +164,7 @@ function upsertAliases(
       return false
     }
     state.aliases.set(
-      serializeAgentChildWorkAliasKey(record),
+      serializeAgentChildWorkBindingKey(record),
       deepFreezeAgentStatusStoreValue(record)
     )
   }
@@ -197,7 +200,7 @@ export function applyAgentStatusStoreMutation(
     removeChild(next, childWorkId, revision)
   }
   for (const key of mutation.removeAliases ?? []) {
-    if (!deserializeAgentChildWorkAliasKey(key)) {
+    if (!deserializeAgentChildWorkBindingKey(key)) {
       return null
     }
     removeAlias(next, key, revision)
@@ -210,7 +213,10 @@ export function applyAgentStatusStoreMutation(
       return null
     }
   }
-  if (mutation.parent && !upsertParent(next, mutation.parent, revision)) {
+  if (
+    mutation.parent &&
+    !upsertParent(next, mutation.parent, revision, mutation.reopenStructuredParent === true)
+  ) {
     return null
   }
   if (mutation.children && !upsertChildren(next, mutation.children, revision)) {

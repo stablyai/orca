@@ -7,7 +7,7 @@ import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit
 import { measureUtf8ByteLength } from './utf8-byte-limits'
 
 const SNAPSHOT_STRUCTURE_LIMITS = {
-  structuralTokens: 512 * 1024,
+  structuralTokens: AGENT_STATUS_STORE_LIMITS.serializedBytes,
   nestingDepth: 32
 } as const
 

@@ -14,9 +14,9 @@ import {
   adoptAgentChildWork,
   announceAgentChildWork,
   authorizeAgentChildWorkStop,
-  reparentAgentChildWork,
-  resumeAgentChildWork
+  reparentAgentChildWork
 } from './agent-status-child-work-admission-operations'
+import { resumeAgentChildWork } from './agent-status-child-work-resume'
 import type { AgentStatusStore } from './agent-status-store'
 import type { AgentStatusSubject } from './agent-status-subject'
 

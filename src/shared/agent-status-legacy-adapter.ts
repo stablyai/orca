@@ -69,6 +69,11 @@ export function canAdmitLegacyAgentStatus(
 
 export type AgentStatusLegacyAdapter = {
   readonly view: ReadonlyMap<string, AgentHookEventPayload>
+  canAdmit(
+    caller: AgentStatusLegacyIngressCaller,
+    mode: AgentStatusLegacyAdmissionMode,
+    entry: AgentHookEventPayload
+  ): boolean
   admit(
     caller: AgentStatusLegacyIngressCaller,
     mode: AgentStatusLegacyAdmissionMode,
@@ -140,14 +145,19 @@ export function createAgentStatusLegacyAdapter(
   const nextListingOrder = options.nextListingOrder ?? (() => nextLocalListingOrder++)
   const isCanonicalPaneKey = options.isCanonicalPaneKey ?? (() => false)
   const view = createReadonlyView(entries)
+  const canAdmit: AgentStatusLegacyAdapter['canAdmit'] = (caller, mode, entry) =>
+    entry.structuredHost === undefined &&
+    !isCanonicalPaneKey(entry.paneKey) &&
+    canAdmitLegacyAgentStatus(caller, mode)
 
   return {
     view,
+    canAdmit,
     admit: (caller, mode, entry, admitOptions = {}) => {
-      if (isCanonicalPaneKey(entry.paneKey) || !canAdmitLegacyAgentStatus(caller, mode)) {
+      if (!canAdmit(caller, mode, entry)) {
         return false
       }
-      if (!listingOrderByPaneKey.has(entry.paneKey)) {
+      if (!listingOrderByPaneKey.has(entry.paneKey) || admitOptions.moveToEnd) {
         const order = nextListingOrder()
         if (!Number.isSafeInteger(order) || order < 0) {
           throw new RangeError(
@@ -181,7 +191,6 @@ export function createAgentStatusLegacyAdapter(
         }
         const movedKey = `${toPaneKey}${key.slice(fromPaneKey.length)}`
         const priorTargetOrder = listingOrderByPaneKey.get(movedKey)
-        const sourceOrder = listingOrderByPaneKey.get(key)
         entries.delete(key)
         listingOrderByPaneKey.delete(key)
         if (isCanonicalPaneKey(movedKey)) {
@@ -190,8 +199,8 @@ export function createAgentStatusLegacyAdapter(
         entries.set(movedKey, value)
         if (priorTargetOrder !== undefined) {
           listingOrderByPaneKey.set(movedKey, priorTargetOrder)
-        } else if (sourceOrder !== undefined) {
-          listingOrderByPaneKey.set(movedKey, sourceOrder)
+        } else {
+          listingOrderByPaneKey.set(movedKey, nextListingOrder())
         }
       }
     },

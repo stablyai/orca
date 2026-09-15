@@ -34,14 +34,14 @@ export function findAgentChildWork(
   store: AgentStatusStore,
   childWorkId: string
 ): AgentChildWorkRecord | null {
-  return store.getSnapshot().children.find((child) => child.childWorkId === childWorkId) ?? null
+  return store.getChild(childWorkId)
 }
 
 export function agentChildWorkAliasesForChild(
   store: AgentStatusStore,
   childWorkId: string
 ): AgentChildWorkAliasRecord[] {
-  return store.getSnapshot().aliases.filter((alias) => alias.childWorkId === childWorkId)
+  return store.getChildAliases(childWorkId)
 }
 
 export function buildAgentChildWorkAliases(
@@ -130,6 +130,14 @@ export function updateExistingAgentChildWork(
   aliases: AgentChildWorkAliasInput[],
   removeAliases: string[] = []
 ): AgentChildWorkAdmissionResult {
+  if (
+    child.membership === 'settled' &&
+    (request.membership !== 'settled' ||
+      request.state !== child.state ||
+      request.outcome !== child.outcome)
+  ) {
+    return rejectAgentChildWorkAdmission('stale-invocation')
+  }
   const updated = buildAgentChildWork(
     request,
     child.childWorkId,
@@ -146,10 +154,7 @@ export function resolveAgentChildWorkAliasRecords(
   store: AgentStatusStore,
   aliases: AgentChildWorkAliasInput[]
 ): AgentChildWorkAliasRecord[] {
-  const keys = new Set(aliases.map(serializeAgentChildWorkAliasKey))
-  return store
-    .getSnapshot()
-    .aliases.filter((alias) => keys.has(serializeAgentChildWorkAliasKey(alias)))
+  return store.resolveChildAliases(aliases)
 }
 
 export function validateExistingAgentChildWork(

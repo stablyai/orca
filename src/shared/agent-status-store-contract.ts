@@ -38,6 +38,8 @@ export type AgentStatusTombstoneRecord = AgentStatusTombstoneInput & { revision:
 
 export type AgentStatusStoreMutation = {
   parent?: AgentStatusParentInput
+  /** An owning structured feed may reopen its durable session, never a retired PTY run. */
+  reopenStructuredParent?: true
   removeParent?: AgentStatusSubject
   children?: AgentChildWorkInput[]
   removeChildren?: string[]
