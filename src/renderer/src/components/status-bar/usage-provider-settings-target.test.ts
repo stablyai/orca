@@ -12,7 +12,8 @@ describe('getUsageProviderAccountsSectionId', () => {
     expect(getUsageProviderAccountsSectionId('grok')).toBe('accounts-grok')
   })
 
-  it('does not invent an Accounts section for CLI-owned Kimi credentials', () => {
+  it('does not invent an Accounts section for CLI-owned Kimi and Cursor credentials', () => {
     expect(getUsageProviderAccountsSectionId('kimi')).toBeNull()
+    expect(getUsageProviderAccountsSectionId('cursor')).toBeNull()
   })
 })

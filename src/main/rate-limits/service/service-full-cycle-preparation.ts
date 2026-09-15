@@ -3,6 +3,9 @@ import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
+import { fetchCursorRateLimits } from '../cursor-fetcher'
+import { readCursorAuthSession } from '../cursor-auth'
+import { cursorCredentialKey } from '../cursor-credential-identity'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from '../opencode-go-usage-fetcher'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
@@ -40,6 +43,10 @@ export type FetchAllCyclePrepared = {
   ]
   grokResultPromise: Promise<
     { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
+  >
+  previousCursorCredentialKey: string | null
+  cursorResultPromise: Promise<
+    PromiseSettledResult<{ limits: ProviderRateLimits; credentialKey: string | null }>
   >
 }
 
@@ -121,7 +128,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
     })
 
     const missingWslCodexHome =
@@ -133,6 +141,30 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
+    const previousCursorCredentialKey = this.cursorCredentialKey
+    const cursorResultPromise = readCursorAuthSession()
+      .then(async (auth) => {
+        if (signal.aborted) {
+          throw new DOMException('The operation was aborted.', 'AbortError')
+        }
+        const credentialKey = cursorCredentialKey(auth)
+        this.cursorAuthConfigured = auth.status === 'ok'
+        if (credentialKey !== this.cursorCredentialKey) {
+          this.cursorCredentialKey = credentialKey
+          this.updateState({ ...this.state, cursor: null })
+        }
+        const previous = this.state.cursor
+        const retryAt = previous?.usageMetadata?.retryAtMs
+        const limits =
+          previous && retryAt && retryAt > Date.now()
+            ? previous
+            : await fetchCursorRateLimits({ signal, authReadResult: auth })
+        return { limits, credentialKey }
+      })
+      .then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason) => ({ status: 'rejected', reason }) as const
+      )
 
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
@@ -202,7 +234,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      cursorResultPromise,
+      previousCursorCredentialKey
     }
   }
 }

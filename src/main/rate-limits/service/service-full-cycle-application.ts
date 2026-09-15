@@ -1,6 +1,8 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
 import type { ProviderRateLimits } from './service-types'
+import { readCursorAuthSession } from '../cursor-auth'
+import { cursorCredentialKey } from '../cursor-credential-identity'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
   protected async runFetchAllCycle(
@@ -34,7 +36,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      cursorResultPromise,
+      previousCursorCredentialKey
     } = prepared
     if (signal.aborted) {
       return
@@ -210,6 +214,42 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
+    })
+
+    const cursorResult = await cursorResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const latestAuth = await readCursorAuthSession()
+    if (signal.aborted) {
+      return
+    }
+    const latestKey = cursorCredentialKey(latestAuth)
+    this.cursorAuthConfigured = latestAuth.status === 'ok'
+    this.cursorCredentialKey = latestKey
+    if (cursorResult.status === 'fulfilled' && latestKey !== cursorResult.value.credentialKey) {
+      // An account changed while the request was in flight; its response no longer owns the meter.
+      this.updateState({ ...this.state, cursor: null })
+      return
+    }
+    const cursor: ProviderRateLimits =
+      cursorResult.status === 'fulfilled'
+        ? cursorResult.value.limits
+        : {
+            provider: 'cursor',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error: 'Cursor usage request failed',
+            status: 'error'
+          }
+    this.trackActiveFailureStreak('cursor', cursor)
+    this.updateState({
+      ...this.state,
+      cursor: this.applyStalePolicy(
+        cursor,
+        previousCursorCredentialKey === latestKey ? previousState.cursor : null
+      )
     })
   }
 }

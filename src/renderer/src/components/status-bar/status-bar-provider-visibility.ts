@@ -14,10 +14,11 @@ export type UsageProviderSettings = Pick<
   // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
   // which never yields data while that opt-in is off.
   antigravityUsageConfigured: boolean
-  // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
+  // Why: MiniMax/Grok/Cursor sign-in live on disk or in a CLI session, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
   grokAuthConfigured: boolean
+  cursorAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -29,10 +30,10 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  cursor?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
-
 function hasUsageData(provider: ProviderRateLimits): boolean {
   return Boolean(
     provider.session ||
@@ -47,12 +48,6 @@ function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefin
   return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))
 }
 
-// Why: a provider that returns `unavailable` is explicitly not configured
-// (Gemini OAuth off, OpenCode Go cookie unset, Claude on API-key billing). Its
-// fetch object is non-null, so a bare `!== null` check still renders a "--"
-// bar for a provider the user never set up. `error` is kept visible on purpose
-// — that's a *configured* provider failing transiently, and hiding it would
-// make the bar flap on every refresh hiccup.
 export function isProviderConfigured(
   provider: ProviderRateLimits | null | undefined
 ): provider is ProviderRateLimits {
@@ -79,7 +74,8 @@ export function hasUsageProviderSettings(
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
-    settings?.grokAuthConfigured === true
+    settings?.grokAuthConfigured === true ||
+    settings?.cursorAuthConfigured === true
   )
 }
 
@@ -113,6 +109,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
+  }
+  if (providerId === 'cursor') {
+    return settings.cursorAuthConfigured === true
   }
   return false
 }
@@ -167,7 +166,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
-    isProviderSnapshotPending(providers.grok)
+    isProviderSnapshotPending(providers.grok) ||
+    (providers.cursor !== undefined && isProviderSnapshotPending(providers.cursor))
   ) {
     return false
   }
@@ -180,6 +180,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
-    !isProviderConfigured(providers.grok)
+    !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.cursor)
   )
 }
