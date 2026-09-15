@@ -15,6 +15,9 @@ export const nativeChatApi = {
     transcriptPath?: string
   ): Promise<NativeChatReadSessionResult> =>
     ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
+  /** Raw contents of the local Claude keybindings.json, or null if absent. */
+  readClaudeKeybindings: (): Promise<string | null> =>
+    ipcRenderer.invoke('nativeChat:readClaudeKeybindings'),
   /** Start live tailing; onAppended fires with only newly-appended messages. Returns an unsubscribe fn that closes the watcher. */
   subscribe: (
     args: {

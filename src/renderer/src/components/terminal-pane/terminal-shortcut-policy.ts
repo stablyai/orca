@@ -198,6 +198,21 @@ export function resolveTerminalShortcutAction(
   }
 
   if (
+    isMac &&
+    event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key === 'Enter'
+  ) {
+    // Cmd+Enter has no terminal default on macOS; emit Super+Enter CSI-u when KKP is
+    // negotiated, else the ESC+CR (Alt+Enter) byte agents bind to submit. Mac-only:
+    // elsewhere metaKey is the Super key and Ctrl+Enter already covers submit above.
+    const canSendCsiU = (getKittyKeyboardFlagsActivePane?.() ?? 0) > 0
+    return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;9u' : '\x1b\r' }
+  }
+
+  if (
     event.ctrlKey &&
     !event.metaKey &&
     !event.altKey &&
