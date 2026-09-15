@@ -209,6 +209,8 @@ export function buildDefaultSettings(args: {
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
     agentYoloDefaultsMigrated: true,
     agentStatusHooksEnabled: true,
+    // Why: mirroring ~/.codex/auth.json into Orca's runtime home needs explicit consent.
+    codexCredentialMirrorConsent: false,
     tabAutoGenerateTitle: false,
     confirmClosePinnedTab: true,
     keepComputerAwakeWhileAgentsRun: false,

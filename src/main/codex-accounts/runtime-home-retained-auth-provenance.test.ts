@@ -93,6 +93,7 @@ describe('CodexRuntimeHomeService', () => {
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const settings = createSettings({
+      codexCredentialMirrorConsent: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -131,6 +132,7 @@ describe('CodexRuntimeHomeService', () => {
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const settings = createSettings({
+      codexCredentialMirrorConsent: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -170,7 +172,9 @@ describe('CodexRuntimeHomeService', () => {
       'refreshed-token'
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
@@ -188,7 +192,9 @@ describe('CodexRuntimeHomeService', () => {
   it('does not rewrite retained-auth provenance during unchanged rate polling', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-token')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     const provenancePath = getSharedRuntimeAuthProvenancePath()
@@ -204,7 +210,9 @@ describe('CodexRuntimeHomeService', () => {
   it('does not rewrite completed retained logout metadata during rate polling', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-token')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     setShellStartupEnvProbeSupportedForTest(true)
@@ -237,6 +245,9 @@ describe('CodexRuntimeHomeService', () => {
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const settings = createSettings({
+      // Why: the later retained-pane resync must actually copy the refreshed system-default
+      // auth into the shared runtime home, which now requires explicit mirror consent (G2).
+      codexCredentialMirrorConsent: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -308,7 +319,9 @@ describe('CodexRuntimeHomeService', () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
     const retainedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'retained-token')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
 
@@ -332,7 +345,9 @@ describe('CodexRuntimeHomeService', () => {
       'refreshed-token'
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     writeFileSync(
@@ -356,7 +371,9 @@ describe('CodexRuntimeHomeService', () => {
   it('recovers runtime auth quarantined by an interrupted guarded update', async () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
     const runtimeAuthPath = getRuntimeCodexAuthPath()
@@ -404,7 +421,9 @@ describe('CodexRuntimeHomeService', () => {
       'refreshed-token'
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     writeFileSync(getSharedRuntimeAuthProvenancePath(), '{"owner":"pending"}\n')
@@ -422,7 +441,11 @@ describe('CodexRuntimeHomeService', () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
     const reloginAuth = createCodexAuthJson('system@example.com', 'acct-system', 'relogin-token')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    // Why: the re-login branch below must actually recreate shared auth from ~/.codex, which now
+    // requires explicit mirror consent (G2).
+    const store = createStore(
+      createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+    )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
 
@@ -452,7 +475,9 @@ describe('CodexRuntimeHomeService', () => {
       const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
       const reloginAuth = createCodexAuthJson('system@example.com', 'acct-system', 'relogin-token')
       writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-      const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+      const store = createStore(
+        createSettings({ shellStartupEnvProbeSupported: false, codexCredentialMirrorConsent: true })
+      )
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       new CodexRuntimeHomeService(store as never)
 
@@ -491,6 +516,7 @@ describe('CodexRuntimeHomeService', () => {
     )
     const settings = createSettings({
       shellStartupEnvProbeSupported: false,
+      codexCredentialMirrorConsent: true,
       codexManagedAccounts: [
         {
           id: 'account-1',

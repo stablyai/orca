@@ -21,6 +21,11 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
     owner: { owner: 'system-default' } | { owner: 'managed'; accountId: string },
     options?: { expectedContents: string | null }
   ): boolean {
+    // Why: every system-default credential copy flows through this one primitive; gate here so no
+    // caller (including a future one) can write it without consent (G2).
+    if (owner.owner === 'system-default' && !this.hasCredentialMirrorConsent()) {
+      return false
+    }
     // Why: auth.json holds credentials; restrict to owner-only so other users on a shared machine cannot read it.
     const runtimeAuthPath = this.getRuntimeAuthPath()
     if (options && !this.fileContentsMatchExpected(runtimeAuthPath, options.expectedContents)) {
