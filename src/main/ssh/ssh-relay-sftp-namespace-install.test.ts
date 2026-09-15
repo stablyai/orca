@@ -190,6 +190,9 @@ function makeConnection(capture: Capture, options: ConnectionOptions = {}): SshC
         capture.lstatCalls.push(path)
         cb(lstatPresent(path) ? null : Object.assign(new Error('No such file'), { code: 2 }))
       }),
+      readdir: vi.fn((_path: string, cb: (err: Error | undefined, list?: unknown[]) => void) => {
+        cb(undefined, [])
+      }),
       createWriteStream: vi.fn().mockImplementation((path: string) => {
         capture.writePaths.push(path)
         const ws = new EventEmitter()
