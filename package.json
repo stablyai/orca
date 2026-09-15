@@ -97,7 +97,7 @@
     "build": "pnpm run build:desktop && pnpm run build:native",
     "build:release": "pnpm run build:relay && pnpm run build:native && pnpm run verify:computer-native && pnpm run build:cli && pnpm run build:electron-vite && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer",
     "build:release:parallel": "pnpm run build:relay && pnpm run build:native && pnpm run verify:computer-native && pnpm run build:cli && pnpm run build:electron-vite:parallel && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer",
-    "postinstall": "node config/scripts/rebuild-native-deps.mjs && node config/scripts/sync-anti-slop-plugin.mjs",
+    "postinstall": "node config/scripts/rebuild-native-deps.mjs",
     "rebuild:electron": "node config/scripts/rebuild-native-deps.mjs",
     "reclaim:electron-dists": "node config/scripts/reclaim-electron-dists.mjs",
     "reclaim:dev-bundles": "node config/scripts/reclaim-dev-electron-bundles.mjs",
