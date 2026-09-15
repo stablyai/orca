@@ -133,6 +133,9 @@ jobs:
       - name: Lint
         run: pnpm exec oxlint --format github
 
+      - name: Reject low-evidence patterns
+        run: pnpm run audit:anti-slop
+
       - name: Enforce focused code-quality plugins
         run: pnpm run audit:code-quality:native
 

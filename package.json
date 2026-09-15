@@ -165,7 +165,7 @@
     "test:e2e:ssh-docker-bulk-open-freeze": "node config/scripts/run-ssh-docker-bulk-open-freeze-e2e.mjs",
     "repro:live-remote-bulk-open-freeze": "node config/scripts/live-remote-bulk-open-freeze-repro.mjs",
     "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs",
-    "audit:anti-slop": "oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
+    "audit:anti-slop": "node config/scripts/sync-anti-slop-plugin.mjs && oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
     "sync:anti-slop-plugin": "node config/scripts/sync-anti-slop-plugin.mjs"
   },
   "dependencies": {
