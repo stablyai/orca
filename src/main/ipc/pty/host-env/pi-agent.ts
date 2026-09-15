@@ -8,6 +8,7 @@ import {
   type PiAgentKind
 } from '../../../../shared/pi-agent-kind'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup-env'
+import { resolveDefaultOpenCodeConfigDir } from '../../../opencode/config-source'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS, CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS } from './spawn-env-keys'
 
 export function readEnvWithProcessFallback(
@@ -198,5 +199,9 @@ export function resolveOpenCodeSourceConfigDir(
     return undefined
   }
 
-  return configDir ?? readSessionShellStartupEnvVar('OPENCODE_CONFIG_DIR', baseEnv)
+  const explicitConfigDir = configDir ?? readSessionShellStartupEnvVar('OPENCODE_CONFIG_DIR', baseEnv)
+  if (explicitConfigDir) {
+    return explicitConfigDir
+  }
+  return resolveDefaultOpenCodeConfigDir(baseEnv)
 }
