@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { Plug, Files, GitBranch, ListChecks, StickyNote, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -71,6 +71,12 @@ export function useRightSidebarActivityItems({
         id: 'vault',
         icon: AgentSessionHistoryIcon,
         title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
+        shortcut: ''
+      },
+      {
+        id: 'notes',
+        icon: StickyNote,
+        title: translate('auto.components.right.sidebar.notes', 'Notes'),
         shortcut: ''
       },
       {

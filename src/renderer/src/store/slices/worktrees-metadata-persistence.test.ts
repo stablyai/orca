@@ -468,4 +468,103 @@ describe('worktree remote runtime mutations', () => {
       })
     )
   })
+
+  it('rejects a metadata update when an SSH host has rival runtime owners', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/same/path'
+    const firstOwner = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-a',
+      comment: 'Hub A note'
+    })
+    const secondOwner = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-ssh',
+      hostId: 'ssh:ssh-1',
+      runtimeOwnerEnvironmentId: 'hub-b',
+      comment: 'Hub B note'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo',
+          displayName: 'SSH repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [firstOwner, secondOwner] }
+    })
+
+    await expect(
+      store.getState().updateWorktreeMeta(
+        worktreeId,
+        { comment: 'Should not apply' },
+        {
+          executionHostId: 'ssh:ssh-1'
+        }
+      )
+    ).resolves.toEqual({ ok: false, error: 'Could not update this workspace.' })
+
+    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([firstOwner, secondOwner])
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('keeps a newer host-scoped save after an earlier failed save refreshes', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const initialWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo1',
+      hostId: 'ssh:ssh-1',
+      comment: 'Initial note'
+    })
+    let resolveRefresh!: (result: boolean) => void
+    const fetchWorktrees = vi.fn<AppState['fetchWorktrees']>().mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveRefresh = (result) => {
+            store.setState({
+              worktreesByRepo: {
+                repo1: [{ ...initialWorktree, comment: 'Stale rollback' }]
+              }
+            })
+            resolve(result)
+          }
+        })
+    )
+    mockApi.worktrees.updateMeta.mockRejectedValueOnce(new Error('first save failed'))
+    vi.spyOn(store.getState(), 'fetchWorktrees').mockImplementation(fetchWorktrees)
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { repo1: [initialWorktree] }
+    })
+
+    const firstSave = store
+      .getState()
+      .updateWorktreeMeta(worktreeId, { comment: 'First draft' }, { executionHostId: 'ssh:ssh-1' })
+    await vi.waitFor(() => expect(fetchWorktrees).toHaveBeenCalledTimes(1))
+
+    const secondSave = store
+      .getState()
+      .updateWorktreeMeta(worktreeId, { comment: 'Newer draft' }, { executionHostId: 'ssh:ssh-1' })
+    resolveRefresh(false)
+    await Promise.all([firstSave, secondSave])
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('Newer draft')
+  })
 })
