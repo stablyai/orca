@@ -36,6 +36,9 @@ export async function scanRuntimeAiVaultSessions(args: {
 }): Promise<AiVaultListResult> {
   const { signal, ...scannerOptions } = args.options ?? {}
   throwIfAiVaultScanCancelled(signal)
+  if (args.hostInfo.environmentId === 'unresolved-owner') {
+    return runtimeScanIssueResult(args.hostInfo, 'Workspace ownership is unresolved.')
+  }
   if (!args.scanner) {
     return runtimeScanIssueResult(
       args.hostInfo,
