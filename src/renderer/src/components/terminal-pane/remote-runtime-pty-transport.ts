@@ -101,6 +101,7 @@ const TERMINAL_CREATE_RETRY_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_00
 type HostHandleReplacementPolicy = 'reuse' | 'prefer-replacement' | 'require-replacement'
 
 type HostSessionHandleWaitResult = {
+  incarnationId?: string | null
   handle: string | null | undefined
   inventoryFailed: boolean
 }
@@ -529,10 +530,10 @@ export function createRemoteRuntimePtyTransport(
     )
   }
 
-  function findReadyHostSessionHandle(
+  function findReadyHostSessionTerminal(
     snapshot: RuntimeMobileSessionTabsResult,
     hostTabId: string
-  ): string | null {
+  ): RuntimeMobileSessionTerminalClientTab | null {
     const terminalTabs = getHostSessionTerminalSurfaces(snapshot, hostTabId, {
       matchRequestedLeaf: false
     })
@@ -544,8 +545,7 @@ export function createRemoteRuntimePtyTransport(
           (tab) => tab.status === 'ready' && tab.parentTabId === hostTabId && tab.isActive
         ) ?? terminalTabs.find((tab) => tab.status === 'ready' && tab.parentTabId === hostTabId))
     if (selected?.status === 'ready') {
-      authoritativePtyIncarnationId = selected.incarnationId ?? null
-      return selected.terminal
+      return selected
     }
     return null
   }
@@ -618,9 +618,10 @@ export function createRemoteRuntimePtyTransport(
       }
       throw error
     }
-    const immediate = findReadyHostSessionHandle(activated, hostTabId)
+    const immediate = findReadyHostSessionTerminal(activated, hostTabId)
     if (immediate) {
-      return immediate
+      adoptExecutionMetadata(immediate)
+      return immediate.terminal
     }
 
     const startedAt = Date.now()
@@ -668,9 +669,10 @@ export function createRemoteRuntimePtyTransport(
         nextRequest = 'list'
         continue
       }
-      const handle = findReadyHostSessionHandle(snapshot, hostTabId)
-      if (handle) {
-        return handle
+      const terminal = findReadyHostSessionTerminal(snapshot, hostTabId)
+      if (terminal) {
+        adoptExecutionMetadata(terminal)
+        return terminal.terminal
       }
       if (request === 'activate') {
         // Why: an activation response can race host publication, so inventory — not this snapshot — decides what exists.
@@ -774,14 +776,18 @@ export function createRemoteRuntimePtyTransport(
     // Why: list-only polling cannot recreate a host PTY lost across desktop generations.
     let nextRequest: 'activate' | 'list' = 'activate'
     let lastRequestError: unknown = null
-    let lastReadyHandle: string | null = null
+    let lastReadyTerminal: RuntimeMobileSessionTerminalClientTab | null = null
     const finishBoundedWait = (): HostSessionHandleWaitResult => {
       const effectivePolicy = stricterReplacementPolicy(
         replacementPolicy,
         getRecoveryReplacementPolicy(previousHandle)
       )
-      if (effectivePolicy === 'prefer-replacement' && lastReadyHandle) {
-        return { handle: lastReadyHandle, inventoryFailed: false }
+      if (effectivePolicy === 'prefer-replacement' && lastReadyTerminal) {
+        return {
+          handle: lastReadyTerminal.terminal,
+          incarnationId: lastReadyTerminal.incarnationId,
+          inventoryFailed: false
+        }
       }
       if (lastRequestError) {
         console.warn(
@@ -822,16 +828,21 @@ export function createRemoteRuntimePtyTransport(
               // must stay slept even though it publishes the same pending status.
               await activateHostSessionSurface(hostTabId, worktree, 'automatic', requestRemainingMs)
         lastRequestError = null
-        const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
-        if (nextHandle) {
-          lastReadyHandle = nextHandle
+        const nextTerminal = findReadyHostSessionTerminal(listed, hostTabId)
+        const nextHandle = nextTerminal?.terminal
+        if (nextTerminal) {
+          lastReadyTerminal = nextTerminal
         }
         const effectivePolicy = stricterReplacementPolicy(
           replacementPolicy,
           getRecoveryReplacementPolicy(previousHandle)
         )
         if (nextHandle && (effectivePolicy === 'reuse' || nextHandle !== previousHandle)) {
-          return { handle: nextHandle, inventoryFailed: false }
+          return {
+            handle: nextHandle,
+            incarnationId: nextTerminal?.incarnationId,
+            inventoryFailed: false
+          }
         }
         if (request === 'list') {
           if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
@@ -918,7 +929,7 @@ export function createRemoteRuntimePtyTransport(
   }
 
   async function attachHostSessionMirror(
-    options: { cols?: number; rows?: number },
+    options: { cols?: number; rows?: number; existingPtyId?: string; sessionId?: string },
     notifySpawn = true,
     expectedAttachGeneration?: number,
     expectedLifecycleEpoch?: number
@@ -955,26 +966,9 @@ export function createRemoteRuntimePtyTransport(
       return undefined
     }
 
-    if (leafId && worktreeId && !resolvePaneUnavailable) {
-      try {
-        const resolved = await callRuntime<{ terminal: RuntimeTerminalResolvePane }>(
-          'terminal.resolvePane',
-          { paneKey: `${hostTabId}:${leafId}`, worktreeId }
-        )
-        const terminal = resolved.terminal
-        if (
-          terminal.handle === hostHandle &&
-          terminal.tabId === hostTabId &&
-          terminal.leafId === leafId &&
-          (!terminal.worktreeId || terminal.worktreeId === worktreeId)
-        ) {
-          adoptExecutionMetadata(terminal)
-        }
-      } catch (error) {
-        if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-          resolvePaneUnavailable = true
-        }
-      }
+    const executionMetadata = await resolveHostSessionExecutionMetadata(hostTabId, hostHandle)
+    if (executionMetadata && isCurrent()) {
+      adoptExecutionMetadata(executionMetadata)
     }
 
     if (!isCurrent() || recovery.currentPhase === 'disconnected') {
@@ -990,6 +984,13 @@ export function createRemoteRuntimePtyTransport(
     }
     if (notifySpawn) {
       onPtySpawn?.(remotePtyId)
+    } else if (authoritativePtyIncarnationId) {
+      // attach() has no result consumer; publish its identity before the first image.
+      onPtyRebind?.(
+        remotePtyId,
+        options.existingPtyId ?? options.sessionId ?? remotePtyId,
+        authoritativePtyIncarnationId
+      )
     }
 
     try {
@@ -1009,6 +1010,35 @@ export function createRemoteRuntimePtyTransport(
       isReattach: true,
       ...(authoritativePtyIncarnationId ? { incarnationId: authoritativePtyIncarnationId } : {})
     } satisfies PtyConnectResult
+  }
+
+  // Older inventory projections omit incarnation even when resolvePane can prove it.
+  async function resolveHostSessionExecutionMetadata(
+    hostTabId: string,
+    hostHandle: string
+  ): Promise<RuntimeTerminalResolvePane | null> {
+    if (!leafId || !worktreeId || resolvePaneUnavailable) {
+      return null
+    }
+    try {
+      const { terminal } = await callRuntime<{ terminal: RuntimeTerminalResolvePane }>(
+        'terminal.resolvePane',
+        { paneKey: `${hostTabId}:${leafId}`, worktreeId }
+      )
+      if (
+        terminal.handle === hostHandle &&
+        terminal.tabId === hostTabId &&
+        terminal.leafId === leafId &&
+        (!terminal.worktreeId || terminal.worktreeId === worktreeId)
+      ) {
+        return terminal
+      }
+    } catch (error) {
+      if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
+        resolvePaneUnavailable = true
+      }
+    }
+    return null
   }
 
   async function callRuntimeForEnvironment<TResult>(
@@ -1253,7 +1283,7 @@ export function createRemoteRuntimePtyTransport(
 
   async function adoptResolvedHostPane(
     terminal: RuntimeTerminalResolvePane,
-    options: { cols?: number; rows?: number },
+    options: { cols?: number; rows?: number; existingPtyId?: string },
     notifySpawn = true,
     expectedAttachGeneration?: number
   ): Promise<PtyConnectResult | undefined> {
@@ -1276,6 +1306,12 @@ export function createRemoteRuntimePtyTransport(
     }
     if (notifySpawn) {
       onPtySpawn?.(remotePtyId)
+    } else if (authoritativePtyIncarnationId) {
+      onPtyRebind?.(
+        remotePtyId,
+        options.existingPtyId ?? remotePtyId,
+        authoritativePtyIncarnationId
+      )
     }
     emitRecoveryState()
     try {
@@ -1588,8 +1624,10 @@ export function createRemoteRuntimePtyTransport(
     setAttachmentReady(false)
     // Why: host handle rotation preserves the pane generation; only the store identity changes, not spawn/exit semantics.
     if (replacedPtyId) {
-      replaceFitOverridePtyId(replacedPtyId, remotePtyId)
-      replaceDriverPtyId(replacedPtyId, remotePtyId)
+      if (replacedPtyId !== remotePtyId) {
+        replaceFitOverridePtyId(replacedPtyId, remotePtyId)
+        replaceDriverPtyId(replacedPtyId, remotePtyId)
+      }
       if (nextIncarnationId) {
         onPtyRebind?.(remotePtyId, replacedPtyId, nextIncarnationId)
       } else {
@@ -1610,7 +1648,7 @@ export function createRemoteRuntimePtyTransport(
         hostTabId,
         leafId
       },
-      (update) => {
+      async (update) => {
         if (destroyed || !connected || handle !== previousHandle) {
           clearPublishedHandleWait()
           return
@@ -1624,7 +1662,10 @@ export function createRemoteRuntimePtyTransport(
         if (!update.terminalHandle) {
           return
         }
-        if (update.terminalHandle === previousHandle) {
+        if (
+          update.terminalHandle === previousHandle &&
+          (!update.incarnationId || update.incarnationId === authoritativePtyIncarnationId)
+        ) {
           // Why: once the auto-recovery window is spent, a host still publishing this surface is evidence the fenced handle outlived the stale error.
           if (!autoRecoveryWindowSpent || getCurrentMultiplexedStream(previousHandle)) {
             return
@@ -1645,7 +1686,19 @@ export function createRemoteRuntimePtyTransport(
           // Why: without a live epoch a failed resubscribe is swallowed as already-latched, leaving a pane with no handle and no way back.
           recovery.begin()
         }
-        rebindRemoteTerminalHandle(update.terminalHandle)
+        const expectedSubscriptionGeneration = subscriptionGeneration
+        const metadata = update.incarnationId
+          ? update
+          : await resolveHostSessionExecutionMetadata(hostTabId, update.terminalHandle)
+        if (
+          destroyed ||
+          !connected ||
+          handle !== previousHandle ||
+          subscriptionGeneration !== expectedSubscriptionGeneration
+        ) {
+          return
+        }
+        rebindRemoteTerminalHandle(update.terminalHandle, metadata?.incarnationId ?? null)
         const reboundHandle = handle
         const reboundPtyId = remotePtyId
         void subscribeToHandle().catch((error) => {
@@ -1788,8 +1841,20 @@ export function createRemoteRuntimePtyTransport(
       if (effectivePolicy === 'require-replacement' && nextHandle === previousHandle) {
         return
       }
-      if (nextHandle !== previousHandle) {
-        rebindRemoteTerminalHandle(nextHandle)
+      const executionMetadata = waitResult.incarnationId
+        ? waitResult
+        : await resolveHostSessionExecutionMetadata(hostTabId, nextHandle)
+      if (
+        destroyed ||
+        !connected ||
+        handle !== previousHandle ||
+        !recovery.isCurrent(recoveryEpoch)
+      ) {
+        return
+      }
+      const nextIncarnationId = executionMetadata?.incarnationId ?? null
+      if (nextHandle !== previousHandle || nextIncarnationId !== authoritativePtyIncarnationId) {
+        rebindRemoteTerminalHandle(nextHandle, nextIncarnationId)
       }
       clearPublishedHandleWait()
       await subscribeToHandle(
@@ -1814,10 +1879,13 @@ export function createRemoteRuntimePtyTransport(
         retireRemoteTerminalId(-1)
         return
       }
-      if (resolved.handle !== previousHandle) {
-        adoptExecutionMetadata(resolved)
+      if (
+        resolved.handle !== previousHandle ||
+        (resolved.incarnationId ?? null) !== authoritativePtyIncarnationId
+      ) {
         rebindRemoteTerminalHandle(resolved.handle, resolved.incarnationId ?? null)
       }
+      adoptExecutionMetadata(resolved)
       clearPublishedHandleWait()
       await subscribeToHandle(
         recoveryEpoch,
