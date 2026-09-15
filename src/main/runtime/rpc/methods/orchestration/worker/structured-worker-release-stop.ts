@@ -4,15 +4,15 @@ import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker
 import { stopStructuredWorker } from '../../orchestration-structured-worker-lifecycle'
 import type { StructuredWorkerIdentity } from '../../../../structured-worker-identity'
 import { archiveSummary } from './worker-terminal-resource-presentation'
-import type { WorkerReleaseReceipt } from './worker-release-completion'
+import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'
 
 /**
  * The close half of a release for a worker that IS a structured session.
  *
  * Separate from the PTY close for the same reason the delivery lane is: there is no terminal to
  * close and no exit to observe, so the host's own settlement is the only proof available. Only a
- * proven close may settle; an unproven one reports `release_unknown` and stays retryable under the
- * same request id.
+ * proven close may settle; an unproven one reports `release_unknown` and stays retryable, but only
+ * under a fresh request id — replaying the prior one just returns this same receipt.
  */
 export async function stopStructuredWorkerForRelease(args: {
   structured: StructuredWorkerIdentity
@@ -36,7 +36,7 @@ export async function stopStructuredWorkerForRelease(args: {
       processAction: stop.closeAttempted ? 'closed_agent_terminal' : 'none',
       archive: { source: args.archiveSource, status: args.archiveStatus },
       lastError: unknown.release_error ?? stop.reason,
-      recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request.`
+      recovery: releaseUnknownRecovery(dispatchId)
     }
   }
   const settled = db.settleWorkerTerminalRelease(resource.id)
