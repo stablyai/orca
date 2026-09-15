@@ -13,7 +13,7 @@ import {
 } from './windows-process-tree-gyp-rebuild.mjs'
 
 const require = createRequire(import.meta.url)
-const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
+const { assertNodePtyJobOwnership, nodePtyAddonPath } = require('./node-pty-job-ownership.cjs')
 const { assertWindowsProcessTreeCreationTime } = require('./windows-process-tree-creation-time.cjs')
 const scriptPath = import.meta.filename
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -298,7 +298,11 @@ function loadNodePtyNativeModule() {
   // terminal is created, so require('node-pty') alone can miss ABI mismatches.
   const native = loadNativeModule(nativeName)
   assertNodePtyWindowsConptyRuntime(native?.dir)
-  assertNodePtyJobOwnership({ nativeName, native })
+  assertNodePtyJobOwnership({
+    nativeName,
+    native,
+    addonPath: nodePtyAddonPath(require.resolve('node-pty/lib/utils'), native, nativeName)
+  })
   if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
     throw new Error(
       `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`

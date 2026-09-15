@@ -399,4 +399,75 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       }
     })
   }
+
+  // The Electron probe carries this check too, but it is skipped whenever the
+  // Electron package binary is unusable. Every job export predates the MSYS
+  // breakaway denial, so without reading the binary this step would hand the
+  // packaged app one that leaks every Git Bash child out of its pane's job.
+  it('fails a Windows rebuild that leaves an addon predating the MSYS breakaway denial', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir)
+      writeFakeNodePtyConptyPayload(projectDir, 'x64', { cygwinBreakawayDenied: false })
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+
+      const result = runRebuildScript(
+        projectDir,
+        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('predates the Cygwin/MSYS job-breakaway denial')
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+
+  it('accepts a Windows rebuild whose addon carries the denial', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir)
+      writeFakeNodePtyConptyPayload(projectDir, 'x64')
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+
+      const result = runRebuildScript(
+        projectDir,
+        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stderr).not.toContain('job-breakaway denial')
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+
+  // A cross-platform rebuild does not necessarily leave a win32 addon on this
+  // disk. That must warn, not fail an install that was working.
+  it('warns rather than fails a Windows rebuild that produced no addon here', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir)
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+
+      const result = runRebuildScript(
+        projectDir,
+        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stderr + result.stdout).toContain('could not check the MSYS job-breakaway')
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
 })

@@ -1,11 +1,23 @@
+const { existsSync } = require('node:fs')
 const { createRequire } = require('node:module')
 const { join } = require('node:path')
-const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
+const {
+  assertNodePtyJobOwnership,
+  assertCygwinBreakawayDenied,
+  nodePtyAddonPath
+} = require('./node-pty-job-ownership.cjs')
+
+/** Where electron-builder lands the addon; the only layout `loadPackagedConpty` produces. */
+function packagedConptyPath(resourcesDir) {
+  return join(resourcesDir, 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node')
+}
 
 function loadPackagedConpty(resourcesDir) {
   const packagedRequire = createRequire(join(resourcesDir, 'package.json'))
-  const { loadNativeModule } = packagedRequire('./node_modules/node-pty/lib/utils')
-  return loadNativeModule('conpty')
+  const utilsPath = packagedRequire.resolve('./node_modules/node-pty/lib/utils')
+  const { loadNativeModule } = packagedRequire(utilsPath)
+  const native = loadNativeModule('conpty')
+  return { native, addonPath: nodePtyAddonPath(utilsPath, native, 'conpty') }
 }
 
 function verifyPackagedNodePtyJobOwnership(resourcesDir, options = {}) {
@@ -14,12 +26,40 @@ function verifyPackagedNodePtyJobOwnership(resourcesDir, options = {}) {
     return
   }
 
-  const native = (options.loadNative ?? loadPackagedConpty)(resourcesDir)
-  assertNodePtyJobOwnership({ platform, nativeName: 'conpty', native })
+  const { native, addonPath } = (options.loadNative ?? loadPackagedConpty)(resourcesDir)
+  assertNodePtyJobOwnership({ platform, nativeName: 'conpty', native, addonPath })
   if (!native.dir.replace(/\\/g, '/').includes('build/Release/')) {
     throw new Error(`Packaged node-pty resolved to ${native.dir}; expected patched build/Release`)
   }
   console.log('[verify-packaged-node-pty] OK — packaged ConPTY owns process trees')
 }
 
-module.exports = { verifyPackagedNodePtyJobOwnership }
+/**
+ * The half of the packaged check that survives a cross-host build.
+ *
+ * The export check has to load the addon, so it cannot run when the packaging
+ * host is not the target platform/arch -- and that skip is how a Windows
+ * release built elsewhere could ship a node-pty that leaks every MSYS pane
+ * child out of its job. Reading the binary needs neither.
+ *
+ * Absence is logged rather than thrown: an unrecognised layout must not fail a
+ * release that was packaging fine, and the export check still covers the
+ * same-host case. A binary that IS there and lacks the marker is fatal.
+ */
+function verifyPackagedConptyBreakawayMarker(resourcesDir, options = {}) {
+  // Deliberately no host-platform gate: the caller has already established that
+  // the *target* is Windows, and gating on the host is the very skip this
+  // closes.
+  const addonPath = (options.packagedConptyPath ?? packagedConptyPath)(resourcesDir)
+  if (!(options.exists ?? existsSync)(addonPath)) {
+    console.warn(
+      `[verify-packaged-node-pty] no addon at ${addonPath}; could not check the MSYS ` +
+        'job-breakaway denial for this cross-host package.'
+    )
+    return
+  }
+  assertCygwinBreakawayDenied(addonPath, { dir: addonPath })
+  console.log('[verify-packaged-node-pty] OK — packaged ConPTY denies MSYS job breakaway')
+}
+
+module.exports = { verifyPackagedNodePtyJobOwnership, verifyPackagedConptyBreakawayMarker }

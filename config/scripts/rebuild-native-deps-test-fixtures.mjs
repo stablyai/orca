@@ -8,7 +8,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
@@ -310,10 +310,20 @@ process.exit(result.status ?? 0)
   }
 }
 
-export function writeFakeNodePtyConptyPayload(projectDir, arch) {
+export function writeFakeNodePtyConptyPayload(
+  projectDir,
+  arch,
+  { cygwinBreakawayDenied = true } = {}
+) {
   const releaseDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
   mkdirSync(releaseDir, { recursive: true })
-  writeFileSync(join(releaseDir, 'conpty.node'), 'native addon')
+  writeFileSync(
+    join(releaseDir, 'conpty.node'),
+    Buffer.concat([
+      Buffer.from('native addon'),
+      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+    ])
+  )
   const sourceDir = join(
     projectDir,
     'node_modules',
@@ -328,12 +338,37 @@ export function writeFakeNodePtyConptyPayload(projectDir, arch) {
   writeFileSync(join(sourceDir, 'OpenConsole.exe'), `OpenConsole.exe ${arch}`)
 }
 
+/**
+ * The wide literal `usesCygwinRuntime` holds, as it sits in a real addon. A
+ * fixture addon without it is a build that predates the MSYS breakaway denial,
+ * which is what these tests need to be able to represent.
+ */
+const CYGWIN_BREAKAWAY_MARKER = Buffer.from('msys-2.0.dll', 'utf16le')
+
+function writeFakeNodePtyAddon(nodePtyDir, nativeDir, { cygwinBreakawayDenied }) {
+  const addonDir = resolve(join(nodePtyDir, 'lib'), nativeDir)
+  mkdirSync(addonDir, { recursive: true })
+  for (const nativeName of ['conpty', 'pty']) {
+    writeFileSync(
+      join(addonDir, `${nativeName}.node`),
+      Buffer.concat([
+        Buffer.from('MZ fake addon '),
+        cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+      ])
+    )
+  }
+}
+
 export function writeFakeLoadableNodePty(
   projectDir,
-  { nativeDir = 'prebuilds/pty', ownsPtyJob = true } = {}
+  { nativeDir = 'prebuilds/pty', ownsPtyJob = true, cygwinBreakawayDenied = true } = {}
 ) {
   const nodePtyDir = join(projectDir, 'node_modules', 'node-pty')
   mkdirSync(join(nodePtyDir, 'lib'), { recursive: true })
+  // Why a real file: the job-ownership gate reads the addon it was told about,
+  // because every job export predates the MSYS breakaway denial and so cannot
+  // distinguish a current build from one that leaks Git Bash children.
+  writeFakeNodePtyAddon(nodePtyDir, nativeDir, { cygwinBreakawayDenied })
   writeFileSync(join(nodePtyDir, 'index.js'), 'module.exports = {}\n')
   writeFileSync(
     join(nodePtyDir, 'lib', 'utils.js'),
@@ -434,11 +469,17 @@ export function writeNodePtyPatchFile(projectDir) {
   writeFileSync(join(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch'), 'patch marker\n')
 }
 
-export function writePatchedNodePtyBuildArtifacts(projectDir) {
+export function writePatchedNodePtyBuildArtifacts(
+  projectDir,
+  { cygwinBreakawayDenied = true } = {}
+) {
   const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
   mkdirSync(buildDir, { recursive: true })
   if (process.platform === 'win32') {
-    writeFileSync(join(buildDir, 'conpty.node'), '')
+    writeFileSync(
+      join(buildDir, 'conpty.node'),
+      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+    )
     mkdirSync(join(buildDir, 'conpty'), { recursive: true })
     writeFileSync(join(buildDir, 'conpty', 'conpty.dll'), '')
     writeFileSync(join(buildDir, 'conpty', 'OpenConsole.exe'), '')
