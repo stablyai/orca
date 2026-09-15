@@ -1,11 +1,17 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { TERMINAL_WEB_AND_APP_URL_REGEX } from '../../../../shared/external-app-url'
+import { getTerminalCustomAppSchemeOpenHint } from '@/components/terminal-pane/terminal-link-open-hints'
 import { createPaneDOM } from './pane-dom-creation'
 
 const webLinksAddonMock = vi.hoisted(() => ({
   handler: null as ((event: MouseEvent, uri: string) => void) | null,
-  options: null as { hover?: (event: MouseEvent, uri: string) => void; leave?: () => void } | null
+  options: null as {
+    hover?: (event: MouseEvent, uri: string) => void
+    leave?: () => void
+    urlRegex?: RegExp
+  } | null
 }))
 
 vi.mock('@xterm/addon-fit', () => ({
@@ -155,5 +161,38 @@ describe('createPaneDOM link tooltips', () => {
     webLinksAddonMock.handler?.(event, 'https://example.com')
 
     expect(onLinkClick).toHaveBeenCalledWith(7, event, 'https://example.com')
+  })
+
+  it('linkifies custom app schemes with the shared matcher', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    createPaneDOM(
+      1,
+      leafId,
+      { linkOpenHint: () => 'open hint' },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+
+    expect(webLinksAddonMock.options?.urlRegex).toBe(TERMINAL_WEB_AND_APP_URL_REGEX)
+  })
+
+  it('uses the registered-app hint for custom scheme hover text', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const pane = createPaneDOM(
+      1,
+      leafId,
+      { linkOpenHint: () => 'http hint' },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+
+    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'obsidian://open?vault=notes')
+    expect(pane.linkTooltip.textContent).toBe(
+      `obsidian://open?vault=notes (${getTerminalCustomAppSchemeOpenHint()})`
+    )
   })
 })

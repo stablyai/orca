@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getTerminalUrlOpenHint, terminalUrlOpenHintOptionsFor } from './terminal-link-open-hints'
+import {
+  getTerminalCustomAppSchemeOpenHint,
+  getTerminalUrlOpenHint,
+  terminalUrlOpenHintOptionsFor
+} from './terminal-link-open-hints'
 
 function stubPlatform(isMac: boolean): void {
   vi.stubGlobal('navigator', { userAgent: isMac ? 'Mac OS X' : 'Windows NT 10.0' })
@@ -163,5 +167,14 @@ describe('terminalUrlOpenHintOptionsFor', () => {
     )
 
     expect(options.modifierInverts).toBe(true)
+  })
+})
+
+describe('getTerminalCustomAppSchemeOpenHint', () => {
+  it('names the registered app on Mac and other platforms', () => {
+    stubPlatform(true)
+    expect(getTerminalCustomAppSchemeOpenHint()).toBe('⌘+click to open in the registered app')
+    stubPlatform(false)
+    expect(getTerminalCustomAppSchemeOpenHint()).toBe('Ctrl+click to open in the registered app')
   })
 })
