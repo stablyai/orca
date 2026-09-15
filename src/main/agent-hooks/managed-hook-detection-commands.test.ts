@@ -27,7 +27,7 @@ describe('managed hook detection commands', () => {
     expect(bob.every((command) => command.identityExclusion)).toBe(true)
     expect(commands.find((command) => command.id === 'codex')?.identityExclusion).toBeUndefined()
 
-    const wire = JSON.parse(JSON.stringify(commands)) as typeof commands
+    const wire: typeof commands = JSON.parse(JSON.stringify(commands))
     await expect(
       excludeMisidentifiedAgents(wire, ['bob'], new Set(['bob']), async () => ({
         stdout: 'bob 4.0.0\nA version manager for neovim',

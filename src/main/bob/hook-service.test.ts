@@ -8,7 +8,7 @@ const { homedirMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('os', async () => {
-  const actual = (await vi.importActual('os')) as Record<string, unknown>
+  const actual = await vi.importActual<Record<string, unknown>>('os')
   return { ...actual, homedir: homedirMock }
 })
 
@@ -26,7 +26,8 @@ type BobSettings = {
 }
 
 function readSettings(): BobSettings {
-  return JSON.parse(readFileSync(getBobConfigPath(), 'utf-8')) as BobSettings
+  const settings: BobSettings = JSON.parse(readFileSync(getBobConfigPath(), 'utf-8'))
+  return settings
 }
 
 function writeSettings(value: unknown): void {

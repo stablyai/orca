@@ -4,14 +4,14 @@ import {
   buildWindowsAgentHookPostCommand,
   readHooksJson,
   writeHooksJson,
-  writeManagedScript,
-  type HooksConfig
+  writeManagedScript
 } from '../agent-hooks/installer-utils'
 import {
   readTextFileRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { parseHooksJsonText } from '../agent-hooks/hooks-json-read'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
@@ -161,20 +161,14 @@ export class BobHookService {
     // Why: SFTP I/O fails far more often than local fs; wrap the flow so failures surface as a structured error, not an unhandled rejection.
     try {
       const body = await readTextFileRemote(sftp, remoteConfigPath)
-      let config: HooksConfig
-      if (body === null) {
-        config = {}
-      } else {
-        try {
-          config = JSON.parse(body) as HooksConfig
-        } catch {
-          return {
-            agent: 'bob',
-            state: 'error',
-            configPath: remoteConfigPath,
-            managedHooksPresent: false,
-            detail: 'Could not parse remote Bob settings.json'
-          }
+      const config = body === null ? {} : parseHooksJsonText(body)
+      if (config === null) {
+        return {
+          agent: 'bob',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: 'Could not parse remote Bob settings.json'
         }
       }
 

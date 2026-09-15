@@ -25,10 +25,6 @@ vi.mock('child_process', () => {
   return { execFile: execFileWithPromisify }
 })
 
-const runProcessMock = vi.hoisted(() => vi.fn())
-// Why: the identity probe starts the resolved executable through runProcess.
-vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
-
 vi.mock('../main/pwsh', () => ({ isPwshAvailableAsync: isPwshAvailableAsyncMock }))
 vi.mock('../main/wsl', () => ({
   isWslAvailableAsync: isWslAvailableAsyncMock,
