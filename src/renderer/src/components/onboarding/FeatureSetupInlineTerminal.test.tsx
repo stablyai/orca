@@ -63,46 +63,61 @@ describe('FeatureSetupInlineTerminal', () => {
 
   it('runs the command through the resolved WSL runtime', () => {
     render(
-      <FeatureSetupInlineTerminal command="npx skills add orchestration" selection={SELECTION} />
+      <FeatureSetupInlineTerminal
+        command="npx skills@latest add orchestration"
+        selection={SELECTION}
+      />
     )
 
-    expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills add orchestration', {
+    expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills@latest add orchestration', {
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
       label: 'WSL Ubuntu'
     })
     expect(mocks.terminalProps).toMatchObject({
-      command: 'wsl:npx skills add orchestration',
+      command: 'wsl:npx skills@latest add orchestration',
       forceHostRuntime: false,
       shellOverride: 'powershell.exe'
     })
     expect(
-      mocks.terminalProps?.prepareCommandForShell?.('wsl:npx skills add orchestration', 'wsl.exe')
-    ).toBe('wsl-wsl.exe:wsl:npx skills add orchestration')
+      mocks.terminalProps?.prepareCommandForShell?.(
+        'wsl:npx skills@latest add orchestration',
+        'wsl.exe'
+      )
+    ).toBe('wsl-wsl.exe:wsl:npx skills@latest add orchestration')
   })
 
   it('uses the host command builder when the WSL runtime needs repair', () => {
     mocks.runtime.installDisabledReason = 'The selected WSL distro is unavailable.'
 
     render(
-      <FeatureSetupInlineTerminal command="npx skills add orchestration" selection={SELECTION} />
+      <FeatureSetupInlineTerminal
+        command="npx skills@latest add orchestration"
+        selection={SELECTION}
+      />
     )
 
-    expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills add orchestration', undefined)
+    expect(mocks.buildCommand).toHaveBeenCalledWith(
+      'npx skills@latest add orchestration',
+      undefined
+    )
     expect(mocks.terminalProps).toMatchObject({
-      command: 'host:npx skills add orchestration',
+      command: 'host:npx skills@latest add orchestration',
       forceHostRuntime: true,
       shellOverride: 'powershell.exe'
     })
     expect(
-      mocks.terminalProps?.prepareCommandForShell?.('host:npx skills add orchestration', 'wsl.exe')
-    ).toBe('host-wsl.exe:host:npx skills add orchestration')
+      mocks.terminalProps?.prepareCommandForShell?.(
+        'host:npx skills@latest add orchestration',
+        'wsl.exe'
+      )
+    ).toBe('host-wsl.exe:host:npx skills@latest add orchestration')
   })
 
   it('keeps the runtime captured when setup started', () => {
     render(
       <FeatureSetupInlineTerminal
-        command="npx skills add orchestration"
+        command="npx skills@latest add orchestration"
         runtimeContext={{
           agentRuntime: { runtime: 'host', label: 'Windows' },
           installDisabledReason: null,
@@ -112,16 +127,19 @@ describe('FeatureSetupInlineTerminal', () => {
       />
     )
 
-    expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills add orchestration', {
+    expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills@latest add orchestration', {
       runtime: 'host',
       label: 'Windows'
     })
     expect(mocks.terminalProps).toMatchObject({
-      command: 'host:npx skills add orchestration',
+      command: 'host:npx skills@latest add orchestration',
       shellOverride: 'cmd.exe'
     })
     expect(
-      mocks.terminalProps?.prepareCommandForShell?.('host:npx skills add orchestration', 'cmd.exe')
-    ).toBe('host-cmd.exe:host:npx skills add orchestration')
+      mocks.terminalProps?.prepareCommandForShell?.(
+        'host:npx skills@latest add orchestration',
+        'cmd.exe'
+      )
+    ).toBe('host-cmd.exe:host:npx skills@latest add orchestration')
   })
 })
