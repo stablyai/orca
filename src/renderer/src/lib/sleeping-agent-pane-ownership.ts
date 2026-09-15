@@ -94,7 +94,7 @@ function hasRestorableStablePanePty(
 // the pane that reconnects on activation. Liveness comes from the runtime
 // live-PTY map (ptyIdsByTabId), not the layout's ptyIdsByLeafId snapshot, which
 // persists stale across sleep/restart.
-function stablePaneHasLivePty(
+export function stablePaneHasLivePty(
   tabId: string,
   leafId: string,
   ptyIdsByTabId: Record<string, string[]>,
