@@ -13,5 +13,15 @@ export const bitbucketApi = {
 
   disconnect: (): Promise<void> => ipcRenderer.invoke('bitbucket:disconnect'),
 
-  status: () => ipcRenderer.invoke('bitbucket:status')
+  status: () => ipcRenderer.invoke('bitbucket:status'),
+
+  mergePR: (args) => ipcRenderer.invoke('bitbucket:mergePR', args),
+
+  closePR: (args) => ipcRenderer.invoke('bitbucket:closePR', args),
+
+  getPRComments: (args) => ipcRenderer.invoke('bitbucket:getPRComments', args),
+
+  addPRComment: (args) => ipcRenderer.invoke('bitbucket:addPRComment', args),
+
+  replyPRComment: (args) => ipcRenderer.invoke('bitbucket:replyPRComment', args)
 } satisfies PreloadApi['bitbucket']
