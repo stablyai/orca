@@ -1,8 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { OperationExposure } from '../operation-module-loader'
+import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter, MountContext } from '../recording-scenario'
-import type { operationModuleLoader } from '../operation-module-loader'
 
 const HOST_ID = 'host-1'
 const WORKTREE_ID = 'worktree-1'

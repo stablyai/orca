@@ -1,6 +1,5 @@
-import type { OperationExposure } from '../operation-module-loader'
+import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { operationModuleLoader } from '../operation-module-loader'
 
 /**
  * The two push senders are module-private, and the exported entry points that reach them read the
