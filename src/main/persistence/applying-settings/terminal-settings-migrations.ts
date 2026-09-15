@@ -18,6 +18,10 @@ export function buildWorkspaceDirHistoryForUpdate(
   if (!('workspaceDir' in updates) && !('nestWorkspaces' in updates)) {
     return null
   }
+  // Corrupt persisted paths must not enter history and later crash worktree layout classification (#14016).
+  if (typeof current.workspaceDir !== 'string' || current.workspaceDir.trim().length === 0) {
+    return null
+  }
   const nextPath = updates.workspaceDir ?? current.workspaceDir
   const nextNestWorkspaces = updates.nestWorkspaces ?? current.nestWorkspaces
   if (
@@ -32,7 +36,9 @@ export function buildWorkspaceDirHistoryForUpdate(
     path: current.workspaceDir,
     nestWorkspaces: current.nestWorkspaces
   }
-  const existing = current.workspaceDirHistory ?? []
+  const existing = (current.workspaceDirHistory ?? []).filter(
+    (layout) => typeof layout?.path === 'string' && layout.path.trim().length > 0
+  )
   const next = [...existing]
   const previousKey = getWorkspaceLayoutHistoryKey(previousLayout)
   if (!next.some((layout) => getWorkspaceLayoutHistoryKey(layout) === previousKey)) {

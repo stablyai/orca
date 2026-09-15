@@ -268,6 +268,56 @@ describe('worktree ownership classification', () => {
     ).toBe('external')
   })
 
+  it('skips corrupt workspaceDirHistory paths without throwing (#14016)', () => {
+    const repo = makeRepo({ path: 'D:/orca/workspaces/repo' })
+    const settings = makeSettings({
+      workspaceDir: 'D:/orca/workspaces',
+      nestWorkspaces: false,
+      workspaceDirHistory: [
+        null as never,
+        undefined as never,
+        { path: undefined as unknown as string, nestWorkspaces: false },
+        { path: null as unknown as string, nestWorkspaces: true },
+        { path: '', nestWorkspaces: false },
+        { path: 'D:/old/workspaces', nestWorkspaces: true }
+      ]
+    })
+
+    expect(() => buildKnownOrcaWorkspaceLayouts(settings, repo)).not.toThrow()
+    const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+    expect(layouts.map((layout) => layout.path)).toContain('D:/old/workspaces')
+    expect(
+      layouts.every((layout) => typeof layout.path === 'string' && layout.path.length > 0)
+    ).toBe(true)
+  })
+
+  it('keeps valid workspace history when the current workspace path is corrupt (#14016)', () => {
+    const repo = makeRepo()
+    const settings = makeSettings({
+      workspaceDir: undefined as unknown as string,
+      workspaceDirHistory: [{ path: '/old/workspaces', nestWorkspaces: false }]
+    })
+
+    expect(buildKnownOrcaWorkspaceLayouts(settings, repo)).toEqual([
+      { path: '/old/workspaces', nestWorkspaces: false }
+    ])
+  })
+
+  it('ignores corrupt history entries when deriving WSL layout modes (#14016)', () => {
+    const repo = makeRepo({ path: '//wsl.localhost/Ubuntu/home/dev/repo' })
+    const settings = makeSettings({
+      workspaceDir: undefined as unknown as string,
+      workspaceDirHistory: [null as never, { path: '/old/workspaces', nestWorkspaces: false }]
+    })
+
+    const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+    const wslRoot = '//wsl.localhost/Ubuntu/home/dev/orca/workspaces'
+    expect(layouts.filter(({ path }) => path === wslRoot)).toEqual([
+      { path: wslRoot, nestWorkspaces: true },
+      { path: wslRoot, nestWorkspaces: false }
+    ])
+  })
+
   it('builds known layouts from large workspace history lists', () => {
     const repo = makeRepo()
     const workspaceDirHistory = Array.from(
