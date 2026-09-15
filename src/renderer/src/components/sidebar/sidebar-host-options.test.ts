@@ -115,6 +115,7 @@ describe('sidebar host options', () => {
         [
           'runtime-1',
           {
+            checkedAt: 0,
             status: {
               runtimeId: 'rt',
               rendererGraphEpoch: 0,
@@ -147,6 +148,7 @@ describe('sidebar host options', () => {
         [
           'runtime-1',
           {
+            checkedAt: 0,
             status: {
               runtimeId: 'rt',
               rendererGraphEpoch: 0,

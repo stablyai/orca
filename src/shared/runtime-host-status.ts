@@ -17,6 +17,21 @@ export type RuntimeHostStatusSnapshot = {
   retired?: true
 }
 
+/**
+ * One client-side record of a host's last status probe: the projected `status`, and the
+ * `snapshot` evidence for what that projection is worth. Declared once rather than duck-typed
+ * per consumer — every field added here has been optional, so a local structural copy keeps
+ * typechecking against the store while silently missing whatever landed after it was written.
+ */
+export type RuntimeEnvironmentStatus = {
+  snapshot?: RuntimeHostStatusSnapshot
+  status: RuntimeStatus | null
+  remoteControl?: RuntimeStatus['remoteControl'] | null
+  appVersion?: string | null
+  checkedAt: number
+  connectionGeneration?: number
+}
+
 export type RuntimeHostStatusResponse = RuntimeRpcResponse<RuntimeStatus>
 
 export function runtimeHostStatusFailure(code: string, message: string): RuntimeRpcFailure {
