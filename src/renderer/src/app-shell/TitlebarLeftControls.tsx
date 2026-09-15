@@ -15,7 +15,7 @@ import {
 } from '@/store/slices/worktree-nav-history'
 import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
-import { hasCustomTitleBar, isMac } from './app-window-chrome'
+import { hasCustomTitleBar, isMac, resolveCustomWindowControlsSide } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 
 /**
@@ -26,6 +26,9 @@ import type { AppChromeLayout } from './use-app-chrome-layout'
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const windowControlsSide = resolveCustomWindowControlsSide(
+    useAppStore((s) => s.settings?.windowControlsPosition)
+  )
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
@@ -47,6 +50,10 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         ) : hasCustomTitleBar ? (
           /* Why: Windows/Linux remove the native title bar, so render the logo plus a ··· button that pops the application menu (as Alt does). */
           <>
+            {/* Why: when Linux puts min/max/close on the left, reserve the overlay width before the logo/menu cluster. */}
+            {windowControlsSide === 'left' ? (
+              <div className="window-controls-titlebar-spacer-left" />
+            ) : null}
             <img src={logo} alt="" aria-hidden className="titlebar-logo" />
             <Tooltip>
               <TooltipTrigger asChild>

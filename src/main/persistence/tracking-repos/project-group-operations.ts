@@ -2,8 +2,10 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import {
   createProjectGroup,
+  getNextProjectGroupSiblingTabOrder,
   getProjectGroupSubtreeIds,
-  normalizeProjectGroupName
+  normalizeProjectGroupName,
+  resolveProjectGroupParentGroupId
 } from '../../../shared/project-groups'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { removeWorkspaceSessionOwner } from '../restoring-sessions/session-owner-removal'
@@ -47,23 +49,30 @@ export class ProjectGroupPersistenceOperations {
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
-    let maxOrder = -1
-    // Why: persisted group lists can be large enough to exceed spread limits.
-    for (const existingGroup of this.state.projectGroups ?? []) {
-      maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
-    }
+    const existingGroups = this.state.projectGroups ?? []
+    const parentResolution = resolveProjectGroupParentGroupId(
+      existingGroups,
+      null,
+      input.parentGroupId ?? null
+    )
+    // Why: a missing parent on create falls back to top-level rather than failing the whole create.
+    const parentGroupId = parentResolution.ok ? parentResolution.parentGroupId : null
     const group = createProjectGroup({
       ...input,
-      tabOrder: maxOrder + 1
+      parentGroupId,
+      // Why: nest under a parent at the end of that parent's children, not the global list.
+      tabOrder: getNextProjectGroupSiblingTabOrder(existingGroups, parentGroupId)
     })
-    this.state.projectGroups = [...(this.state.projectGroups ?? []), group]
+    this.state.projectGroups = [...existingGroups, group]
     this.scheduleSave()
     return group
   }
 
   updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+    >
   ): ProjectGroup | null {
     const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
     if (!group) {
@@ -80,6 +89,23 @@ export class ProjectGroupPersistenceOperations {
     }
     if (updates.color !== undefined) {
       group.color = typeof updates.color === 'string' ? updates.color : null
+    }
+    if (updates.parentGroupId !== undefined) {
+      const parentResolution = resolveProjectGroupParentGroupId(
+        this.state.projectGroups ?? [],
+        groupId,
+        updates.parentGroupId
+      )
+      if (parentResolution.ok && group.parentGroupId !== parentResolution.parentGroupId) {
+        group.parentGroupId = parentResolution.parentGroupId
+        // Why: keep the moved client at the end of its new sibling list.
+        if (updates.tabOrder === undefined) {
+          group.tabOrder = getNextProjectGroupSiblingTabOrder(
+            (this.state.projectGroups ?? []).filter((entry) => entry.id !== groupId),
+            parentResolution.parentGroupId
+          )
+        }
+      }
     }
     group.updatedAt = Date.now()
     this.scheduleSave()

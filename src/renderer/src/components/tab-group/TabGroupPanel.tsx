@@ -324,7 +324,8 @@ export default function TabGroupPanel({
               className="shrink-0"
               style={
                 {
-                  width: 'calc(40px + var(--window-controls-width, 0px))',
+                  width:
+                    'calc(40px + var(--window-controls-right, var(--window-controls-width, 0px)))',
                   WebkitAppRegion: 'no-drag'
                 } as React.CSSProperties
               }

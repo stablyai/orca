@@ -164,6 +164,51 @@ export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry
   }
 ])
 
+export const getWindowControlsPositionEntries = createLocalizedCatalog(
+  (): SettingsSearchEntry[] => [
+    {
+      title: translate(
+        'settings.appearance.windowControlsPosition.title',
+        'Window Controls Position'
+      ),
+      description: translate(
+        'settings.appearance.windowControlsPosition.description',
+        'Place minimize, maximize, and close on the left or right on Linux.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'settings.appearance.windowControlsPosition.keyword.titlebar',
+          'titlebar'
+        ),
+        ...translateSearchKeyword(
+          'settings.appearance.windowControlsPosition.keyword.window',
+          'window'
+        ),
+        ...translateSearchKeyword(
+          'settings.appearance.windowControlsPosition.keyword.controls',
+          'controls'
+        ),
+        ...translateSearchKeyword(
+          'settings.appearance.windowControlsPosition.keyword.linux',
+          'linux'
+        ),
+        ...translateSearchKeyword(
+          'settings.appearance.windowControlsPosition.keyword.left',
+          'left'
+        ),
+        ...translateSearchKeyword(
+          'settings.appearance.windowControlsPosition.keyword.right',
+          'right'
+        ),
+        ...translateSearchKeyword(
+          'settings.appearance.windowControlsPosition.keyword.close',
+          'close'
+        )
+      ]
+    }
+  ]
+)
+
 export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   getUsagePercentageDisplayEntry(),
   ...getStatusBarToggles().map(({ title, description, keywords }) => ({
@@ -226,6 +271,7 @@ type AppearancePaneSearchOptions = {
   showDesktopThemeImports?: boolean
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
+  showWindowControlsPosition?: boolean
 }
 
 export function getAppearancePaneSearchEntries(
@@ -240,6 +286,7 @@ export function getAppearancePaneSearchEntries(
     ...getTerminalAppearanceSearchEntries(options),
     ...getLayoutEntries(),
     ...getTitlebarEntries(),
+    ...(options.showWindowControlsPosition ? getWindowControlsPositionEntries() : []),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
     ...getAppIconEntries(),
