@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { monaco } from '@/lib/monaco-setup'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import {
+  computeEditorFontSize,
+  resolveEditorFontFamily,
+  resolveEditorFontWeight
+} from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -52,6 +56,7 @@ export default function MonacoCodeExcerpt({
     editorFontZoomLevel
   )
   const fontFamily = resolveEditorFontFamily(settings)
+  const fontWeight = resolveEditorFontWeight(settings)
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
   const code = useMemo(() => lines.join('\n'), [lines])
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
@@ -89,7 +94,7 @@ export default function MonacoCodeExcerpt({
   return (
     <div
       className="overflow-x-auto py-1 text-[12px] leading-5"
-      style={{ fontFamily, fontSize: editorFontSize }}
+      style={{ fontFamily, fontWeight, fontSize: editorFontSize }}
     >
       {lines.map((codeLine, index) => {
         const lineNumber = firstLineNumber + index

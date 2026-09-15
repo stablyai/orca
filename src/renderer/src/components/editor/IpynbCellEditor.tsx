@@ -6,7 +6,7 @@ import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
 import { monaco } from '@/lib/monaco-setup'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import { computeEditorFontSize, resolveEditorFontOptions } from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
@@ -147,7 +147,7 @@ function IpynbCodeCellEditor({
         onChange={(value) => onChange(value ?? '')}
         options={{
           automaticLayout: true,
-          fontFamily: resolveEditorFontFamily(settings),
+          ...resolveEditorFontOptions(settings),
           fontSize,
           glyphMargin: false,
           lineNumbersMinChars: 3,
