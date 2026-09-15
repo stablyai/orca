@@ -833,7 +833,11 @@ describe('project group store routing', () => {
     const movedRepo = { ...remoteRepo, projectGroupId: projectGroup.id, projectGroupOrder: 3 }
     projectGroupsMoveProject.mockResolvedValue(movedRepo)
     const store = createTestStore()
-    store.setState({ repos: [remoteRepo], projectGroups: [projectGroup] })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [remoteRepo],
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }]
+    })
 
     await expect(
       store.getState().moveProjectToGroup(remoteRepo.id, projectGroup.id, 3)
