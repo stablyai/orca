@@ -31,6 +31,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   openFilesByWorktree: 'owner-keyed-row-arrays',
   activeFileIdByWorktree: 'owner-keyed',
   markdownFrontmatterVisible: 'none',
+  editorTextDirectionByFile: 'none',
   browserTabsByWorktree: 'owner-keyed-browser-row-arrays',
   browserPagesByWorkspace: 'browser-row-arrays',
   activeBrowserTabIdByWorktree: 'owner-keyed',

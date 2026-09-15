@@ -32,6 +32,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   openFilesByWorktree: true,
   activeFileIdByWorktree: true,
   markdownFrontmatterVisible: true,
+  editorTextDirectionByFile: true,
   browserTabsByWorktree: true,
   browserPagesByWorkspace: true,
   activeBrowserTabIdByWorktree: true,

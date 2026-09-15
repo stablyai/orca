@@ -350,6 +350,37 @@ describe('removeWorktree state cleanup', () => {
     expect(store.getState().markdownFrontmatterVisible).toEqual({ 'file-2': true })
   })
 
+  it('cleans up editorTextDirectionByFile for files in the removed worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      openFiles: [
+        {
+          id: 'file-1',
+          worktreeId: 'repo1::/path/wt1',
+          filePath: '/path/wt1/readme.md',
+          relativePath: 'readme.md',
+          language: 'markdown',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      // Why: fileIds derive from worktree path, so a recreated worktree reuses them; a stale
+      // override would silently reopen an unrelated file in RTL.
+      editorTextDirectionByFile: {
+        'file-1': 'rtl',
+        'file-2': 'rtl'
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
+
+    expect(store.getState().editorTextDirectionByFile).toEqual({ 'file-2': 'rtl' })
+  })
+
   it('cleans up markdownFrontmatterVisible for preview-only source files in the removed worktree', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })

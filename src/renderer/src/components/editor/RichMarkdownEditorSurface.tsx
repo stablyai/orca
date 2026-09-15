@@ -20,6 +20,7 @@ import type { MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import type { RichMarkdownAnnotationTarget } from './rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { EditorTextDirection } from '../../../../shared/editor-text-direction'
 
 function shouldFocusEmptyEditorFromSurfaceClick(
   event: React.MouseEvent<HTMLDivElement>,
@@ -37,6 +38,8 @@ function shouldFocusEmptyEditorFromSurfaceClick(
 
 type RichMarkdownEditorSurfaceProps = {
   editor: Editor | null
+  /** Contenteditable honors `dir` natively, so rich mode gets real bidi rather than Monaco's best effort. */
+  textDirection: EditorTextDirection
   editorFontZoomLevel: number
   rootElement: HTMLDivElement | null
   rootRef: (node: HTMLDivElement | null) => void
@@ -125,6 +128,7 @@ type RichMarkdownEditorSurfaceProps = {
 
 export function RichMarkdownEditorSurface({
   editor,
+  textDirection,
   editorFontZoomLevel,
   rootElement,
   rootRef,
@@ -217,7 +221,7 @@ export function RichMarkdownEditorSurface({
               editor?.commands.focus('start')
             }}
           >
-            <EditorContent editor={editor} />
+            <EditorContent editor={editor} dir={textDirection} />
             <RichMarkdownTableControls editor={editor} scrollContainerRef={scrollContainerRef} />
             {reviewRailVisible && notePositions.length > 0 ? (
               <RichMarkdownReviewNoteLayer

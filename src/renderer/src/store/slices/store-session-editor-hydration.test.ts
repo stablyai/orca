@@ -72,10 +72,12 @@ describe('hydrateEditorSession', () => {
       },
       activeFileIdByWorktree: { [wt]: '/path/wt1/src/index.ts' },
       activeTabTypeByWorktree: { [wt]: 'editor' },
-      markdownFrontmatterVisible: { '/path/wt1/README.md': false }
+      markdownFrontmatterVisible: { '/path/wt1/README.md': false },
+      editorTextDirectionByFile: { '/path/wt1/README.md': 'rtl' }
     })
 
     const s = store.getState()
+    expect(s.editorTextDirectionByFile).toEqual({ '/path/wt1/README.md': 'rtl' })
     expect(s.openFiles).toHaveLength(2)
     expect(s.openFiles[0].filePath).toBe('/path/wt1/src/index.ts')
     expect(s.openFiles[0].mode).toBe('edit')

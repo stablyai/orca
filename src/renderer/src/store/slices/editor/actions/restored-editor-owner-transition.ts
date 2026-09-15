@@ -208,6 +208,7 @@ export function buildRestoredEditorOwnerTransition(
         markdownRichModeSizeOverride: rekeyFileIdRecord(s.markdownRichModeSizeOverride, migrations),
         editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
         markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
+        editorTextDirectionByFile: rekeyFileIdRecord(s.editorTextDirectionByFile, migrations),
         markdownTableOfContentsVisible: rekeyFileIdRecord(
           s.markdownTableOfContentsVisible,
           migrations
