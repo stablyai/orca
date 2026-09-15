@@ -184,8 +184,8 @@ describe('the conversation scope is a column filter, and it binds the whole quer
       (db.prepare('SELECT max(id) AS id FROM messages').get() as { id: number }).id
     )
     const plan = planSessionSearchQuery('harbor')
-    expect(sessionSearchSnippet(db, 'conversation', rowid, plan)).toEqual(EMPTY_SNIPPET)
-    expect(sessionSearchSnippet(db, 'all', rowid, plan).text).toContain('output')
+    expect(sessionSearchSnippet(db, 'conversation', rowid, plan, 'or')).toEqual(EMPTY_SNIPPET)
+    expect(sessionSearchSnippet(db, 'all', rowid, plan, 'or').text).toContain('output')
   })
 })
 
@@ -471,3 +471,59 @@ it.each(['repo:target', 'path:/work/target'])(
     expect(result.truncated.candidates).toBe(false)
   }
 )
+
+describe('a sentence pasted out of a transcript is found behind a full candidate set', () => {
+  // The words of an ordinary sentence are common, so over OR the candidate
+  // limit fills with whatever is recent and the old session holding the
+  // sentence never reaches ranking.
+  const sentence = 'The sol review says the PR is not quite merge-ready yet'
+
+  async function pasted(sessionCandidateLimit = 600): Promise<SessionSearchHarness> {
+    const opened = await open('ss-engine-pasted-sentence', { sessionCandidateLimit })
+    addSyntheticSession(opened.db, {
+      id: 1,
+      text: `${sentence}, but not because of the implementation.`,
+      updatedAt: '2026-08-01T00:00:00.000Z'
+    })
+    for (let id = 2; id <= sessionCandidateLimit + 50; id++) {
+      addSyntheticSession(opened.db, {
+        id,
+        text: 'the review says the implementation is not quite there yet',
+        updatedAt: '2026-09-09T00:00:00.000Z'
+      })
+    }
+    return opened
+  }
+
+  it('returns the exact sentence first, over the phrase route', async () => {
+    const { engine } = await pasted()
+    const result = engine.search({ query: sentence })
+    expect(result.planner.route).toBe('phrase')
+    expect(ids(result)).toEqual(['1'])
+  })
+
+  it('does not claim the results were limited when the phrase rung answered', async () => {
+    // The OR rung would have filled the candidate limit; the rung that answered
+    // did not, and it is the answering rung the notice describes.
+    const { engine } = await pasted()
+    expect(engine.search({ query: sentence }).truncated.candidates).toBe(false)
+    expect(engine.search({ query: 'the review says yet' }).truncated.candidates).toBe(true)
+  })
+
+  it('falls to AND for prose whose words are all present but not adjacent', async () => {
+    const { db, engine } = await open('ss-engine-prose-and')
+    addSyntheticSession(db, {
+      id: 1,
+      text: 'yet quite merge-ready the PR is not what sol says a review of it'
+    })
+    const result = engine.search({ query: sentence })
+    expect(result.planner.route).toBe('and')
+    expect(ids(result)).toEqual(['1'])
+  })
+
+  it('still sends a single prose word straight to OR', async () => {
+    const { db, engine } = await open('ss-engine-prose-one-word')
+    addSyntheticSession(db, { id: 1, text: 'relay' })
+    expect(engine.search({ query: 'relay' }).planner.route).toBe('or')
+  })
+})

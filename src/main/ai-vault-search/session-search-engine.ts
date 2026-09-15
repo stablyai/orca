@@ -209,7 +209,7 @@ export class SessionSearchEngine {
     const { session, message } = entry
     const snippet =
       message && retrieved
-        ? sessionSearchSnippet(this.db, scope, message.rowid, retrieved.plan)
+        ? sessionSearchSnippet(this.db, scope, message.rowid, retrieved.plan, retrieved.route)
         : EMPTY_SNIPPET
     return {
       ...sessionFields(session),

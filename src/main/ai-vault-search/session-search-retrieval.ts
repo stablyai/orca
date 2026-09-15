@@ -71,8 +71,7 @@ export class SessionSearchRetrieval {
   }
 
   /**
-   * The route ladder: phrase, then AND for a literal-looking query, then typo
-   * repair, then OR.
+   * The route ladder: phrase, then AND, then typo repair, then OR.
    *
    * Repair runs before the OR fallback rather than after it fails. A typo next
    * to a common word would otherwise be masked: the common word alone retrieves
@@ -84,7 +83,10 @@ export class SessionSearchRetrieval {
     let sessions: SessionRow[] = []
     const match = (expression: string): MessageRow[] => {
       const rows = this.match(expression, scope)
-      incomplete ||= rows.length >= scope.candidateLimit
+      // Assigned, not accumulated: only the rung whose rows are returned can
+      // say whether a cap hid anything. A phrase rung that filled the limit and
+      // was then discarded describes a row set the answering rung never used.
+      incomplete = rows.length >= scope.candidateLimit
       sessions = this.loadSessions(
         rows.map((row) => row.session_row_id),
         scope
@@ -92,13 +94,13 @@ export class SessionSearchRetrieval {
       const eligible = new Set(sessions.map((row) => row.id))
       return rows.filter((row) => eligible.has(row.session_row_id))
     }
-    const exact = this.literal(plan, match)
+    const exact = this.phraseThenAnd(plan, match)
     if (exact) {
       return { ...exact, plan, incomplete, sessions }
     }
     const repaired = this.repair(plan, scope.scope)
     const effective = repaired ?? plan
-    const literal = repaired ? this.literal(repaired, match) : null
+    const literal = repaired ? this.phraseThenAnd(repaired, match) : null
     const found = literal ?? {
       rows: match(orExpression(effective.terms)),
       route: 'or' as const
@@ -194,25 +196,35 @@ export class SessionSearchRetrieval {
     return changed ? planSessionSearchQuery(body.join(' '), plan.literal) : null
   }
 
-  /** Phrase, then AND, for literal-looking queries; null when neither matches. */
-  private literal(
+  /**
+   * Phrase, then AND, over the tokens as typed; null when neither matches.
+   *
+   * Prose runs it too, and not only a literal-looking query. A sentence pasted
+   * out of a transcript is ordinary words in order, and over OR its common
+   * words fill the candidate limit with recent sessions long before the old
+   * session that holds the sentence is reached, so the exact match a user can
+   * see in front of them comes back missing.
+   */
+  private phraseThenAnd(
     plan: SessionSearchQueryPlan,
     match: (expression: string) => MessageRow[]
   ): { rows: MessageRow[]; route: 'phrase' | 'and' } | null {
-    if (!plan.literal || plan.body.length === 0) {
-      return null
-    }
+    const tokens = plan.phrase
     // A one-token literal (`resolveTerminalPath`, `src/a/b.ts`) is its own
     // phrase: the tokenizer keeps it whole, so the exact token is the cheap,
-    // precise first try before the identifier pieces fan out over OR.
-    const phrase = match(phraseExpression(plan.body))
+    // precise first try before the identifier pieces fan out over OR. One word
+    // of prose is not quoting anything, so it goes straight to OR as before.
+    if (tokens.length === 0 || (tokens.length < 2 && !plan.literal)) {
+      return null
+    }
+    const phrase = match(phraseExpression(tokens))
     if (phrase.length > 0) {
       return { rows: phrase, route: 'phrase' }
     }
-    if (plan.body.length < 2) {
+    if (tokens.length < 2) {
       return null
     }
-    const and = match(andExpression(plan.body))
+    const and = match(andExpression(tokens))
     return and.length > 0 ? { rows: and, route: 'and' } : null
   }
 
