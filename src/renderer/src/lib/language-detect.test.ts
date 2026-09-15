@@ -20,6 +20,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
 
+  it('maps JSP files to the jsp language id', () => {
+    expect(detectLanguage('src/main/webapp/index.jsp')).toBe('jsp')
+    expect(detectLanguage('src/main/webapp/header.jspf')).toBe('jsp')
+  })
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')
