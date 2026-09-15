@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T07:56:09.513Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy TUI 1.2.1; the same failed turn as antigravity-busy-turn-ended, but the capture ends after agy's full composer repaint instead of after the spinner-erase touch-up. Ground truth: ready. Which of the two frames ends a turn is not deterministic.",
+  "exitCode": 0
+}

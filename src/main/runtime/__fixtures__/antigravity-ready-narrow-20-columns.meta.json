@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T07:52:03.825Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 20,
+  "rows": 12,
+  "note": "agy TUI 1.2.1 idle on a 20-column PTY. agy redraws the composer rule at the grid width, so it is 20 glyphs and never wraps. Ground truth: ready.",
+  "exitCode": 0
+}
