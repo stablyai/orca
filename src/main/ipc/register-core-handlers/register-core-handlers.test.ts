@@ -38,6 +38,7 @@ const {
   registerClaudeAccountHandlersMock,
   registerMiniMaxCredentialsHandlersMock,
   registerGrokAccountHandlersMock,
+  registerZhipuCredentialsHandlersMock,
   registerClipboardHandlersMock,
   setTrustedClipboardRendererWebContentsIdMock,
   registerUpdaterHandlersMock,
@@ -105,6 +106,7 @@ const {
   registerClaudeAccountHandlersMock: vi.fn(),
   registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerGrokAccountHandlersMock: vi.fn(),
+  registerZhipuCredentialsHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
@@ -344,6 +346,10 @@ vi.mock('../grok-accounts', () => ({
   registerGrokAccountHandlers: registerGrokAccountHandlersMock
 }))
 
+vi.mock('../zhipu-credentials', () => ({
+  registerZhipuCredentialsHandlers: registerZhipuCredentialsHandlersMock
+}))
+
 vi.mock('../../window/attach-main-window-services', () => ({
   registerUpdaterHandlers: registerUpdaterHandlersMock
 }))
@@ -435,6 +441,7 @@ describe('registerCoreHandlers', () => {
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
     registerMiniMaxCredentialsHandlersMock.mockReset()
+    registerZhipuCredentialsHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     setTrustedClipboardRendererWebContentsIdMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
@@ -524,6 +531,7 @@ describe('registerCoreHandlers', () => {
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
+    expect(registerZhipuCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits, codexAccounts)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
