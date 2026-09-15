@@ -1,6 +1,7 @@
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 import { unknownCommandData } from './command-suggestion'
+import { formatLinearIssueContextFlagHelp } from './linear-issue-flag-help'
 import { formatSkillsCommandFlagHelp } from './skills-command-flag-help'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
@@ -185,6 +186,8 @@ export function formatFlagHelp(flag: string): string {
   const helpByFlag: Record<string, string> = {
     agent: '--agent <id>          Launch a known TUI agent in the first terminal',
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
+    branch:
+      '--branch <name>         Git branch to create (independent of the sanitized directory name)',
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
     cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
@@ -289,30 +292,5 @@ export function formatFlagHelp(flag: string): string {
     format: '--format <png|jpeg>    Screenshot image format'
   }
 
-  if (flag === 'current') {
-    return '--current              Use the current Orca worktree linked Linear issue'
-  }
-  if (flag === 'comments') {
-    return '--comments             Include threaded Linear comments'
-  }
-  if (flag === 'children') {
-    return '--children             Include recursive child issues'
-  }
-  if (flag === 'depth') {
-    return '--depth <n>            Child issue depth for --children/--full'
-  }
-  if (flag === 'attachments') {
-    return '--attachments          Include attachment metadata and URLs'
-  }
-  if (flag === 'relations') {
-    return '--relations            Include blocking, related, and duplicate links'
-  }
-  if (flag === 'activity') {
-    return '--activity             Include issue field-change history'
-  }
-  if (flag === 'full') {
-    return '--full                 Include all supported V1 issue context within caps'
-  }
-
-  return helpByFlag[flag] ?? `--${flag}`
+  return formatLinearIssueContextFlagHelp(flag) ?? helpByFlag[flag] ?? `--${flag}`
 }
