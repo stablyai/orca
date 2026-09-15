@@ -5,12 +5,13 @@ import {
   readString,
   toolUpdate
 } from '../tool-input-preview'
-import { deriveInteractivePrompt } from '../interactive-tool'
+import { deriveInteractivePrompt, extractToolResponseText } from '../interactive-tool'
 
 export function extractCodexToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
+  const update: ToolSnapshot = {}
   if (
     eventName === 'PreToolUse' ||
     eventName === 'PermissionRequest' ||
@@ -22,20 +23,30 @@ export function extractCodexToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
-    return toolUpdate(
-      {
-        toolName,
-        toolInput,
-        interactivePrompt: deriveInteractivePrompt(toolName, rawInput, eventName)
-      },
-      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
+    Object.assign(
+      update,
+      toolUpdate(
+        {
+          toolName,
+          toolInput,
+          interactivePrompt: deriveInteractivePrompt(toolName, rawInput, eventName)
+        },
+        { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
+      )
     )
   }
-  if (eventName === 'Stop') {
-    const message = readString(hookPayload, 'last_assistant_message')
-    if (message) {
-      return { lastAssistantMessage: message }
+  if (eventName === 'PostToolUse') {
+    // Why: Codex posts the tool result on PostToolUse; surface it as the status row summary.
+    const responseText = extractToolResponseText(hookPayload.tool_response)
+    if (responseText) {
+      update.lastAssistantMessage = responseText
     }
   }
-  return {}
+  if (eventName === 'Stop' || eventName === 'SubagentStop') {
+    const message = readString(hookPayload, 'last_assistant_message')
+    if (message) {
+      update.lastAssistantMessage = message
+    }
+  }
+  return update
 }

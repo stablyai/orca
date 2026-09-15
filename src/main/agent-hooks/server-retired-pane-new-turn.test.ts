@@ -20,7 +20,9 @@ afterEach(() => vi.restoreAllMocks())
 
 /** Each source's own new-turn boundary, as `isNewTurnEvent` classifies it. `null` means the
  *  classifier names no boundary for that source. That is not the same as "can never revive":
- *  mimo-code's boundary is an explicit-prompt MessagePart, which the gate handles separately. */
+ *  mimo-code's boundary is an explicit-prompt MessagePart, which the gate handles separately.
+ *  Codex SessionStart still names a boundary (it un-retires the fence) but is idle metadata,
+ *  not a visible working row — the dedicated Codex case covers first-real-event revival. */
 const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   claude: 'SessionStart',
   kimi: 'UserPromptSubmit',
@@ -70,13 +72,52 @@ describe("retired pane un-retires on each provider's own new-turn event", () => 
   // Why: keys of a Record<AgentHookSource, …> — a new source fails typecheck here rather than
   // silently skipping coverage, which is the same guarantee the runtime list would give.
   const revivable = (Object.keys(NEW_TURN_EVENT) as AgentHookSource[]).filter(
-    (source) => NEW_TURN_EVENT[source] !== null
+    (source) => NEW_TURN_EVENT[source] !== null && source !== 'codex'
   )
 
   it.each(revivable)('%s', (source) => {
     const hookEventName = NEW_TURN_EVENT[source]
     expect(hookEventName).not.toBeNull()
     expect(reviveRetiredPane(source, hookEventName as string)).toBe(true)
+  })
+
+  it('codex un-retires on SessionStart without a synthetic working row, then the first real event supplies the row', () => {
+    // Why this assertion changed: the old `%s` table treated Codex SessionStart like
+    // Claude and required a visible working row. SessionStart is an idle metadata
+    // clear; a synthetic working row is the mixed-version bug this PR closes. The
+    // fence still opens, and the first real event (PostToolUse) is the visible row.
+    const server = new AgentHookServer()
+    server.retirePaneAuthority(PANE)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        source: 'codex',
+        hookEventName: 'SessionStart',
+        payload: { state: 'working', prompt: 'after reuse', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot().some((entry) => entry.paneKey === PANE)).toBe(false)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        source: 'codex',
+        hookEventName: 'PostToolUse',
+        payload: {
+          state: 'working',
+          prompt: '',
+          agentType: 'codex',
+          toolName: 'Bash',
+          toolInput: 'pwd'
+        }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot().some((entry) => entry.paneKey === PANE)).toBe(true)
   })
 
   // Why these two: every case above passes `source`, so the source-less compatibility path —

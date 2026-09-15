@@ -1,4 +1,5 @@
 import { isAskUserQuestionTool } from '../../../../shared/agent-question-answered-intent'
+import { isCodexNativeActionRequiredTitle } from '../../../../shared/agent-detection'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import { getSyntheticAgentTitleProfile } from '../../../../shared/synthetic-agent-title'
 import { resolveTuiAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
@@ -65,7 +66,10 @@ export function shouldSuppressCodexAutoApprovalSyntheticTitle(
   title: string,
   context: CodexAutoApprovalStatusContext
 ): boolean {
-  if (title !== getSyntheticAgentTitleProfile('codex')?.permissionLabel) {
+  const isPermissionTitle =
+    title === getSyntheticAgentTitleProfile('codex')?.permissionLabel ||
+    isCodexNativeActionRequiredTitle(title)
+  if (!isPermissionTitle) {
     return false
   }
 

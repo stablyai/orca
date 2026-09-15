@@ -1,4 +1,10 @@
 import type { CodexTrustEntry } from './config-toml-trust'
+import { readHookTrustContent } from './config-toml-hook-trust-read'
+
+export type CodexHookTrustKeyMove = {
+  fromKey: string
+  toKey: string
+}
 import {
   computeCodexTrustedHash,
   computeCodexTrustKey,
@@ -35,6 +41,42 @@ export function upsertHookTrustContent(
   return updated
 }
 
+export function moveHookTrustContent(
+  existingContent: string,
+  moves: readonly CodexHookTrustKeyMove[]
+): string {
+  const existing = stripLeadingBom(existingContent)
+  const states = readHookTrustContent(existing)
+  const resolvedMoves = moves.flatMap(({ fromKey, toKey }) => {
+    if (normalizeCodexHookTrustLookupKey(fromKey) === normalizeCodexHookTrustLookupKey(toKey)) {
+      return []
+    }
+    const state = states.get(fromKey)
+    return [{ fromKey, toKey, trustedHash: state?.trustedHash, enabled: state?.enabled }]
+  })
+  if (resolvedMoves.length === 0) {
+    return existing
+  }
+  // Why: destination is the source snapshot only. Vacate every non-identity
+  // from and to key before writes so a missing source clears a stale dest
+  // approval and a missing enabled cannot inherit dest disablement.
+  let updated = removeHookTrustContent(existing, [
+    ...new Set(resolvedMoves.flatMap(({ fromKey, toKey }) => [fromKey, toKey]))
+  ])
+  for (const { toKey, trustedHash, enabled } of resolvedMoves) {
+    if (trustedHash === undefined && enabled === undefined) {
+      continue
+    }
+    updated = upsertTrustBlocks(
+      updated,
+      getTrustKeyWriteVariants(toKey),
+      trustedHash,
+      enabled ?? true
+    )
+  }
+  return updated
+}
+
 export function removeHookTrustContent(content: string, keys: readonly string[]): string {
   const normalizedKeys = new Set(keys.map(normalizeCodexHookTrustLookupKey))
   const ranges = findHookTrustBlockRanges(content, normalizedKeys)
@@ -53,7 +95,7 @@ export function removeHookTrustContent(content: string, keys: readonly string[])
 function upsertTrustBlocks(
   content: string,
   keys: readonly string[],
-  hash: string,
+  hash?: string,
   explicitEnabled?: boolean
 ): string {
   const ranges = findHookTrustBlockRanges(
@@ -86,7 +128,7 @@ function isBlockDisabled(content: string, range: HookTrustBlockRange): boolean {
 function appendTrustBlocks(
   content: string,
   keys: readonly string[],
-  hash: string,
+  hash: string | undefined,
   enabled: boolean
 ): string {
   const block = buildTrustBlocks(keys, hash, enabled)
@@ -97,16 +139,20 @@ function appendTrustBlocks(
   return `${content}${separator}${block}\n`
 }
 
-function buildTrustBlocks(keys: readonly string[], hash: string, enabled: boolean): string {
+function buildTrustBlocks(
+  keys: readonly string[],
+  hash: string | undefined,
+  enabled: boolean
+): string {
   return keys.map((key) => buildTrustBlock(key, hash, enabled)).join('\n\n')
 }
 
-function buildTrustBlock(key: string, hash: string, enabled: boolean): string {
-  return [
-    `[hooks.state.${formatHookStateTableKey(key)}]`,
-    `enabled = ${enabled}`,
-    `trusted_hash = "${escapeTomlBasicString(hash)}"`
-  ].join('\n')
+function buildTrustBlock(key: string, hash: string | undefined, enabled: boolean): string {
+  const lines = [`[hooks.state.${formatHookStateTableKey(key)}]`, `enabled = ${enabled}`]
+  if (hash) {
+    lines.push(`trusted_hash = "${escapeTomlBasicString(hash)}"`)
+  }
+  return lines.join('\n')
 }
 
 function formatHookStateTableKey(key: string): string {
