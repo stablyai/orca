@@ -217,6 +217,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
         if (fileSearchQuery) {
           handleClearSearch()
         }
+        ;(e.target as HTMLInputElement).blur()
       }
       if (e.key === 'Enter') {
         executeSearch(fileSearchQuery)
