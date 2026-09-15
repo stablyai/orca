@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
+import { runProjectRemoval } from './remove-project-flow'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -210,16 +211,13 @@ const WorktreeList = React.memo(function WorktreeList({
     },
     [openModal]
   )
-  const handleRemoveProject = useCallback(
-    (repo: Repo) => {
-      openModal('confirm-remove-folder', {
-        repoId: repo.id,
-        displayName: repo.displayName,
-        hostId: getRepoExecutionHostId(repo)
-      })
-    },
-    [openModal]
-  )
+  const handleRemoveProject = useCallback((repo: Repo) => {
+    runProjectRemoval({
+      repoId: repo.id,
+      displayName: repo.displayName,
+      hostId: getRepoExecutionHostId(repo)
+    })
+  }, [])
   const handleCreateFolderWorkspace = useCallback(
     (projectGroup: ProjectGroup) => {
       if (!projectGroup.parentPath) {
