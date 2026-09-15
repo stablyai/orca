@@ -20,6 +20,7 @@ import {
 
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
+import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -108,6 +109,13 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     onPtyExit: session.onExit,
     onPtySpawn: session.onPtySpawn,
     onPtyRebind: session.onPtyRebind,
+    retainDisposedSpawn: () =>
+      shouldRetainDisposedPaneSpawn(
+        useAppStore.getState(),
+        session.deps.worktreeId,
+        session.deps.tabId,
+        session.pane.leafId
+      ),
     ...(session.mainSideEffectAuthority
       ? {}
       : {
