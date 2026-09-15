@@ -46,6 +46,13 @@ const KIMI_SESSION = {
   codexHome: null
 }
 
+const CURSOR_SESSION = {
+  agent: 'cursor' as const,
+  sessionId: 'cursor-conversation-1',
+  cwd: '/Users/ada/repo/packages/api',
+  codexHome: null
+}
+
 describe('AI Vault resume for Kimi', () => {
   it('keeps the cd prefix on the copied resume line', () => {
     // Why: Kimi sessions are work-dir-scoped — resuming from the worktree root instead of the
@@ -78,6 +85,22 @@ describe('AI Vault resume for Kimi', () => {
         key: 'session_id',
         id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
       }
+    })
+  })
+})
+
+describe('AI Vault resume for Cursor', () => {
+  it('uses the Cursor conversation id as the provider session', () => {
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state: makeState(),
+        worktreeId: 'repo-1::worktree-1',
+        session: CURSOR_SESSION
+      })
+    ).toMatchObject({
+      command: "cursor-agent '--yolo' '--resume' 'cursor-conversation-1'",
+      cwd: '/Users/ada/repo/packages/api',
+      providerSession: { key: 'conversation_id', id: 'cursor-conversation-1' }
     })
   })
 })

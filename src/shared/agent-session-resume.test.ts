@@ -28,6 +28,10 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('kimi')).toBe(true)
   })
 
+  it('treats Cursor as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('cursor')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -63,6 +67,15 @@ describe('agent session resume metadata', () => {
       'kimi',
       { session_id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' },
       { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' }
+    ],
+    [
+      'cursor',
+      { conversation_id: 'cursor-conversation-1', transcript_path: '/tmp/cursor.jsonl' },
+      {
+        key: 'conversation_id',
+        id: 'cursor-conversation-1',
+        transcriptPath: '/tmp/cursor.jsonl'
+      }
     ]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
@@ -94,6 +107,11 @@ describe('agent session resume metadata', () => {
       'kimi',
       { key: 'session_id', id: 'session_431324d7' },
       ['kimi', '--session', 'session_431324d7']
+    ],
+    [
+      'cursor',
+      { key: 'conversation_id', id: 'cursor-conversation-1' },
+      ['cursor-agent', '--resume', 'cursor-conversation-1']
     ]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
