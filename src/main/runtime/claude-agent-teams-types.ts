@@ -48,11 +48,16 @@ export type AgentTeamsTerminalApi = {
   focusTerminal(handle: string): Promise<RuntimeTerminalFocus>
   closeTerminal(handle: string): Promise<RuntimeTerminalClose>
   showTerminal(handle: string): Promise<RuntimeTerminalShow>
+  // Why: terminal handles are remintable while teams are long-lived; a pane key
+  // lets stale team state recover the pane's current handle (same pattern as #7514).
+  resolveTerminalHandleForPaneKey?(paneKey: string): string | null
 }
 
 export type TeamPane = {
   fakePaneId: string
   handle: string
+  // Why: remint-stable identity for stale-handle recovery; only the leader has one today.
+  paneKey?: string
   index: number
   // Why: Claude Code splits a holding pane (`-- cat`) then `respawn-pane`s it
   // with the real teammate command. We remember how the pane was first split so
