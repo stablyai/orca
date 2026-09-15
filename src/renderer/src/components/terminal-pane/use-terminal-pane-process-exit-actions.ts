@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -14,6 +14,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const {
     clearCodexRestartNotice,
     clearExitedPanePtyLayoutBinding,
+    clearExitedPanePtyLayoutBindingForLeaf,
     clearRuntimePaneTitle,
     clearTabPtyId,
     clearTerminalPaneUnread,
@@ -56,12 +57,13 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     updateTabTitle,
     worktreeId
   } = controller
+  const codexPaneRestartsRef = useRef(new Map<number, Promise<void>>())
 
-  const handleRestartCodexPane = useCallback(
-    (
+  const runRestartCodexPane = useCallback(
+    async (
       paneId: number,
       restartStartup: PtyConnectionDeps['startup'] = CODEX_ACCOUNT_RESTART_STARTUP
-    ) => {
+    ): Promise<void> => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
@@ -69,17 +71,42 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       }
       const transport = paneTransportsRef.current.get(paneId)
       const panePtyBinding = panePtyBindingsRef.current.get(paneId)
-      const existingPtyId = transport?.getPtyId()
+      const existingPtyId = transport?.getPtyId() ?? transport?.getPendingShutdownPtyId?.()
       if (existingPtyId) {
         suppressPtyExit(existingPtyId)
-        clearCodexRestartNotice(existingPtyId)
-        clearTabPtyId(tabId, existingPtyId)
       }
       panePtyBinding?.dispose()
       panePtyBindingsRef.current.delete(paneId)
-      syncPanePtyLayoutBinding(paneId, null)
-      transport?.destroy?.()
-      paneTransportsRef.current.delete(paneId)
+      try {
+        await transport?.destroy?.()
+      } catch (error) {
+        if (existingPtyId) {
+          useAppStore.getState().reopenCodexRestartPrompt(existingPtyId)
+        }
+        console.warn('[codex-restart] mounted pane shutdown failed:', error)
+        return
+      }
+      if (existingPtyId) {
+        clearCodexRestartNotice(existingPtyId)
+        clearTabPtyId(tabId, existingPtyId)
+        if (clearExitedPanePtyLayoutBindingForLeaf) {
+          clearExitedPanePtyLayoutBindingForLeaf(pane.leafId, existingPtyId)
+        } else {
+          clearExitedPanePtyLayoutBinding(paneId, existingPtyId)
+        }
+      } else {
+        syncPanePtyLayoutBinding(paneId, null)
+      }
+      if (paneTransportsRef.current.get(paneId) === transport) {
+        paneTransportsRef.current.delete(paneId)
+      }
+      if (
+        managerRef.current !== manager ||
+        paneTransportsRef.current.has(paneId) ||
+        !manager.getPanes().some((candidate) => candidate.id === paneId)
+      ) {
+        return
+      }
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
       setTerminalError(null)
       setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
@@ -128,6 +155,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     [
       clearCodexRestartNotice,
       clearExitedPanePtyLayoutBinding,
+      clearExitedPanePtyLayoutBindingForLeaf,
       clearRuntimePaneTitle,
       clearTabPtyId,
       clearTerminalPaneUnread,
@@ -166,6 +194,34 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     ]
   )
 
+  const handleRestartCodexPane = useCallback(
+    (
+      paneId: number,
+      restartStartup: PtyConnectionDeps['startup'] = CODEX_ACCOUNT_RESTART_STARTUP
+    ): Promise<void> => {
+      const pendingRestart = codexPaneRestartsRef.current.get(paneId)
+      if (pendingRestart) {
+        return pendingRestart
+      }
+      const restart = runRestartCodexPane(paneId, restartStartup)
+      codexPaneRestartsRef.current.set(paneId, restart)
+      void restart.then(
+        () => {
+          if (codexPaneRestartsRef.current.get(paneId) === restart) {
+            codexPaneRestartsRef.current.delete(paneId)
+          }
+        },
+        () => {
+          if (codexPaneRestartsRef.current.get(paneId) === restart) {
+            codexPaneRestartsRef.current.delete(paneId)
+          }
+        }
+      )
+      return restart
+    },
+    [runRestartCodexPane]
+  )
+
   const clearPaneProcessExit = useCallback(
     (paneId: number) => {
       setPaneProcessExitsByPaneId((current) => {
@@ -183,7 +239,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const handleRestartExitedPane = useCallback(
     (processExit: PaneProcessExit) => {
       clearPaneProcessExit(processExit.paneId)
-      handleRestartCodexPane(
+      void handleRestartCodexPane(
         processExit.paneId,
         resolveTerminalProcessExitRestartStartup(processExit)
       )
@@ -232,12 +288,13 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       return
     }
     for (const pane of manager.getPanes()) {
-      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
+      const transport = paneTransportsRef.current.get(pane.id)
+      const ptyId = transport?.getPtyId() ?? transport?.getPendingShutdownPtyId?.()
       if (!ptyId || !pendingCodexPaneRestartIds[ptyId]) {
         continue
       }
       if (consumePendingCodexPaneRestart(ptyId)) {
-        handleRestartCodexPane(pane.id)
+        void handleRestartCodexPane(pane.id)
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
