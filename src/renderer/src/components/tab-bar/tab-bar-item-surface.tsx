@@ -61,6 +61,7 @@ export function renderTabBarItems({
   const {
     resolvedGroupId,
     generatedTabTitlesEnabled,
+    pinnedTabsIconOnly,
     unifiedTabByVisibleId,
     nativeChatEnabled,
     tabAgentTypesByTabId,
@@ -139,6 +140,7 @@ export function renderTabBarItems({
             item.id === activeTabId
           }
           isPinned={item.isPinned}
+          pinnedIconOnly={pinnedTabsIconOnly}
           isExpanded={expandedPaneByTabId[item.id] === true}
           onActivate={activateRealTab(onActivate)}
           onClose={onClose}
@@ -166,6 +168,7 @@ export function renderTabBarItems({
             activeBrowserTabId === item.id
           }
           isPinned={item.isPinned}
+          pinnedIconOnly={pinnedTabsIconOnly}
           hasTabsToRight={index < items.length - 1}
           hasTabsToLeft={index > 0}
           tabCount={items.length}
@@ -209,6 +212,7 @@ export function renderTabBarItems({
             item.id === activeSimulatorTabId
           }
           isPinned={item.isPinned}
+          pinnedIconOnly={pinnedTabsIconOnly}
           hasTabsToRight={index < items.length - 1}
           hasTabsToLeft={index > 0}
           tabCount={items.length}
@@ -256,6 +260,7 @@ export function renderTabBarItems({
             item.id === activeTabId
           }
           isPinned={item.isPinned}
+          pinnedIconOnly={pinnedTabsIconOnly}
           isExpanded={false}
           onActivate={() => activateRealTab(onActivateAgentSession)(item.id)}
           onClose={() => onClose(item.id)}
@@ -283,6 +288,7 @@ export function renderTabBarItems({
           activeFileId === item.id
         }
         isPinned={item.isPinned}
+        pinnedIconOnly={pinnedTabsIconOnly}
         hasTabsToRight={index < items.length - 1}
         hasTabsToLeft={index > 0}
         tabCount={items.length}

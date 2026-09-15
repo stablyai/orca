@@ -250,6 +250,7 @@ async function renderSortableTab({
     hasTabsToLeft: false,
     isActive: true,
     isPinned: false,
+    pinnedIconOnly: false,
     isExpanded: false,
     onActivate: vi.fn(),
     onClose: vi.fn(),

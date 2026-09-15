@@ -117,6 +117,14 @@ export function GeneralPane({
       activeRuntimeTarget.environmentId === sourceDefaultsSupportedRuntimeEnvironmentId)
   const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
   const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
+  const pinnedTabsIconOnlyTitle = translate(
+    'settings.general.pinnedTabsIconOnly.title',
+    'Show pinned tabs as icons only'
+  )
+  const pinnedTabsIconOnlyDescription = translate(
+    'settings.general.pinnedTabsIconOnly.description',
+    'Hide the title on pinned tabs so they shrink to their icon and leave more room in the tab strip.'
+  )
   const projectRuntimeSearchEntries = wslSupportedPlatform
     ? getGeneralProjectRuntimeSearchEntries()
     : []
@@ -155,6 +163,20 @@ export function GeneralPane({
             checked={settings.confirmClosePinnedTab ?? true}
             onChange={() =>
               updateSettings({ confirmClosePinnedTab: !(settings.confirmClosePinnedTab ?? true) })
+            }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={pinnedTabsIconOnlyTitle}
+          description={pinnedTabsIconOnlyDescription}
+          keywords={['pinned', 'tab', 'icon', 'compact', 'space']}
+        >
+          <SettingsSwitchRow
+            label={pinnedTabsIconOnlyTitle}
+            description={pinnedTabsIconOnlyDescription}
+            checked={settings.pinnedTabsIconOnly === true}
+            onChange={() =>
+              updateSettings({ pinnedTabsIconOnly: settings.pinnedTabsIconOnly !== true })
             }
           />
         </SearchableSetting>
