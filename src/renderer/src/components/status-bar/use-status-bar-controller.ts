@@ -10,10 +10,11 @@ import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provide
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT, useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
 import { observeStatusBarContainer } from './status-bar-container-observer'
+import { useActiveRuntimeRateLimits } from './use-active-runtime-rate-limits'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
-  const rateLimits = useAppStore((s) => s.rateLimits)
+  const localRateLimits = useAppStore((s) => s.rateLimits)
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -48,6 +49,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   const [containerWidth, setContainerWidth] = useState(900)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const { rateLimits, remoteOwner, refreshRemoteRateLimits } = useActiveRuntimeRateLimits(
+    localRateLimits,
+    settings
+  )
 
   useEffect(() => {
     mountedRef.current = true
@@ -87,13 +92,16 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     setIsRefreshing(true)
     try {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
-      await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
+      await Promise.all([
+        remoteOwner ? refreshRemoteRateLimits() : refreshRateLimits(),
+        remoteOwner ? Promise.resolve() : refreshDetectedAgents()
+      ])
     } finally {
       if (mountedRef.current) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
+  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents, refreshRemoteRateLimits, remoteOwner])
 
   if (!statusBarVisible) {
     return null
@@ -106,7 +114,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // Why: Antigravity visibility also requires geminiCliOAuthEnabled because its usage snapshot mirrors the Gemini fetch.
   const antigravityUsageConfigured =
     statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    (remoteOwner || isStatusBarItemAvailable('antigravity', detectedAgentIds))
   // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
   const usageSettings = {
     ...settings,
@@ -125,29 +133,29 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
-    isStatusBarItemAvailable('claude', detectedAgentIds)
+    (remoteOwner || isStatusBarItemAvailable('claude', detectedAgentIds))
   const showCodex =
     visibleCodex !== null &&
     statusBarItems.includes('codex') &&
-    isStatusBarItemAvailable('codex', detectedAgentIds)
+    (remoteOwner || isStatusBarItemAvailable('codex', detectedAgentIds))
   const showGemini =
     visibleGemini !== null &&
     statusBarItems.includes('gemini') &&
-    isStatusBarItemAvailable('gemini', detectedAgentIds)
+    (remoteOwner || isStatusBarItemAvailable('gemini', detectedAgentIds))
   const showKimi =
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
-    isStatusBarItemAvailable('kimi', detectedAgentIds)
+    (remoteOwner || isStatusBarItemAvailable('kimi', detectedAgentIds))
   const showAntigravity =
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    (remoteOwner || isStatusBarItemAvailable('antigravity', detectedAgentIds))
   // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
-    isStatusBarItemAvailable('grok', detectedAgentIds)
+    (remoteOwner || isStatusBarItemAvailable('grok', detectedAgentIds))
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')

@@ -237,6 +237,24 @@ export function fetchProviderAccountsSnapshot(
   return request
 }
 
+// Forces a fresh provider-usage read on the runtime that owns the accounts.
+// The status bar uses this for remote hosts; local refreshes stay on the
+// desktop RateLimitService so existing account-switch behavior is unchanged.
+export async function refreshRemoteProviderAccountsSnapshot(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+): Promise<ProviderAccountsSnapshot> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind !== 'environment') {
+    throw new Error('Remote provider usage refresh requires an active runtime environment.')
+  }
+  return callRuntimeRpc<ProviderAccountsSnapshot>(
+    target,
+    'accounts.list',
+    { refreshUsage: true },
+    { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
+  )
+}
+
 export async function selectClaudeProviderAccount(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   selection: ProviderAccountSelection

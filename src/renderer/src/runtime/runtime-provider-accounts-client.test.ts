@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/managed-account-types'
 import {
   fetchProviderAccountsSnapshot,
+  refreshRemoteProviderAccountsSnapshot,
   removeClaudeProviderAccount,
   removeCodexProviderAccount,
   selectClaudeProviderAccount,
@@ -396,6 +397,23 @@ describe('fetchProviderAccountsSnapshot', () => {
       rateLimits: null,
       failedProviders: ['claude']
     })
+  })
+})
+
+describe('refreshRemoteProviderAccountsSnapshot', () => {
+  it('forces an all-provider usage refresh on the active remote runtime', async () => {
+    const snapshot = snapshotFixture('refreshed')
+    runtimeEnvironmentCall.mockResolvedValue({ ok: true, result: snapshot })
+
+    await expect(refreshRemoteProviderAccountsSnapshot(REMOTE)).resolves.toEqual(snapshot)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'accounts.list',
+        params: { refreshUsage: true }
+      })
+    )
   })
 })
 
