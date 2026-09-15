@@ -16,9 +16,10 @@ function makeRuntime(
       return Promise.resolve({
         terminals: [],
         totalCount: 0,
+        truncated: false,
         hostScope: undefined,
         ...result
-      } as RuntimeTerminalListResult)
+      } satisfies RuntimeTerminalListResult)
     })
   }
 }
@@ -49,7 +50,7 @@ describe('runServeUpdateCensus', () => {
     })
 
     const partial = makeRuntime({
-      hostScope: { hostIds: [], omittedHostIds: [] } as unknown as RuntimeListingHostScope
+      hostScope: { hostIds: [], omittedHostIds: [] } satisfies RuntimeListingHostScope
     })
     await expect(runServeUpdateCensus(partial)).resolves.toEqual({
       ok: false,
@@ -60,7 +61,22 @@ describe('runServeUpdateCensus', () => {
   it('blocks when terminals are live even with a complete scope', async () => {
     const runtime = makeRuntime({
       hostScope: completeScope,
-      terminals: [{ id: 't1' } as never],
+      terminals: [
+        {
+          handle: 't1',
+          ptyId: null,
+          worktreeId: 'w1',
+          worktreePath: '/repo',
+          branch: 'main',
+          tabId: 'tab1',
+          leafId: 'leaf1',
+          title: null,
+          connected: true,
+          writable: true,
+          lastOutputAt: null,
+          preview: ''
+        }
+      ],
       totalCount: 1
     })
     await expect(runServeUpdateCensus(runtime)).resolves.toEqual({

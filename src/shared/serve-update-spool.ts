@@ -38,6 +38,10 @@ export type ServeUpdateHelperMarker = {
 /** Null verdict means timeout: the helper never answered inside the poll window. */
 export type ServeUpdateVerdict = 'accepted' | 'rejected' | 'failed'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 export function getRequestPath(spoolDir: string): string {
   return join(spoolDir, SERVE_UPDATE_REQUEST_FILE)
 }
@@ -55,39 +59,35 @@ export function getCensusOkPath(spoolDir: string): string {
 }
 
 export function parseServeUpdateResult(value: unknown): ServeUpdateResult | null {
-  if (!value || typeof value !== 'object') {
+  if (!isRecord(value)) {
     return null
   }
-  const state = value as Record<string, unknown>
-  if (state.phase === 'accepted') {
+  const { phase, targetVersion, reason } = value
+  if (phase === 'accepted') {
     // Pre-quit acknowledgement: the helper has claimed the request and the app may exit.
     return { phase: 'accepted' }
   }
-  if (state.phase === 'ok') {
-    return typeof state.targetVersion === 'string' && state.targetVersion.length > 0
-      ? { phase: 'ok', targetVersion: state.targetVersion }
+  if (phase === 'ok') {
+    return typeof targetVersion === 'string' && targetVersion.length > 0
+      ? { phase: 'ok', targetVersion }
       : null
   }
-  if (state.phase === 'rejected' || state.phase === 'failed') {
-    return typeof state.reason === 'string' && state.reason.length > 0
-      ? { phase: state.phase, reason: state.reason }
-      : null
+  if (phase === 'rejected' || phase === 'failed') {
+    return typeof reason === 'string' && reason.length > 0 ? { phase, reason } : null
   }
   return null
 }
 
 export function parseServeUpdateHelperMarker(value: unknown): ServeUpdateHelperMarker | null {
-  if (!value || typeof value !== 'object') {
+  if (!isRecord(value) || typeof value.helperVersion !== 'number') {
     return null
   }
-  const state = value as Record<string, unknown>
-  if (
-    !Number.isInteger(state.helperVersion) ||
-    (state.helperVersion as number) <= 0 ||
-    typeof state.unitName !== 'string' ||
-    state.unitName.length === 0
-  ) {
+  const { helperVersion, unitName } = value
+  if (!Number.isInteger(helperVersion) || helperVersion <= 0) {
     return null
   }
-  return state as ServeUpdateHelperMarker
+  if (typeof unitName !== 'string' || unitName.length === 0) {
+    return null
+  }
+  return { helperVersion, unitName }
 }

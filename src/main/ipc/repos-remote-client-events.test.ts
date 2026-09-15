@@ -56,6 +56,7 @@ beforeEach(() => {
   mockStore.removeProject.mockReset()
   mockStore.removeProjectForHost.mockReset()
   mockStore.reorderRepos.mockReset().mockReturnValue(true)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal test doubles for BrowserWindow/Store/OrcaRuntimeService; handler registration only reads a few members.
   registerRepoHandlers(mainWindow as never, mockStore as never, {} as never)
 })
 
@@ -65,7 +66,7 @@ describe('repo IPC mutations notify paired clients', () => {
   // notifier holder has overwrite semantics, so each test arranges it explicitly.
   it('broadcasts once for repos:remove and still notifies the local renderer', () => {
     const notify = vi.fn()
-    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify } as never)
+    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify })
 
     handlers.get('repos:remove')!(null, { repoId: 'repo-1' })
 
@@ -75,7 +76,7 @@ describe('repo IPC mutations notify paired clients', () => {
 
   it('broadcasts once for repos:removeForHost', () => {
     const notify = vi.fn()
-    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify } as never)
+    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify })
 
     handlers.get('repos:removeForHost')!(null, { repoId: 'repo-1', hostId: 'ssh:host-1' })
 
@@ -85,7 +86,7 @@ describe('repo IPC mutations notify paired clients', () => {
 
   it('broadcasts for non-removal mutations too, via the shared helper', () => {
     const notify = vi.fn()
-    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify } as never)
+    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify })
 
     handlers.get('repos:reorder')!(null, { orderedIds: ['repo-1', 'repo-2'] })
 
@@ -93,7 +94,7 @@ describe('repo IPC mutations notify paired clients', () => {
   })
 
   it('does not throw when no notifier has been set', async () => {
-    setRepoRemoteClientNotifier(null as never)
+    setRepoRemoteClientNotifier(null)
 
     await expect(handlers.get('repos:remove')!(null, { repoId: 'repo-1' })).resolves.toBeUndefined()
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
@@ -104,7 +105,7 @@ describe('repo IPC mutations notify paired clients', () => {
       notifyReposChangedForRemoteClients: () => {
         throw new Error('client event stream exploded')
       }
-    } as never)
+    })
 
     await expect(handlers.get('repos:remove')!(null, { repoId: 'repo-1' })).resolves.toBeUndefined()
   })
@@ -113,8 +114,9 @@ describe('repo IPC mutations notify paired clients', () => {
   // same overwrite semantics the IPC handlers do.
   it('notifyReposChanged fans out through the module-scoped holder', () => {
     const notify = vi.fn()
-    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify } as never)
+    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double for Electron BrowserWindow; only isDestroyed/webContents.send are touched.
     notifyReposChanged(mainWindow as never)
 
     expect(notify).toHaveBeenCalledTimes(1)

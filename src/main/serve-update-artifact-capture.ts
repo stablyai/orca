@@ -10,6 +10,10 @@ import {
 
 const APPIMAGE_EXTENSION = '.appimage'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 export type ServeUpdateArtifactCapture =
   | { ok: true; artifact: ServeUpdateSpoolArtifact }
   | {
@@ -35,7 +39,10 @@ function resolveExpectedSha512(files: unknown, downloadedFile: string): string |
   const targetName = path.basename(downloadedFile)
   let resolved: string | null = null
   for (const entry of files) {
-    const url = (entry as { url?: unknown })?.url
+    if (!isRecord(entry)) {
+      continue
+    }
+    const url = entry.url
     if (typeof url !== 'string' || url.length === 0) {
       continue
     }
@@ -51,7 +58,7 @@ function resolveExpectedSha512(files: unknown, downloadedFile: string): string |
     if (path.posix.basename(pathname) !== targetName) {
       continue
     }
-    const sha512 = (entry as { sha512?: unknown })?.sha512
+    const sha512 = entry.sha512
     if (typeof sha512 !== 'string' || sha512.length === 0) {
       return null
     }
@@ -71,8 +78,10 @@ function resolveExpectedSha512(files: unknown, downloadedFile: string): string |
 export async function captureServeUpdateAppImage(
   event: unknown
 ): Promise<ServeUpdateArtifactCapture> {
-  const downloadedFile = (event as { downloadedFile?: unknown })?.downloadedFile
-  const version = (event as { version?: unknown })?.version
+  if (!isRecord(event)) {
+    return { ok: false, reason: 'missing-metadata' }
+  }
+  const { downloadedFile, version, files } = event
   if (typeof downloadedFile !== 'string' || !path.isAbsolute(downloadedFile)) {
     return { ok: false, reason: 'missing-metadata' }
   }
@@ -82,9 +91,7 @@ export async function captureServeUpdateAppImage(
   if (typeof version !== 'string' || version.length === 0) {
     return { ok: false, reason: 'missing-metadata' }
   }
-  const expected = decodeExpectedDigest(
-    resolveExpectedSha512((event as { files?: unknown })?.files, downloadedFile) ?? ''
-  )
+  const expected = decodeExpectedDigest(resolveExpectedSha512(files, downloadedFile) ?? '')
   if (!expected) {
     return { ok: false, reason: 'missing-metadata' }
   }

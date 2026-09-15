@@ -79,7 +79,10 @@ describe('serve-update-spool', () => {
 
   it('binds the result to the spooled attemptId and target version', () => {
     writeUpdateRequest(VALID_REQUEST)
-    const attemptId = getServeUpdateAttemptId() as string
+    const attemptId = getServeUpdateAttemptId()
+    if (attemptId === undefined) {
+      throw new Error('expected a spooled attemptId')
+    }
     writeFileSync(
       getResultPath(spoolDir),
       JSON.stringify({
@@ -120,14 +123,20 @@ describe('serve-update-spool', () => {
 
   it('a re-spooled request invalidates the previous attemptId binding', () => {
     writeUpdateRequest(VALID_REQUEST)
-    const firstAttempt = getServeUpdateAttemptId() as string
+    const firstAttempt = getServeUpdateAttemptId()
+    if (firstAttempt === undefined) {
+      throw new Error('expected a spooled attemptId')
+    }
     writeFileSync(
       getResultPath(spoolDir),
       JSON.stringify({ attemptId: firstAttempt, targetVersion: '1.4.198', phase: 'ok' })
     )
     expect(readServeUpdateResultFor(firstAttempt, '1.4.198')).not.toBeNull()
     writeUpdateRequest({ ...VALID_REQUEST, targetVersion: '1.4.199' })
-    const secondAttempt = getServeUpdateAttemptId() as string
+    const secondAttempt = getServeUpdateAttemptId()
+    if (secondAttempt === undefined) {
+      throw new Error('expected a spooled attemptId')
+    }
     expect(secondAttempt).not.toBe(firstAttempt)
     // The stale verdict from the first attempt can never be read as this one's.
     expect(readServeUpdateResultFor(firstAttempt, '1.4.199')).toBeNull()

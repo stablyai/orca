@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeTerminalListResult } from '../shared/runtime-terminal-contracts'
 import {
   SHA512,
   SERVE_UPDATE_VERDICT_POLL_MS,
@@ -43,8 +44,12 @@ describe('headless serve update handoff failure paths', () => {
       const updaterModule = await loadUpdaterModule()
       // A census listing without a complete host scope blocks the quit fence.
       updaterModule.setServeUpdateCensusRuntime({
-        listTerminals: async () => ({})
-      } as never)
+        listTerminals: async () => ({
+          terminals: [],
+          totalCount: 0,
+          truncated: false
+        })
+      })
       const {
         checkForUpdatesFromMenu,
         downloadUpdate,
@@ -692,11 +697,14 @@ describe('headless serve update handoff failure paths', () => {
         verdict: 'accepted',
         message: ''
       })
-      const listTerminals = vi.fn(async () => ({
-        terminals: [],
-        totalCount: 0,
-        hostScope: { hostIds: ['local'], omittedHostIds: [] }
-      }))
+      const listTerminals = vi.fn((): Promise<RuntimeTerminalListResult> =>
+        Promise.resolve({
+          terminals: [],
+          totalCount: 0,
+          truncated: false,
+          hostScope: { hostIds: ['local'], omittedHostIds: [] }
+        })
+      )
       harness.autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         harness.autoUpdaterMock.emit('checking-for-update')
         queueMicrotask(() =>
@@ -706,7 +714,7 @@ describe('headless serve update handoff failure paths', () => {
       })
 
       const updaterModule = await loadUpdaterModule()
-      updaterModule.setServeUpdateCensusRuntime({ listTerminals } as never)
+      updaterModule.setServeUpdateCensusRuntime({ listTerminals })
       const {
         checkForUpdatesFromMenu,
         downloadUpdate,
