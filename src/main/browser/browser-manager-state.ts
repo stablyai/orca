@@ -7,7 +7,8 @@ import {
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import type {
   BrowserLoadError,
-  BrowserSessionUserAgentMode
+  BrowserSessionUserAgentMode,
+  BrowserViewportOverride
 } from '../../shared/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from './browser-route-guest-popup-ownership'
 import type {
@@ -129,6 +130,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   // Why: presence means the preset requires a CDP UA override (installed or in flight), so navigation
   // can re-issue it against the target URL's identity.
   protected readonly viewportUaOverrideMobileByTabId = new Map<string, boolean>()
+  // Why: debugger detach drops Emulation.* state; retain the user-selected preset so a later
+  // reapply can restore metrics without attaching guests that have no preset.
+  protected readonly viewportOverrideByTabId = new Map<string, BrowserViewportOverride>()
+  // Why: an older in-flight doSet must not overwrite a newer queued set/clear after its own CDP step.
+  protected readonly viewportOverrideRequestGenerationByTabId = new Map<string, number>()
   // Why: the confirmed CDP identity outranks getUserAgent; pending intent keeps rapid navigations
   // ordered without claiming a failed write was installed.
   protected readonly authUserAgentOverrideStateByGuestId = new Map<
@@ -196,13 +202,32 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   // UA override, so the confirmed-override record must be dropped or the next auth navigation
   // believes the identity is still installed and skips the write.
   protected trackDebuggerDetachForAuthUserAgent(guest: Electron.WebContents): () => void {
+    const reapplyStandingViewportIfReady = (): void => {
+      // Why: debugger.detach fires when DevTools opens, not when it closes; attach throws while open.
+      if (guest.isDestroyed() || guest.isDevToolsOpened?.()) {
+        return
+      }
+      const browserTabId = this.tabIdByWebContentsId.get(guest.id)
+      if (browserTabId && this.viewportOverrideByTabId.has(browserTabId)) {
+        this.reapplyStandingViewportOverride(browserTabId)
+      }
+    }
     const onDetach = (): void => {
       this.authUserAgentOverrideStateByGuestId.delete(guest.id)
+      reapplyStandingViewportIfReady()
+    }
+    const onDevToolsClosed = (): void => {
+      reapplyStandingViewportIfReady()
     }
     try {
       guest.debugger.on('detach', onDetach)
     } catch {
       /* debugger may be unavailable */
+    }
+    try {
+      guest.on('devtools-closed', onDevToolsClosed)
+    } catch {
+      /* guest events may be unavailable */
     }
     return () => {
       try {
@@ -210,8 +235,17 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       } catch {
         /* guest may already be destroyed */
       }
+      try {
+        guest.off('devtools-closed', onDevToolsClosed)
+      } catch {
+        /* guest may already be destroyed */
+      }
     }
   }
+
+  // Why a hook: Registration sits above Viewport in the mixin chain, so guest-swap restore
+  // dispatches here and the Viewport override enqueues the actual CDP write.
+  protected reapplyStandingViewportOverride(_browserTabId: string): void {}
 
   protected resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
     return this.resolvePopupOwnerContext(guestWebContentsId)?.browserTabId ?? null

@@ -48,19 +48,78 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     // The renderer resizes the host before CDP completes; discard the old geometry until it
     // reports the new pane bounds so a pending preset cannot route wheel input using stale limits.
     this.viewportScrollStateByTabId.delete(browserTabId)
+    const previousOverride = this.viewportOverrideByTabId.get(browserTabId)
+    const previousUaMobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
+    const generation = this.advanceViewportOverrideRequestGeneration(browserTabId)
+    this.applyLatestViewportOverrideIntent(browserTabId, override)
+    return this.enqueueViewportOperation(browserTabId, () =>
+      this.doSetViewportOverrideImpl(
+        browserTabId,
+        override,
+        expectedWebContentsId,
+        generation,
+        previousOverride,
+        previousUaMobile
+      )
+    )
+  }
+
+  protected advanceViewportOverrideRequestGeneration(browserTabId: string): number {
+    const generation = (this.viewportOverrideRequestGenerationByTabId.get(browserTabId) ?? 0) + 1
+    this.viewportOverrideRequestGenerationByTabId.set(browserTabId, generation)
+    return generation
+  }
+
+  protected isLatestViewportOverrideRequest(browserTabId: string, generation: number): boolean {
+    return this.viewportOverrideRequestGenerationByTabId.get(browserTabId) === generation
+  }
+
+  protected applyLatestViewportOverrideIntent(
+    browserTabId: string,
+    override: BrowserViewportOverride | null
+  ): void {
+    if (override) {
+      this.viewportOverrideByTabId.set(browserTabId, { ...override })
+      if (this.userAgentModeByPageId.get(browserTabId) !== 'native') {
+        this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
+      } else {
+        this.viewportUaOverrideMobileByTabId.delete(browserTabId)
+      }
+      return
+    }
+    this.viewportOverrideByTabId.delete(browserTabId)
+    this.viewportUaOverrideMobileByTabId.delete(browserTabId)
+  }
+
+  protected async enqueueViewportOperation(
+    browserTabId: string,
+    operation: () => Promise<boolean>
+  ): Promise<boolean> {
     const prev = this.viewportOpsByTabId.get(browserTabId) ?? Promise.resolve()
-    const next = prev
-      .catch(() => {})
-      .then(() => this.doSetViewportOverrideImpl(browserTabId, override, expectedWebContentsId))
+    const next = prev.catch(() => {}).then(operation)
     this.viewportOpsByTabId.set(browserTabId, next)
     try {
       return await next
     } finally {
-      // Why: only clear if we're still the tail; a later call may have replaced the entry, and deleting would break serialization.
       if (this.viewportOpsByTabId.get(browserTabId) === next) {
         this.viewportOpsByTabId.delete(browserTabId)
       }
     }
+  }
+
+  protected override reapplyStandingViewportOverride(browserTabId: string): void {
+    void this.enqueueViewportOperation(browserTabId, async () => {
+      const override = this.viewportOverrideByTabId.get(browserTabId)
+      if (!override) {
+        return false
+      }
+      return this.doSetViewportOverrideImpl(
+        browserTabId,
+        override,
+        this.webContentsIdByTabId.get(browserTabId),
+        this.viewportOverrideRequestGenerationByTabId.get(browserTabId) ?? 0
+      )
+    }).catch(() => {})
   }
 
   async setAnnotationViewportBridge(
@@ -117,7 +176,10 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
   protected async doSetViewportOverrideImpl(
     browserTabId: string,
     override: BrowserViewportOverride | null,
-    expectedWebContentsId: number | undefined
+    expectedWebContentsId: number | undefined,
+    generation: number,
+    previousOverride?: BrowserViewportOverride,
+    previousUaMobile?: boolean
   ): Promise<boolean> {
     const webContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (!webContentsId || webContentsId !== expectedWebContentsId) {
@@ -145,6 +207,8 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     }
 
     const dbg = guest.debugger
+    const stillOnExpectedGuest = (): boolean =>
+      this.webContentsIdByTabId.get(browserTabId) === webContentsId
     try {
       if (override) {
         await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
@@ -153,7 +217,10 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
           deviceScaleFactor: override.deviceScaleFactor,
           mobile: override.mobile
         })
-        if (this.webContentsIdByTabId.get(browserTabId) === webContentsId) {
+        if (!stillOnExpectedGuest()) {
+          return false
+        }
+        if (this.isLatestViewportOverrideRequest(browserTabId, generation)) {
           this.viewportPresetActiveByTabId.set(browserTabId, {
             guestWebContentsId: webContentsId,
             active: true
@@ -163,10 +230,11 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
           enabled: override.mobile,
           maxTouchPoints: override.mobile ? 5 : 0
         })
+        if (!stillOnExpectedGuest()) {
+          return false
+        }
         // Why: viewport sizing must not override a profile's explicit native-UA identity.
         if (this.userAgentModeByPageId.get(browserTabId) !== 'native') {
-          // Navigation must see the preset intent while the final CDP command is in flight.
-          this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
           // Why: same sender as the navigation path, so both resolve the tab's host identically.
           await this.sendViewportUserAgentOverride(guest, override.mobile)
         }
@@ -182,9 +250,6 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
           enabled: false,
           maxTouchPoints: 0
         })
-        const trackedMobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
-        // A navigation after this point must not re-install the override behind the clear.
-        this.viewportUaOverrideMobileByTabId.delete(browserTabId)
         try {
           if (this.authUserAgentOverrideStateByGuestId.has(guest.id)) {
             const url = this.resolveTabNavigationUrl(guest)
@@ -202,8 +267,13 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
             await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
           }
         } catch (error) {
-          if (trackedMobile !== undefined) {
-            this.viewportUaOverrideMobileByTabId.set(browserTabId, trackedMobile)
+          if (this.isLatestViewportOverrideRequest(browserTabId, generation)) {
+            if (previousUaMobile !== undefined) {
+              this.viewportUaOverrideMobileByTabId.set(browserTabId, previousUaMobile)
+            }
+            if (previousOverride) {
+              this.viewportOverrideByTabId.set(browserTabId, previousOverride)
+            }
           }
           throw error
         }
