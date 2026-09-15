@@ -36,8 +36,8 @@ export const OPERATION_MUTATIONS = {
   // Reads the overrides one level above the settings envelope.
   'bot-overrides-envelope': {
     file: 'settings-read-operations.ts',
-    before: "settings == null ? undefined : Reflect.get(Object(settings), 'prBotAuthorOverrides')",
-    after: "raw == null ? undefined : Reflect.get(Object(raw), 'prBotAuthorOverrides')"
+    before: "settings == null ? undefined : settingsField(settings, 'prBotAuthorOverrides')",
+    after: "raw == null ? undefined : settingsField(raw, 'prBotAuthorOverrides')"
   },
   // Publishes the settings envelope instead of the accepted operation value.
   'workspace-context-envelope': {

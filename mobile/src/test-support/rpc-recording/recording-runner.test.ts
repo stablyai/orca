@@ -445,7 +445,7 @@ describe('recording boundaries', () => {
     const root = mkdtempSync(join(tmpdir(), 'rpc-mutant-'))
     try {
       const anchor =
-        "const overrides = settings == null ? undefined : Reflect.get(Object(settings), 'prBotAuthorOverrides')"
+        "const overrides = settings == null ? undefined : settingsField(settings, 'prBotAuthorOverrides')"
       mkdirSync(join(root, 'mod'), { recursive: true })
       writeFileSync(
         join(root, 'mod/settings-read-operations.ts'),

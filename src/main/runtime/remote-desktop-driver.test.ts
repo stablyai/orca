@@ -340,17 +340,18 @@ describe('remote desktop viewer width driver', () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 24, false)
-    const layoutQueues = Reflect.get(runtime, 'layoutQueues') as Map<
-      string,
-      { running: Promise<unknown>; pending: { target: { ownerSubscriptionKey?: string } }[] }
-    >
-    layoutQueues.set('pty-1', { running: new Promise(() => {}), pending: [] })
+    const layoutQueues = runtime['layoutQueues']
+    layoutQueues.set('pty-1', { running: new Promise<never>(() => {}), pending: [] })
 
     void runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 90, 28)
     void runtime.claimRemoteDesktopViewer('pty-1', 'sub-B')
 
     expect(
-      layoutQueues.get('pty-1')?.pending.map(({ target }) => target.ownerSubscriptionKey)
+      layoutQueues
+        .get('pty-1')
+        ?.pending.map(({ target }) =>
+          'ownerSubscriptionKey' in target ? target.ownerSubscriptionKey : undefined
+        )
     ).toEqual(['sub-A', 'sub-B'])
     layoutQueues.delete('pty-1')
   })
@@ -358,11 +359,8 @@ describe('remote desktop viewer width driver', () => {
   it('makes a host claim join a pending disconnect reclaim', async () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 24)
-    const layoutQueues = Reflect.get(runtime, 'layoutQueues') as Map<
-      string,
-      { running: Promise<unknown>; pending: { waiters: unknown[] }[] }
-    >
-    layoutQueues.set('pty-1', { running: new Promise(() => {}), pending: [] })
+    const layoutQueues = runtime['layoutQueues']
+    layoutQueues.set('pty-1', { running: new Promise<never>(() => {}), pending: [] })
 
     void runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
     void runtime.claimRemoteDesktopHost('pty-1', 150, 40)

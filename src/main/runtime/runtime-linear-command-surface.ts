@@ -47,6 +47,7 @@ function overrideAwareReceiver(
           return override.bind(facade)
         }
       }
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: raw string|symbol pass-through; the receiver stays the target on purpose.
       return Reflect.get(target, property, proxyReceiver)
     }
   })

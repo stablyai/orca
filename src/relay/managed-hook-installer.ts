@@ -45,7 +45,9 @@ function readAgents(params: unknown): AgentHookTarget[] {
 
 function readClaudeVersion(params: unknown): string | undefined {
   const raw =
-    params !== null && typeof params === 'object' ? Reflect.get(params, 'claudeVersion') : null
+    params !== null && typeof params === 'object' && 'claudeVersion' in params
+      ? params.claudeVersion
+      : null
   return parseClaudeCliVersion(typeof raw === 'string' ? raw : null) ?? undefined
 }
 
