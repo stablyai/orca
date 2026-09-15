@@ -20,6 +20,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
 
+  it('maps GDScript files to the custom gdscript language id', () => {
+    expect(detectLanguage('scripts/player.gd')).toBe('gdscript')
+    expect(detectLanguage('C:\\game\\scripts\\PLAYER.GD')).toBe('gdscript')
+  })
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')
