@@ -54,6 +54,8 @@ export type JournalSubmissionInput = {
   payloadFingerprint: string
   body: AgentJournalMessageItem
   fence: number
+  /** Id the caller will stamp on the provider frame, recorded before it is sent. */
+  providerWireUuid?: string | null
 }
 
 export type JournalItemAppendInput = {

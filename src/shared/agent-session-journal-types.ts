@@ -246,6 +246,14 @@ export type AgentJournalSubmission = {
   reason: string | null
   submittedAt: number
   resolvedAt: number | null
+  /** Id stamped on the dispatched provider frame, durable before the wire write.
+   *  Three states, and collapsing them loses the only thing it is good for:
+   *  a string is the id this send was dispatched with; `null` is this host
+   *  recording that the row carries none; ABSENT is a host that predates the
+   *  field, which knows nothing either way. Absence must never be read as
+   *  "no id recorded, therefore decidable". Whether the provider adopted the id
+   *  is a separate observed fact, not implied by its presence here. */
+  providerWireUuid?: string | null
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live
    *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
   recovered?: true

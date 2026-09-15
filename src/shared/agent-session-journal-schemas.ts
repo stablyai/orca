@@ -212,6 +212,9 @@ export const AgentJournalSubmissionSchema = z.object({
   reason: z.string().nullable(),
   submittedAt: z.number(),
   resolvedAt: z.number().nullable(),
+  // Optional AND nullable on purpose: an old host omits the key entirely, which
+  // is not the same answer as a host that recorded no id.
+  providerWireUuid: z.string().nullable().optional(),
   recovered: z.literal(true).optional()
 })
 

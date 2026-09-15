@@ -255,7 +255,13 @@ export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
 
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
-  input: { clientMessageId?: string; body: AgentJournalMessageItem }
+  input: {
+    clientMessageId?: string
+    body: AgentJournalMessageItem
+    /** Already persisted with the submission. Minting a second id here would
+     *  leave the durable row naming a message the provider never saw. */
+    providerWireUuid?: string
+  }
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
   try {
@@ -270,7 +276,9 @@ export async function dispatchClaudeTurn(
   // Read the sent content, not the journal blocks: only the mapped trailing prompt decides
   // whether Claude runs a command, so the two cannot disagree about which frame settles this.
   const acceptsResult = claudeDispatchInvokesSlashCommand(content)
-  const sentUuid = randomUUID()
+  // Caller-supplied whenever a durable submission backs this dispatch; internal
+  // sends (compaction) still mint their own, which nothing needs to recover.
+  const sentUuid = input.providerWireUuid ?? randomUUID()
   const replay = waitForReplay(
     session,
     acceptsResult,

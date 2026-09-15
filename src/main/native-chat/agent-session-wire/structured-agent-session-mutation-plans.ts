@@ -84,6 +84,9 @@ export function sendPlan(params: {
           reason: DISPATCH_DOUBT_SUBMISSION_MISSING,
           submittedAt: resolvedAt,
           resolvedAt,
+          // The row is gone, so this host has no id to report — `null`, which is
+          // a recorded answer, not the absence an older host would send.
+          providerWireUuid: null,
           recovered: true
         }
       }

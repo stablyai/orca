@@ -6,6 +6,7 @@
 // row the next attach settles as `unknown`, whereas the reverse would lose a
 // turn the provider already accepted.
 
+import { randomUUID } from 'node:crypto'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
@@ -50,13 +51,15 @@ function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal
 async function dispatchSafely(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  providerWireUuid: string
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     return await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
       body,
+      providerWireUuid,
       fence: ctx.fence
     })
   } catch (error) {
@@ -105,14 +108,19 @@ export async function performSend(
       value: { clientMessageId: input.clientMessageId, submission: existing }
     }
   }
+  // Minted HERE and durable before the dispatch below, so the id naming this
+  // send on the wire is recoverable after a crash. Reattach can then match the
+  // provider's own record by identity instead of inferring delivery from
+  // absence in a content window.
+  const providerWireUuid = randomUUID()
   try {
-    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
+    await ctx.journal.appendSubmission({ ...input, providerWireUuid, fence: ctx.fence })
   } catch {
     return invalid('The message could not be recorded and was not sent.')
   }
   ctx.publish()
 
-  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body, providerWireUuid)
   // An admission needs no dispatch row: the submission is already pending.
   if (outcome.state === 'admitted') {
     ctx.publish()

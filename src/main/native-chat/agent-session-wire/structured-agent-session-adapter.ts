@@ -160,6 +160,10 @@ export type StructuredAgentSessionAdapter = {
     clientMessageId: string
     body: AgentJournalMessageItem
     fence: number
+    /** Already durable in the submission row. An adapter that puts an id on the
+     *  provider frame must use THIS one, not mint its own, or the persisted
+     *  receipt names a message the provider never saw. */
+    providerWireUuid?: string
   }): Promise<AgentSessionDispatchOutcome>
   rewindSupport?(sessionId: string): AgentSessionRewindSupport
   recoverRewind?(input: {

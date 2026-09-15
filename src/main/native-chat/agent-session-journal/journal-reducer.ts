@@ -248,7 +248,10 @@ function applySubmission(
     providerItemId: null,
     reason: null,
     submittedAt: row.ts,
-    resolvedAt: null
+    resolvedAt: null,
+    // A row written before the field existed carries no id, which is `null` —
+    // this host read the row, so the answer is known to be "none".
+    providerWireUuid: row.providerWireUuid ?? null
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
   upsertItem(state, itemId, 0, {

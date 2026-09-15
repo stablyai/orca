@@ -69,6 +69,10 @@ export type JournalSubmissionRow = JournalRowBase & {
   payloadFingerprint: string
   providerHandle: AgentSessionProviderHandle
   body: AgentJournalMessageItem
+  /** Id stamped on the dispatched provider frame, written here BEFORE the wire
+   *  write so reattach can match delivery by identity. Absent on rows written
+   *  before the field existed; those project `null`. */
+  providerWireUuid?: string | null
 }
 
 export type JournalDispatchRow = JournalRowBase & {
@@ -205,6 +209,7 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
       record.clientMessageId.length > 0 &&
       typeof record.payloadFingerprint === 'string' &&
       isPlainObject(record.providerHandle) &&
+      isOptionalWireUuid(record.providerWireUuid) &&
       isAdmissibleAgentJournalMessageBody(record.body)
     )
   }
@@ -230,6 +235,12 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
     )
   }
   return typeof record.reason === 'string' && isPlainObject(record.providerHandle)
+}
+
+/** Absent on every row predating the field, null when the dispatch recorded no
+ *  wire id. Neither is a malformed row. */
+function isOptionalWireUuid(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string'
 }
 
 function isLifecycleMutation(value: unknown): value is JournalLifecycleMutation {
