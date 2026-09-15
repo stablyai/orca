@@ -181,3 +181,5 @@ tests/e2e/.cross-version-checkouts/
 # IS committed). Also keeps oxfmt/oxlint, which honor this file, from walking
 # vendored gems.
 /mobile/vendor/
+
+!examples/environments/vercel-sandbox/package-lock.json
