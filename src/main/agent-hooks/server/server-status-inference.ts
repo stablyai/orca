@@ -40,6 +40,10 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     }
     const payload = existing.payload
     const agentType: AgentType | undefined = payload.agentType
+    // DSH completion is authoritative only when its host receives a terminal turn event.
+    if (agentType === 'dsh-console') {
+      return false
+    }
     // Why: Droid's Ctrl+C exits the CLI (handled by PTY lifecycle) rather than interrupting the current turn.
     if (agentType === 'droid' && request.intent === 'ctrl-c') {
       return false

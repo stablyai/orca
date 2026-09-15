@@ -22,6 +22,7 @@ afterEach(() => vi.restoreAllMocks())
  *  classifier names no boundary for that source. That is not the same as "can never revive":
  *  mimo-code's boundary is an explicit-prompt MessagePart, which the gate handles separately. */
 const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
+  'dsh-console': 'UserPromptSubmit',
   claude: 'SessionStart',
   kimi: 'UserPromptSubmit',
   codex: 'SessionStart',

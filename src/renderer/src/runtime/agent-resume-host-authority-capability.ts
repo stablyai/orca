@@ -2,6 +2,7 @@ import type { ResumableTuiAgent } from '../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_DSH_CONSOLE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
@@ -13,6 +14,7 @@ import {
 // The exhaustive Record makes the next RESUMABLE_TUI_AGENTS entry a compile error until its own
 // gate — or a deliberate `undefined` — is declared here.
 const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
+  'dsh-console': AGENT_SESSION_DSH_CONSOLE_RESUME_RUNTIME_CAPABILITY,
   // These shipped inside agent-session.host-authority.v1's enum, so the generic probe covers them.
   claude: undefined,
   codex: undefined,

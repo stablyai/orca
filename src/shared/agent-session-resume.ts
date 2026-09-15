@@ -3,6 +3,7 @@ import type { AgentStatusState } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
 
 export const RESUMABLE_TUI_AGENTS = [
+  'dsh-console',
   'claude',
   'codex',
   'gemini',
@@ -192,6 +193,7 @@ export function extractAgentProviderSession(
       return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
     }
     case 'gemini':
+    case 'dsh-console':
     case 'droid':
     // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
     // falls through
@@ -250,6 +252,8 @@ export function getAgentResumeArgv(
 ): string[] | null {
   const id = providerSession.id
   switch (agent) {
+    case 'dsh-console':
+      return providerSession.key === 'session_id' ? ['dsh-console', '--resume', id] : null
     case 'claude':
       return providerSession.key === 'session_id' ? ['claude', '--resume', id] : null
     case 'codex':

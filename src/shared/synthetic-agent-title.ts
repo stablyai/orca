@@ -11,6 +11,7 @@ export type SyntheticAgentTitleProfile = {
 }
 
 export const SYNTHETIC_AGENT_TITLE_AGENTS = [
+  'dsh-console',
   'codex',
   'cursor',
   'opencode',
@@ -22,6 +23,11 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
+  'dsh-console': {
+    workingLabel: 'DSH Console',
+    permissionLabel: 'DSH Console - action required',
+    idleLabel: 'DSH Console ready'
+  },
   codex: {
     workingLabel: 'Codex',
     permissionLabel: 'Codex - action required',
