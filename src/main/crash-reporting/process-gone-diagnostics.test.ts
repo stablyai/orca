@@ -84,6 +84,8 @@ describe('process gone diagnostics', () => {
 
     expect(buildProcessGoneCrashDetails({ processType: 'renderer' }, 'renderer')).toEqual({
       processType: 'renderer',
+      // Always present, zero included: an absent field reads as "nobody looked".
+      hostProcessSpawnRefusedCount: 0,
       processMetricsCount: 3,
       processMetricsBrowserCount: 1,
       processMetricsBrowserWorkingSetMB: 431,

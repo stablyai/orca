@@ -162,6 +162,40 @@ describe('pre-gone host memory', () => {
     expect(getSystemMemoryDetails('darwin').systemMemoryPressureSignal).toBe('none')
   })
 
+  it("says 'none' means not computed, because it reads as its own opposite", () => {
+    // Report 3402d7fa carried systemMemoryPressureSignal 'none' beside 28 MB
+    // free and an investigator read it as "the host was not under pressure".
+    setSystemMemoryInfoReaderForTest(() => ({
+      total: 16_000 * 1024,
+      free: 28 * 1024,
+      fileBacked: 2_694 * 1024,
+      purgeable: 0
+    }))
+    const darwin = getSystemMemoryDetails('darwin')
+    expect(darwin.systemMemoryPressureSignal).toBe('none')
+    expect(darwin.systemMemoryPressureSignalComputed).toBe(false)
+
+    setSystemMemoryInfoReaderForTest(() => ({ total: 16_000 * 1024, available: 900 * 1024 }))
+    expect(getSystemMemoryDetails('linux').systemMemoryPressureSignalComputed).toBe(true)
+
+    // Relabelling must move both keys, or the two writers disagree.
+    setSystemMemoryInfoReaderForTest(() => UNDER_COMMIT_PRESSURE)
+    expect(
+      withSwapVolumeFreeSpace(
+        getSystemMemoryDetails('darwin'),
+        { freeMB: 120, volume: '/' },
+        'darwin'
+      ).systemMemoryPressureSignalComputed
+    ).toBe(false)
+    expect(
+      withSwapVolumeFreeSpace(
+        getSystemMemoryDetails('win32'),
+        { freeMB: 120, volume: 'C:' },
+        'win32'
+      ).systemMemoryPressureSignalComputed
+    ).toBe(true)
+  })
+
   // Why this and not the volume number: the branch's own repro needed a pagefile
   // that CANNOT grow to kill anything, and neither the pagefile maximum nor its
   // drive is readable here — `swapVolumeAnchor` measures SystemRoot's volume,

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot,
+  HOST_PROCESS_SPAWN_REFUSED_BREADCRUMB,
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from './crash-breadcrumb-store'
@@ -329,7 +330,7 @@ describe('crash breadcrumb store', () => {
   })
 
   it('caps retained high-water profiles', () => {
-    for (let index = 0; index < 9; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       recordCrashBreadcrumb('renderer_memory_highwater', {
         rendererSurface: `surface-${index}`,
         thresholdPct: 80
@@ -346,8 +347,32 @@ describe('crash breadcrumb store', () => {
       'surface-5',
       'surface-6',
       'surface-7',
-      'surface-8'
+      'surface-8',
+      'surface-9'
     ])
+  })
+
+  // The host-refusal crumb shares this map, and the memory ladders are exactly
+  // the evidence a spawn-refusing host also needs: it must add a slot, not take one.
+  it('does not spend a high-water slot on the host-refusal crumb', () => {
+    for (const rendererSurface of ['main', 'dashboard-popout']) {
+      for (const thresholdPct of [60, 80]) {
+        recordCrashBreadcrumb('renderer_memory_highwater', { rendererSurface, thresholdPct })
+      }
+      for (const thresholdPrivateMB of [600, 1000]) {
+        recordCrashBreadcrumb('renderer_memory_highwater', { rendererSurface, thresholdPrivateMB })
+      }
+    }
+    recordCrashBreadcrumb(HOST_PROCESS_SPAWN_REFUSED_BREADCRUMB, { program: 'git.exe' })
+
+    const snapshot = getCrashBreadcrumbSnapshot()
+
+    expect(
+      snapshot.filter((breadcrumb) => breadcrumb.name === 'renderer_memory_highwater')
+    ).toHaveLength(8)
+    expect(
+      snapshot.filter((breadcrumb) => breadcrumb.name === HOST_PROCESS_SPAWN_REFUSED_BREADCRUMB)
+    ).toHaveLength(1)
   })
 
   it('retains both threshold ladders for both renderer surfaces', () => {
