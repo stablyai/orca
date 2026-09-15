@@ -286,6 +286,7 @@
     "rehype-sanitize": "^6.0.0",
     "rehype-slug": "^6.0.0",
     "remark-breaks": "^4.0.0",
+    "remark-cjk-friendly": "^2.3.1",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
