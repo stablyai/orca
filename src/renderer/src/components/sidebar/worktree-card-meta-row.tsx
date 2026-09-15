@@ -4,6 +4,7 @@ import { GitMerge } from 'lucide-react'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
+import { translate } from '@/i18n/i18n'
 import CacheTimer from './CacheTimer'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import { TruncatedSidebarLabel } from './truncated-sidebar-label'
@@ -34,6 +35,7 @@ export function WorktreeCardMetaRow({
   const {
     showRepoBadgeInMetaRow,
     showHostContextBadge,
+    showBoardProjectLabel,
     showIdentityInNewCard,
     hasHoverDetails,
     showBranch,
@@ -63,6 +65,21 @@ export function WorktreeCardMetaRow({
             <span className="truncate">{hostContextLabel}</span>
           </Badge>
         )}
+
+        {showBoardProjectLabel && repo ? (
+          <Badge
+            variant="secondary"
+            className="h-[16px] max-w-[8rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
+            data-worktree-card-project-label=""
+            aria-label={translate(
+              'auto.components.sidebar.WorktreeCard.35ccfe2475',
+              'Project {{value0}}',
+              { value0: repo.displayName }
+            )}
+          >
+            <span className="truncate">{repo.displayName}</span>
+          </Badge>
+        ) : null}
 
         {showIdentityInNewCard ? (
           <TruncatedSidebarLabel
