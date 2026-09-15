@@ -106,11 +106,10 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
             {navigation.visibleNavSections.length === 0 ? (
               <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
                 {translate(
-                  'auto.components.settings.Settings.3c88ec55d6',
-                  'No settings found for "'
+                  'auto.components.settings.Settings.noSettingsFoundForQuery',
+                  'No settings found for "{{value0}}"',
+                  { value0: model.settingsSearchQuery.trim() }
                 )}
-                {model.settingsSearchQuery.trim()}
-                {translate('auto.components.settings.Settings.add3b97ee6', '"')}
               </div>
             ) : (
               <ActiveSettingsSectionProvider value={model.activeSectionId}>
