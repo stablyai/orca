@@ -34,4 +34,40 @@ describe('buildRuntimeWorktreePsSummaries', () => {
 
     expect(summary?.hostId).toBe('ssh:persisted-host')
   })
+
+  it('stamps folder-workspace host ownership from the resolved worktree row', () => {
+    const folderWorkspace = {
+      id: 'folder-ssh',
+      projectGroupId: 'group-1',
+      name: 'SSH folder',
+      folderPath: '/remote/folder',
+      connectionId: 'box-2',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    }
+    const store = {
+      getRepos: () => [],
+      getWorktreeMeta: () => undefined,
+      getAllWorktreeMeta: () => ({}),
+      getFolderWorkspaces: () => [folderWorkspace],
+      getProjectGroups: () => [{ id: 'group-1', name: 'Group', parentPath: '/remote' }]
+    } as unknown as RuntimeStore
+
+    const summary = [
+      ...buildRuntimeWorktreePsSummaries({
+        store,
+        resolvedWorktrees: [],
+        platformByRepoId: new Map()
+      }).values()
+    ][0]
+
+    expect(summary?.hostId).toBe('ssh:box-2')
+  })
 })

@@ -170,6 +170,7 @@ type RuntimeTypeInventory = [
   Runtime.RuntimeTerminalWaitCondition,
   Runtime.RuntimeWorktreeAgentRow,
   Runtime.RuntimeWorktreeCreateResult,
+  Runtime.RuntimeWorktreeListHostScope,
   Runtime.RuntimeWorktreeListResult,
   Runtime.RuntimeWorktreePsConditionalResult,
   Runtime.RuntimeWorktreePsResult,
