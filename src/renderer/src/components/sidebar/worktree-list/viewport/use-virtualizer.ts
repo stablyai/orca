@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef } from 'react'
 import type React from 'react'
 import {
   measureElement as measureVirtualElementSize,
+  observeElementOffset as observeElementOffsetDefault,
   useVirtualizer
 } from '@tanstack/react-virtual'
 import type { Range } from '@tanstack/react-virtual'
@@ -135,6 +136,16 @@ export function useWorktreeListVirtualizer(args: {
     useFlushSync: false,
     // Why: seed scrollOffset from the ref (not 0) so the first getVirtualItems() after remount picks the right rows.
     initialOffset: () => scrollOffsetRef.current,
+    // @tanstack/virtual-core@3.17.8: observeOffset only registers a scroll listener and never reads
+    // the element once, so the seed above survives until a scroll event — which a list too short to
+    // scroll never fires. Read once at subscribe, then hand off to the stock implementation.
+    observeElementOffset: (instance, onOffset) => {
+      const element = instance.scrollElement
+      if (element) {
+        onOffset(instance.options.horizontal ? element.scrollLeft : element.scrollTop, false)
+      }
+      return observeElementOffsetDefault(instance, onOffset)
+    },
     getItemKey: getVirtualItemKey
   })
   // Why: TanStack's default correction writes scrollTop while cards remeasure mid-wheel, which feels like rubber-banding.

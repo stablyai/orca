@@ -7,7 +7,8 @@ import {
   extractWorktreeVirtualRowIndexes,
   getActiveStickyIndexesForScroll,
   getStickyHeaderIndexes,
-  pruneStaleVirtualRowElementCache
+  pruneStaleVirtualRowElementCache,
+  resolveStickyScrollOffset
 } from './virtual-rows'
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
@@ -341,5 +342,104 @@ describe('pruneStaleVirtualRowElementCache', () => {
     expect(virtualizer.elementsCache.get('wt:active')).toBe(activeElement)
     expect(virtualizer.elementsCache.has('wt:stale')).toBe(false)
     expect(virtualizer.elementsCache.get('wt:connected-stale')).toBe(connectedStaleElement)
+  })
+})
+
+// STA-6697: a card growing after mount books a size correction into the
+// virtualizer's remembered offset without the element moving. In a list too
+// short to scroll the element can never catch up, so every sticky decision made
+// against the remembered value describes a viewport the user is not looking at.
+describe('resolveStickyScrollOffset', () => {
+  // Two projects, collapsed: header, its row, header, its row.
+  const shortRows: RenderRow[] = [
+    groupRow('project-a'),
+    itemStub('wt-a'),
+    groupRow('project-b'),
+    itemStub('wt-b')
+  ]
+  const shortSticky = getStickyHeaderIndexes(shortRows)
+  const shortItems = [
+    virtualItem(0, 0),
+    virtualItem(1, 36),
+    virtualItem(2, 70),
+    virtualItem(3, 106)
+  ]
+  // The believed offset the reporter measured while the element sat at 0.
+  const DRIFTED_OFFSET = 70
+
+  it('reads the element, which cannot drift, in preference to the remembered offset', () => {
+    expect(
+      resolveStickyScrollOffset({
+        element: { scrollTop: 0 },
+        virtualizerOffset: DRIFTED_OFFSET,
+        fallbackOffset: DRIFTED_OFFSET
+      })
+    ).toBe(0)
+  })
+
+  it('falls back to the remembered offset before an element exists', () => {
+    expect(
+      resolveStickyScrollOffset({ element: null, virtualizerOffset: 42, fallbackOffset: 7 })
+    ).toBe(42)
+    expect(
+      resolveStickyScrollOffset({ element: null, virtualizerOffset: null, fallbackOffset: 7 })
+    ).toBe(7)
+  })
+
+  it('keeps the first project pinned when the list cannot scroll (STA-6697)', () => {
+    // The drifted offset also advanced the virtualizer's range, so the candidate
+    // handed to the sticky resolver is already the second project.
+    const active = getActiveStickyIndexesForScroll({
+      rows: shortRows,
+      rangeStartIndex: 2,
+      scrollOffset: resolveStickyScrollOffset({
+        element: { scrollTop: 0 },
+        virtualizerOffset: DRIFTED_OFFSET,
+        fallbackOffset: DRIFTED_OFFSET
+      }),
+      stickyHeaderIndexes: shortSticky,
+      virtualItems: shortItems
+    })
+
+    // Project A is what fills the viewport, so Project A stays pinned. Pinning B
+    // paints it over row 0 and leaves B's own slot blank — the reported gap.
+    expect(active.groupIndex).toBe(0)
+  })
+
+  it('promotes the second project only once the element has really scrolled', () => {
+    const active = getActiveStickyIndexesForScroll({
+      rows: shortRows,
+      rangeStartIndex: 2,
+      scrollOffset: resolveStickyScrollOffset({
+        element: { scrollTop: DRIFTED_OFFSET },
+        virtualizerOffset: DRIFTED_OFFSET,
+        fallbackOffset: 0
+      }),
+      stickyHeaderIndexes: shortSticky,
+      virtualItems: shortItems
+    })
+
+    expect(active.groupIndex).toBe(2)
+  })
+
+  it('does not let a collapse re-measure move the pinned header (STA-6697)', () => {
+    // Toggling a group re-measures and drifts the believed offset again; the
+    // element has not moved, so neither may the pinned header.
+    const pinnedAt = (virtualizerOffset: number): number | null =>
+      getActiveStickyIndexesForScroll({
+        rows: shortRows,
+        rangeStartIndex: 2,
+        scrollOffset: resolveStickyScrollOffset({
+          element: { scrollTop: 0 },
+          virtualizerOffset,
+          fallbackOffset: 0
+        }),
+        stickyHeaderIndexes: shortSticky,
+        virtualItems: shortItems
+      }).groupIndex
+
+    expect(pinnedAt(0)).toBe(0)
+    expect(pinnedAt(DRIFTED_OFFSET)).toBe(0)
+    expect(pinnedAt(DRIFTED_OFFSET * 2)).toBe(0)
   })
 })

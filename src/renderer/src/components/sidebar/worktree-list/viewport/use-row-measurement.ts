@@ -9,7 +9,8 @@ import {
   buildLineageRowRekeyMap,
   getActiveStickyIndexesForScroll,
   getVirtualRowKey,
-  pruneStaleVirtualRowElementCache
+  pruneStaleVirtualRowElementCache,
+  resolveStickyScrollOffset
 } from './virtual-rows'
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
@@ -58,7 +59,11 @@ export function useVirtualRowMeasurementSync(args: {
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
     rows: renderRows,
     rangeStartIndex: virtualization.stickyRangeStartIndexRef.current,
-    scrollOffset: virtualizer.scrollOffset ?? scrollOffsetRef.current,
+    scrollOffset: resolveStickyScrollOffset({
+      element: scrollRef.current,
+      virtualizerOffset: virtualizer.scrollOffset,
+      fallbackOffset: scrollOffsetRef.current
+    }),
     stickyHeaderIndexes: virtualization.stickyHeaderIndexes,
     virtualItems
   })
