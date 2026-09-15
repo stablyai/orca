@@ -1,3 +1,4 @@
+import { resolveAutomationAgentArgs } from './tui-agent-launch-defaults'
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
@@ -185,5 +186,28 @@ describe('MiniMax defaults', () => {
   it('defaults the MiniMax endpoint to overseas', () => {
     const settings = getDefaultSettings('/tmp')
     expect(settings.minimaxEndpoint).toBe('overseas')
+  })
+})
+
+describe('resolveAutomationAgentArgs', () => {
+  it('appends a run-scoped Codex sqlite home without replacing configured args', () => {
+    expect(
+      resolveAutomationAgentArgs('codex', { codex: '--profile work' }, 'run:1/unsafe')
+    ).toMatch(
+      /^--profile work -c sqlite_home='~\/.orca\/tmp\/codex-automation\/run-1-unsafe-[a-f0-9]{32}'$/
+    )
+  })
+
+  it('keeps lossy, truncated, and case-only run ids in separate directories', () => {
+    const resolve = (id: string) => resolveAutomationAgentArgs('codex', {}, id)
+    expect(new Set([resolve('run:1'), resolve('run/1')]).size).toBe(2)
+    expect(new Set([resolve(`${'a'.repeat(128)}x`), resolve(`${'a'.repeat(128)}y`)]).size).toBe(2)
+    expect(new Set([resolve('RUN-1'), resolve('run-1')]).size).toBe(2)
+  })
+
+  it('leaves non-Codex agent arguments unchanged', () => {
+    expect(resolveAutomationAgentArgs('claude', { claude: '--model opus' }, 'run-1')).toBe(
+      '--model opus'
+    )
   })
 })
