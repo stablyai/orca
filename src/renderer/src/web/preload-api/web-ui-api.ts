@@ -247,6 +247,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     minimize: () => {},
     maximize: () => {},
     onMaximizeChanged: () => noopUnsubscribe,
+    // Why: Chromium's accessibility-support flag is an Electron app signal with no browser
+    // equivalent, so the web client leaves xterm's screenReaderMode alone rather than guessing.
+    isAccessibilitySupportEnabled: () => Promise.resolve(false),
+    onAccessibilitySupportChanged: () => noopUnsubscribe,
     requestClose: () => {},
     popupMenu: () => {},
     onWindowCloseRequested: () => noopUnsubscribe,
