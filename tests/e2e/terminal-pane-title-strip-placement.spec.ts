@@ -147,9 +147,7 @@ test.describe('Terminal Panes', () => {
     await expectPaneTitleAttachedToLeaf(orcaPage, title, titledLeafId)
   })
 
-  test('Set Title keeps the pane drag handle available over the title strip', async ({
-    orcaPage
-  }) => {
+  test('Set Title keeps the whole title bar available as a drag surface', async ({ orcaPage }) => {
     const title = `Draggable title ${Date.now()}`
 
     await setPaneTitleFromTerminalMenu(orcaPage, title)
@@ -163,42 +161,40 @@ test.describe('Terminal Panes', () => {
     await waitForPaneCount(orcaPage, 2)
     await expectPaneTitleAttachedToLeaf(orcaPage, title, titledLeafId)
 
+    // Why: the bar itself is the drag surface now (no dedicated drag-handle
+    // child), so hit-testing a point on it — away from the action-button
+    // cluster on the right — should land on the bar with pointer events on.
     const titleTopHit = await orcaPage.evaluate(
       ({ title, titledLeafId }) => {
         const titleBar = Array.from(document.querySelectorAll<HTMLElement>('.pane-title-bar')).find(
           (element) => element.textContent?.includes(title)
         )
-        const titleDragHandle =
-          titleBar.querySelector<HTMLElement>('.pane-title-drag-handle') ?? null
         const pane = document.querySelector<HTMLElement>(`.pane[data-leaf-id="${titledLeafId}"]`)
-        if (!titleBar || !pane || !titleDragHandle) {
+        if (!titleBar || !pane) {
           return null
         }
         const titleRect = titleBar.getBoundingClientRect()
-        const hitElement = document.elementFromPoint(
-          titleRect.left + titleRect.width / 2,
-          titleRect.top + 4
-        )
+        const hitElement = document.elementFromPoint(titleRect.left + 8, titleRect.top + 4)
         return {
-          hitDragHandle:
-            hitElement instanceof HTMLElement &&
-            hitElement.closest('.pane-title-drag-handle') !== null,
-          pointerEvents: getComputedStyle(titleDragHandle).pointerEvents,
-          titleTop: titleRect.top,
-          handleTop: titleDragHandle.getBoundingClientRect().top
+          hitTitleBar:
+            hitElement instanceof HTMLElement && hitElement.closest('.pane-title-bar') !== null,
+          pointerEvents: getComputedStyle(titleBar).pointerEvents
         }
       },
       { title, titledLeafId }
     )
 
     expect(titleTopHit).not.toBeNull()
-    expect(titleTopHit?.hitDragHandle).toBe(true)
+    expect(titleTopHit?.hitTitleBar).toBe(true)
     expect(titleTopHit?.pointerEvents).toBe('auto')
-    expect(Math.abs((titleTopHit?.handleTop ?? 0) - (titleTopHit?.titleTop ?? 0))).toBeLessThan(1)
 
-    await orcaPage.locator('.pane-title-bar', { hasText: title }).click({
-      position: { x: 20, y: 18 }
-    })
+    // Why: a single click on the title bar (or the title text itself) now
+    // drags the pane instead of renaming it — only double-click renames.
+    const titleBarLocator = orcaPage.locator('.pane-title-bar', { hasText: title })
+    await titleBarLocator.click({ position: { x: 20, y: 18 } })
+    await expect(orcaPage.locator('.pane-title-input')).toBeHidden()
+
+    await titleBarLocator.dblclick({ position: { x: 20, y: 18 } })
     await expect(orcaPage.locator('.pane-title-input')).toBeVisible()
   })
 
@@ -221,11 +217,12 @@ test.describe('Terminal Panes', () => {
     }
     const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
 
-    const titleDragHandle = orcaPage
-      .locator('.pane-title-bar', { hasText: title })
-      .locator('.pane-title-drag-handle')
-    await expect(titleDragHandle).toBeVisible({ timeout: 3_000 })
-    const sourceBox = await titleDragHandle.boundingBox()
+    // Why: no dedicated drag-handle child anymore — the title bar itself is
+    // the drag surface, so grab it directly. A point near its left edge stays
+    // clear of the right-aligned action-button cluster.
+    const titleBarLocator = orcaPage.locator('.pane-title-bar', { hasText: title })
+    await expect(titleBarLocator).toBeVisible({ timeout: 3_000 })
+    const sourceBox = await titleBarLocator.boundingBox()
     const targetBox = await orcaPage.locator(`.pane[data-leaf-id="${target.leafId}"]`).boundingBox()
     expect(sourceBox).not.toBeNull()
     expect(targetBox).not.toBeNull()
@@ -234,7 +231,7 @@ test.describe('Terminal Panes', () => {
     const targetDropX =
       sourceIndex < targetIndex ? targetBox!.x + targetBox!.width - 8 : targetBox!.x + 8
 
-    await orcaPage.mouse.move(sourceBox!.x + sourceBox!.width / 2, sourceBox!.y + 4)
+    await orcaPage.mouse.move(sourceBox!.x + 20, sourceBox!.y + 4)
     await orcaPage.mouse.down()
     await orcaPage.mouse.move(targetDropX, targetBox!.y + targetBox!.height / 2, {
       steps: 20

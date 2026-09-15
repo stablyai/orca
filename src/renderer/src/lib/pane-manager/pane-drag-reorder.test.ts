@@ -236,6 +236,82 @@ describe('attachPaneDrag', () => {
     expect(insertPaneNextTo).not.toHaveBeenCalled()
   })
 
+  // Regression for https://github.com/stablyai/orca/issues/19727: preventDefault()
+  // on pointerdown suppresses Chromium's mousedown/click/dblclick compatibility
+  // events for the whole pointer gesture. Calling it unconditionally on every
+  // qualifying pointerdown silently broke double-click-to-rename once the pane
+  // title text became a drag surface (single click/drag drags; double-click
+  // renames) — a plain click's pointerdown/pointerup never gets to become a
+  // native click/dblclick if preventDefault already fired. It must stay
+  // deferred until an actual drag (movement past the threshold) is detected.
+  it('does not preventDefault a pointerdown/pointerup with no movement, so a click/double-click can still reach the DOM', () => {
+    const handle = new FakeElement()
+    const root = new FakeElement(['pane-manager-root'])
+    const sourceContainer = new FakeElement(['pane'])
+    const targetContainer = new FakeElement(['pane'])
+    const sourcePane = createPane(1, sourceContainer)
+    const targetPane = createPane(2, targetContainer)
+    const panes = new Map<number, ManagedPaneInternal>([
+      [sourcePane.id, sourcePane],
+      [targetPane.id, targetPane]
+    ])
+    const state = createDragReorderState()
+
+    attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
+      getPanes: () => panes,
+      getRoot: () => root as unknown as HTMLElement,
+      getStyleOptions: () => ({}),
+      isDestroyed: () => false,
+      safeFit: vi.fn(),
+      applyPaneOpacity: vi.fn(),
+      applyDividerStyles: vi.fn(),
+      refitPanesUnder: vi.fn(),
+      onDragActiveChange: vi.fn()
+    })
+
+    const pointerDownEvent = pointerEvent({ clientX: 10, clientY: 10 })
+    handle.dispatchPointer('pointerdown', pointerDownEvent)
+    handle.dispatchPointer('pointerup', pointerEvent({ pointerId: 1, clientX: 10, clientY: 10 }))
+
+    expect(pointerDownEvent.preventDefault).not.toHaveBeenCalled()
+    expect(root.classList.contains('is-pane-dragging')).toBe(false)
+  })
+
+  it('still preventDefaults once the drag threshold is crossed', () => {
+    const handle = new FakeElement()
+    const root = new FakeElement(['pane-manager-root'])
+    const sourceContainer = new FakeElement(['pane'])
+    const targetContainer = new FakeElement(['pane'])
+    const sourcePane = createPane(1, sourceContainer)
+    const targetPane = createPane(2, targetContainer)
+    const panes = new Map<number, ManagedPaneInternal>([
+      [sourcePane.id, sourcePane],
+      [targetPane.id, targetPane]
+    ])
+    const state = createDragReorderState()
+
+    attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
+      getPanes: () => panes,
+      getRoot: () => root as unknown as HTMLElement,
+      getStyleOptions: () => ({}),
+      isDestroyed: () => false,
+      safeFit: vi.fn(),
+      applyPaneOpacity: vi.fn(),
+      applyDividerStyles: vi.fn(),
+      refitPanesUnder: vi.fn(),
+      onDragActiveChange: vi.fn()
+    })
+
+    const pointerDownEvent = pointerEvent({ clientX: 10, clientY: 10 })
+    handle.dispatchPointer('pointerdown', pointerDownEvent)
+    const pointerMoveEvent = pointerEvent({ clientX: 50, clientY: 10 })
+    handle.dispatchPointer('pointermove', pointerMoveEvent)
+
+    expect(pointerDownEvent.preventDefault).not.toHaveBeenCalled()
+    expect(pointerMoveEvent.preventDefault).toHaveBeenCalledTimes(1)
+    expect(root.classList.contains('is-pane-dragging')).toBe(true)
+  })
+
   it('cleans pane drag state if releasing pointer capture fails during drop', () => {
     const handle = new FakeElement()
     const root = new FakeElement(['pane-manager-root'])
