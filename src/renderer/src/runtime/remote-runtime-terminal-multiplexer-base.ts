@@ -1,5 +1,8 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime-client-error-classification'
+import {
+  isRecoverableRemoteRuntimeConnectionError,
+  toRemoteRuntimeClientErrorLike
+} from '../../../shared/remote-runtime-client-error-classification'
 import {
   encodeTerminalStreamFrame,
   type TerminalStreamOpcode
@@ -120,7 +123,12 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
             this.readyResolver = null
             this.readyRejecter = null
           }
-          reject(error instanceof Error ? error : new Error(String(error)))
+          const like = toRemoteRuntimeClientErrorLike(error)
+          reject(
+            error instanceof Error
+              ? error
+              : Object.assign(new Error(like.message), like.code ? { code: like.code } : {})
+          )
         })
     })
     this.connectPromise = connectPromise

@@ -56,7 +56,7 @@ function dispatch(ipc: ReturnType<typeof createIpc>, event: SubscriptionEvent): 
 
 describe('subscribeRuntimeEnvironmentFromPreload', () => {
   it('registers the subscription event listener before invoking main', async () => {
-    const subscription = deferred<{ subscriptionId: string; requestId: string }>()
+    const subscription = deferred<{ ok: true; subscriptionId: string; requestId: string }>()
     const ipc = createIpc()
     ipc.invoke.mockImplementation((channel: string) =>
       channel === 'runtimeEnvironments:subscribe'
@@ -107,7 +107,7 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     })
     expect(onBinary).toHaveBeenCalledWith(inboundBytes)
 
-    subscription.resolve({ subscriptionId: 'sub-1', requestId: 'rpc-1' })
+    subscription.resolve({ ok: true, subscriptionId: 'sub-1', requestId: 'rpc-1' })
     const cleanup = await cleanupPromise
     const bytes = new Uint8Array([1, 2, 3])
     cleanup.sendBinary(bytes)
@@ -136,11 +136,50 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(onResponse).not.toHaveBeenCalled()
   })
 
+  it('delivers a tombstone close before the pending subscribe handle settles', async () => {
+    const subscription = deferred<{ ok: true; subscriptionId: string; requestId: string }>()
+    const ipc = createIpc()
+    ipc.invoke.mockImplementation((channel: string) =>
+      channel === 'runtimeEnvironments:subscribe'
+        ? (subscription.promise as Promise<unknown>)
+        : (Promise.resolve({}) as Promise<unknown>)
+    )
+    const order: string[] = []
+
+    const handlePromise = subscribeRuntimeEnvironmentFromPreload(
+      ipc,
+      { selector: 'desk', method: 'terminal.subscribe' },
+      {
+        onResponse: vi.fn(),
+        onClose: () => {
+          order.push('close')
+        }
+      },
+      () => 'sub-tombstone'
+    ).then((handle) => {
+      order.push('settled')
+      return handle
+    })
+
+    dispatch(ipc, { subscriptionId: 'sub-tombstone', type: 'close' })
+    expect(order).toEqual(['close'])
+    expect(ipc.listenerCount()).toBe(0)
+
+    subscription.resolve({
+      ok: true,
+      subscriptionId: 'sub-tombstone',
+      requestId: 'rpc-tombstone'
+    })
+    await handlePromise
+    expect(order).toEqual(['close', 'settled'])
+  })
+
   it('shares a single channel listener across many subscriptions on one ipc', async () => {
     const ipc = createIpc()
     ipc.invoke.mockImplementation((channel: string, args: unknown) =>
       channel === 'runtimeEnvironments:subscribe'
         ? Promise.resolve({
+            ok: true,
             subscriptionId: (args as { subscriptionId: string }).subscriptionId,
             requestId: 'rpc'
           })
@@ -192,7 +231,7 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     const ipc = createIpc()
     ipc.invoke.mockImplementation((channel: string) =>
       channel === 'runtimeEnvironments:subscribe'
-        ? Promise.resolve({ subscriptionId: 'sub-err', requestId: 'rpc-err' })
+        ? Promise.resolve({ ok: true, subscriptionId: 'sub-err', requestId: 'rpc-err' })
         : (Promise.resolve({}) as Promise<unknown>)
     )
     const onResponse = vi.fn()
@@ -238,8 +277,45 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
-  it('removes the subscription from dispatch when main rejects the subscribe call', async () => {
-    const subscription = deferred<{ subscriptionId: string; requestId: string }>()
+  it('rejects structured startup failures as plain cloneable data after releasing dispatch', async () => {
+    const ipc = createIpc()
+    ipc.invoke.mockImplementation((channel: string) =>
+      channel === 'runtimeEnvironments:subscribe'
+        ? Promise.resolve({
+            ok: false,
+            error: {
+              code: 'unauthorized',
+              message: 'Remote Orca runtime rejected the pairing token.'
+            }
+          })
+        : (Promise.resolve({}) as Promise<unknown>)
+    )
+    const onResponse = vi.fn()
+
+    const rejection = await subscribeRuntimeEnvironmentFromPreload(
+      ipc,
+      { selector: 'desk', method: 'terminal.multiplex' },
+      { onResponse },
+      () => 'sub-unauthorized'
+    ).catch((error: unknown) => error)
+
+    expect(rejection).toEqual({
+      code: 'unauthorized',
+      message: 'Remote Orca runtime rejected the pairing token.'
+    })
+    expect(rejection).not.toBeInstanceOf(Error)
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+    expect(ipc.listenerCount()).toBe(0)
+    dispatch(ipc, {
+      subscriptionId: 'sub-unauthorized',
+      type: 'response',
+      response: { id: 'rpc', ok: true, result: {}, _meta: { runtimeId: 'rt' } }
+    })
+    expect(onResponse).not.toHaveBeenCalled()
+  })
+
+  it('normalizes unexpected invoke rejections to plain runtime_error data', async () => {
+    const subscription = deferred<{ ok: true; subscriptionId: string; requestId: string }>()
     const ipc = createIpc()
     ipc.invoke.mockImplementation((channel: string) =>
       channel === 'runtimeEnvironments:subscribe'
@@ -255,9 +331,10 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
       () => 'sub-2'
     )
 
-    const error = new Error('subscribe failed')
-    subscription.reject(error)
-    await expect(cleanupPromise).rejects.toThrow(error)
+    subscription.reject(new Error('subscribe failed'))
+    const rejection = await cleanupPromise.catch((error: unknown) => error)
+    expect(rejection).toEqual({ code: 'runtime_error', message: 'subscribe failed' })
+    expect(rejection).not.toBeInstanceOf(Error)
     expect(ipc.removeListener).toHaveBeenCalledTimes(1)
     expect(ipc.listenerCount()).toBe(0)
 
@@ -274,7 +351,7 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     const ipc = createIpc()
     ipc.invoke.mockImplementation((channel: string) =>
       channel === 'runtimeEnvironments:subscribe'
-        ? Promise.resolve({ subscriptionId: 'sub-other', requestId: 'rpc' })
+        ? Promise.resolve({ ok: true, subscriptionId: 'sub-other', requestId: 'rpc' })
         : (Promise.resolve({}) as Promise<unknown>)
     )
     const onResponse = vi.fn()
@@ -286,7 +363,10 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
         { onResponse },
         () => 'sub-expected'
       )
-    ).rejects.toThrow('Runtime environment subscription id mismatch')
+    ).rejects.toEqual({
+      code: 'runtime_error',
+      message: 'Runtime environment subscription id mismatch'
+    })
     expect(ipc.removeListener).toHaveBeenCalledTimes(1)
     expect(ipc.listenerCount()).toBe(0)
 
@@ -302,7 +382,11 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     const ipc = createIpc()
     ipc.invoke.mockImplementation((channel: string) =>
       channel === 'runtimeEnvironments:subscribe'
-        ? Promise.resolve({ subscriptionId: 'sub-closed', requestId: 'rpc-closed' })
+        ? Promise.resolve({
+            ok: true,
+            subscriptionId: 'sub-closed',
+            requestId: 'rpc-closed'
+          })
         : (Promise.resolve({}) as Promise<unknown>)
     )
     const onClose = vi.fn()
@@ -337,7 +421,7 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     const ipc = createIpc()
     ipc.invoke.mockImplementation((channel: string) =>
       channel === 'runtimeEnvironments:subscribe'
-        ? Promise.resolve({ subscriptionId: 'sub-throw', requestId: 'rpc-throw' })
+        ? Promise.resolve({ ok: true, subscriptionId: 'sub-throw', requestId: 'rpc-throw' })
         : (Promise.resolve({}) as Promise<unknown>)
     )
     const onClose = vi.fn(() => {
