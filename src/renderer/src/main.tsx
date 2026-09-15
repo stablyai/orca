@@ -22,6 +22,7 @@ import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
+import { primeTerminalInlineImageAddon } from './lib/pane-manager/terminal-inline-image-addon'
 import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 
@@ -83,3 +84,9 @@ recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
 // Starting the load after the first render keeps it off the boot graph while
 // leaving it resolved long before any pane can attach.
 void primeTerminalWebglAddon()
+// Why here too: the inline-image addon is a *parser* hook, not just a renderer.
+// An OSC 1337 / SIXEL sequence that reaches xterm before the addon is loaded
+// is consumed as an unknown sequence and cannot be replayed once the addon
+// attaches. Starting the load right after first render leaves it resolved
+// before the first pane can open, so openTerminal attaches it synchronously.
+void primeTerminalInlineImageAddon()
