@@ -217,6 +217,9 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
         if (fileSearchQuery) {
           handleClearSearch()
         }
+        // Why: Esc must back out of the field even with an empty query; other
+        // search surfaces close on Esc, and this panel has no close to fall back on.
+        inputRef.current?.blur()
       }
       if (e.key === 'Enter') {
         executeSearch(fileSearchQuery)
