@@ -27,6 +27,8 @@ export type AgentHookEventPayload = {
   grokPromptBoundary?: true
   /** Active Claude compact generation, keyed by provider prompt identity. */
   compactTrigger?: 'manual' | 'auto'
+  /** Execution-host proof that this Codex permission hook cannot ask a human. */
+  codexNonInteractivePermission?: true
   /** Claude tool-use identifier when the hook source exposes one. */
   toolUseId?: string
   /** Claude agent/subagent identifier when the hook source exposes one. */

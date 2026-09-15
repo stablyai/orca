@@ -18,6 +18,7 @@ import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
+import { isCodexNonInteractivePermissionRequest } from './agent-hook-listener/providers/codex-permission-request'
 import { readString } from './agent-hook-listener/tool-input-preview'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 export function normalizeHookPayload(
@@ -162,6 +163,10 @@ export function normalizeHookPayload(
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
+    codexNonInteractivePermission:
+      source === 'codex' && isCodexNonInteractivePermissionRequest(eventName, hookPayloadRecord)
+        ? true
+        : undefined,
     toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
     toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
     teammateName:

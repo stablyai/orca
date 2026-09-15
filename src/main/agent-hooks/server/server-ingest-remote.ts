@@ -1,3 +1,4 @@
+import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
 import { track } from '../../telemetry/client'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
@@ -37,6 +38,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       providerPromptId?: unknown
       grokPromptBoundary?: unknown
       compactTrigger?: unknown
+      codexNonInteractivePermission?: unknown
       toolUseId?: string
       toolAgentId?: string
       teammateName?: string
@@ -261,6 +263,13 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       providerPromptId,
       grokPromptBoundary,
       compactTrigger,
+      codexNonInteractivePermission:
+        source === 'codex' &&
+        hookEventName === 'PermissionRequest' &&
+        envelope.codexNonInteractivePermission === true &&
+        !isAskUserQuestionTool(normalizedPayload.toolName)
+          ? true
+          : undefined,
       toolUseId,
       toolAgentId,
       teammateName,

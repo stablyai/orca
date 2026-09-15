@@ -27,6 +27,7 @@ export function buildRelayHookEnvelope(
     providerPromptId: event.providerPromptId,
     grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
+    codexNonInteractivePermission: event.codexNonInteractivePermission,
     toolUseId: event.toolUseId,
     toolAgentId: event.toolAgentId,
     teammateName: event.teammateName,
