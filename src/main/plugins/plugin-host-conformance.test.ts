@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { PLUGIN_HOST_API_V0 } from '../../shared/plugins/plugin-host-api'
-import type { PluginCapabilityKind } from '../../shared/plugins/plugin-capabilities'
+import {
+  PLUGIN_HOST_API_V0,
+  PLUGIN_HOST_FILE_API_SPECS
+} from '../../shared/plugins/plugin-host-api'
+import type { PluginCapability } from '../../shared/plugins/plugin-capabilities'
 import {
   admitPluginPanelCall,
   createPluginPanelCallAdmission
@@ -22,11 +25,33 @@ import type { PluginHostServices } from './plugin-host-methods'
 const PLUGIN_KEY = 'orca-samples.demo'
 const WORKTREE_ID = 'repo-id::/Users/private/orca'
 const TERMINAL_ID = 'terminal:local:one'
+const WORKSPACE_LIST_RESULT = {
+  workspaces: [
+    {
+      ref: 'identity:wt2%3Assh%253Aone%3Ainstance',
+      hostId: 'ssh:one',
+      branch: 'main',
+      displayName: 'Orca'
+    },
+    { ref: 'id:folder-1', hostId: 'native', displayName: 'Notes' },
+    { ref: 'identity:detached', hostId: 'native', displayName: 'Detached' }
+  ]
+}
 
 type HostCallAdapter = (request: unknown, viaPanel: boolean) => Promise<PluginPanelActionOutcome>
 
 function createServices(): PluginHostServices {
   return {
+    executeAuthorizedPluginHostCall: vi.fn().mockImplementation(async (method) => {
+      if (method === 'files.read') {
+        return { authorized: true, value: { content: 'hello', encoding: 'utf8' } }
+      }
+      if (method === 'files.stat') {
+        return { authorized: true, value: { size: 5, isDirectory: false, mtime: 1 } }
+      }
+      return { authorized: true, value: { entries: [] } }
+    }),
+    listPluginWorkspaces: vi.fn().mockResolvedValue(WORKSPACE_LIST_RESULT),
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue({
       worktreeId: WORKTREE_ID,
       branch: 'main',
@@ -58,7 +83,7 @@ function createServices(): PluginHostServices {
 }
 
 function createPolicy(
-  grantedCapabilities: readonly PluginCapabilityKind[] | null,
+  grantedCapabilities: readonly PluginCapability[] | null,
   services: PluginHostServices = createServices(),
   audit = { record: vi.fn().mockResolvedValue(undefined) }
 ): PluginHostCallPolicy {
@@ -105,6 +130,19 @@ function createAdapters(
 }
 
 const successParams: Record<string, unknown> = {
+  'files.read': {
+    workspaceRef: 'identity:wt2%3Ahost%3Ainstance',
+    relativePath: 'README.md'
+  },
+  'files.stat': {
+    workspaceRef: 'identity:wt2%3Ahost%3Ainstance',
+    relativePath: 'README.md'
+  },
+  'files.readDir': {
+    workspaceRef: 'id:folder-1',
+    relativePath: 'src'
+  },
+  'workspace.list': {},
   'workspace.readContext': {},
   'terminal.sendText': { terminalId: TERMINAL_ID, text: 'echo hi', enter: true },
   'notifications.show': { title: 'Hello' },
@@ -120,17 +158,33 @@ const successParams: Record<string, unknown> = {
   'events.subscribe': { events: ['worktree.created'] }
 }
 
+const SCOPED_FILE_METHODS = ['files.read', 'files.stat', 'files.readDir'] as const
+
 describe('plugin host main/relay conformance', () => {
-  it('runs a granted success through both transports for all 13 v0 methods', async () => {
-    expect(PLUGIN_HOST_API_V0).toHaveLength(13)
+  it('runs a granted success through both transports for all 17 v0 methods', async () => {
+    expect(PLUGIN_HOST_API_V0).toHaveLength(17)
     expect(Object.keys(successParams).sort()).toEqual(
       PLUGIN_HOST_API_V0.map((entry) => entry.name).sort()
     )
     expect(PLUGIN_HOST_API_V0.every((entry) => entry.stability === 'experimental')).toBe(true)
     expect(PLUGIN_HOST_API_V0.every((entry) => entry.scope.length > 0)).toBe(true)
+    expect(
+      PLUGIN_HOST_API_V0.filter((entry) => entry.capability === 'files:read').every(
+        (entry) => entry.authorization === 'resource'
+      )
+    ).toBe(true)
+    expect(
+      PLUGIN_HOST_API_V0.filter((entry) => entry.capability !== 'files:read').every(
+        (entry) => entry.authorization === 'capability-only'
+      )
+    ).toBe(true)
 
     for (const spec of PLUGIN_HOST_API_V0) {
-      const policy = createPolicy([spec.capability])
+      const grant: PluginCapability =
+        spec.capability === 'files:read'
+          ? { kind: 'files:read', paths: ['**'] }
+          : { kind: spec.capability }
+      const policy = createPolicy([grant])
       const resolvePolicy = vi.fn().mockResolvedValue(policy)
       const outcomes = await Promise.all(
         Object.values(createAdapters(resolvePolicy)).map((adapter) =>
@@ -143,8 +197,45 @@ describe('plugin host main/relay conformance', () => {
     }
   })
 
+  it('keeps every scoped file method resource-authorized and panel-forbidden', () => {
+    expect(
+      PLUGIN_HOST_FILE_API_SPECS.filter((entry) => entry.capability === 'files:read').map(
+        (entry) => entry.name
+      )
+    ).toEqual(SCOPED_FILE_METHODS)
+    expect(
+      PLUGIN_HOST_API_V0.filter((entry) => entry.capability === 'files:read').map(
+        (entry) => entry.name
+      )
+    ).toEqual(SCOPED_FILE_METHODS)
+    expect(
+      PLUGIN_HOST_FILE_API_SPECS.filter((entry) => entry.capability === 'files:read').every(
+        (entry) => entry.authorization === 'resource' && entry.panel === false
+      )
+    ).toBe(true)
+  })
+
+  it.each(SCOPED_FILE_METHODS)(
+    'refuses panel %s on both transports before file service execution',
+    async (method) => {
+      for (const adapterName of ['desktop-main', 'relay']) {
+        const services = createServices()
+        const resolvePolicy = vi
+          .fn()
+          .mockResolvedValue(createPolicy([{ kind: 'files:read', paths: ['**'] }], services))
+        const outcome = await createAdapters(resolvePolicy)[adapterName]!(
+          { method, params: successParams[method] },
+          true
+        )
+
+        expect(outcome).toMatchObject({ ok: false, code: 'panel_forbidden' })
+        expect(services.executeAuthorizedPluginHostCall).not.toHaveBeenCalled()
+      }
+    }
+  )
+
   it('projects workspace context without host paths on main and relay', async () => {
-    const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['workspace:read']))
+    const resolvePolicy = vi.fn().mockResolvedValue(createPolicy([{ kind: 'workspace:read' }]))
     for (const adapter of Object.values(createAdapters(resolvePolicy))) {
       const outcome = await adapter({ method: 'workspace.readContext', params: {} }, true)
       expect(outcome).toEqual({
@@ -157,6 +248,45 @@ describe('plugin host main/relay conformance', () => {
       })
       expect(outcome).not.toHaveProperty('value.path')
       expect(outcome).not.toHaveProperty('value.worktreeId')
+    }
+  })
+
+  it('returns the same path-free workspace list through main and relay', async () => {
+    const services = createServices()
+    const resolvePolicy = vi
+      .fn()
+      .mockResolvedValue(createPolicy([{ kind: 'workspace:list' }], services))
+    const outcomes = await Promise.all(
+      Object.values(createAdapters(resolvePolicy)).map((adapter) =>
+        adapter({ method: 'workspace.list', params: {} }, false)
+      )
+    )
+
+    expect(outcomes[0]).toEqual({ ok: true, value: WORKSPACE_LIST_RESULT })
+    expect(outcomes[1]).toEqual(outcomes[0])
+    expect(JSON.stringify(outcomes)).not.toMatch(/Users|private|path|folderPath|worktreeId|git/)
+    expect(WORKSPACE_LIST_RESULT.workspaces[1]).not.toHaveProperty('branch')
+    expect(WORKSPACE_LIST_RESULT.workspaces[2]).not.toHaveProperty('branch')
+    expect(services.listPluginWorkspaces).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    { viaPanel: false, capabilities: [] as PluginCapability[], code: 'capability_denied' },
+    {
+      viaPanel: true,
+      capabilities: [{ kind: 'workspace:list' }] as PluginCapability[],
+      code: 'panel_forbidden'
+    }
+  ])('refuses workspace.list with $code before enumeration', async (testCase) => {
+    for (const adapterName of ['desktop-main', 'relay']) {
+      const services = createServices()
+      const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(testCase.capabilities, services))
+      const outcome = await createAdapters(resolvePolicy)[adapterName]!(
+        { method: 'workspace.list', params: {} },
+        testCase.viaPanel
+      )
+      expect(outcome).toMatchObject({ ok: false, code: testCase.code })
+      expect(services.listPluginWorkspaces).not.toHaveBeenCalled()
     }
   })
 
@@ -185,7 +315,7 @@ describe('plugin host main/relay conformance', () => {
       name: 'unknown method',
       request: { method: 'workspace.erase', params: {} },
       viaPanel: false,
-      policy: () => createPolicy(['workspace:read']),
+      policy: () => createPolicy([{ kind: 'workspace:read' }]),
       code: 'unknown_method'
     },
     {
@@ -195,14 +325,14 @@ describe('plugin host main/relay conformance', () => {
         params: { terminalId: TERMINAL_ID, text: '' }
       },
       viaPanel: true,
-      policy: () => createPolicy(['terminal:send']),
+      policy: () => createPolicy([{ kind: 'terminal:send' }]),
       code: 'invalid_params'
     },
     {
       name: 'panel-forbidden method',
       request: { method: 'storage.get', params: { key: 'alpha' } },
       viaPanel: true,
-      policy: () => createPolicy(['storage']),
+      policy: () => createPolicy([{ kind: 'storage' }]),
       code: 'panel_forbidden'
     },
     {
@@ -217,7 +347,7 @@ describe('plugin host main/relay conformance', () => {
         services.dispatchPluginNotification = vi
           .fn()
           .mockResolvedValue({ delivered: 'yes' } as unknown as { delivered: boolean })
-        return createPolicy(['notifications:show'], services)
+        return createPolicy([{ kind: 'notifications:show' }], services)
       },
       code: 'action_failed'
     },
@@ -229,7 +359,7 @@ describe('plugin host main/relay conformance', () => {
       },
       viaPanel: false,
       policy: () =>
-        createPolicy(['storage'], createServices(), {
+        createPolicy([{ kind: 'storage' }], createServices(), {
           record: vi.fn().mockRejectedValue(new Error('disk full'))
         }),
       code: 'action_failed'
@@ -248,9 +378,79 @@ describe('plugin host main/relay conformance', () => {
     expect(outcomes[0]).toEqual(outcomes[1])
   })
 
+  it.each(
+    ['files.read', 'files.stat', 'files.readDir'].flatMap((method) =>
+      [
+        '/Users/private/orca/secrets.txt',
+        'C:\\private\\orca\\secrets.txt',
+        '\\\\server\\share\\orca\\secrets.txt',
+        'ssh://private-host/home/user/secrets.txt'
+      ].map((providerMessage) => ({ method, providerMessage }))
+    )
+  )(
+    'sanitizes $method provider failure on both transports',
+    async ({ method, providerMessage }) => {
+      const services = createServices()
+      vi.mocked(services.executeAuthorizedPluginHostCall).mockRejectedValue(
+        new Error(providerMessage)
+      )
+      const resolvePolicy = vi
+        .fn()
+        .mockResolvedValue(createPolicy([{ kind: 'files:read', paths: ['docs/**'] }], services))
+
+      const outcomes = await Promise.all(
+        Object.values(createAdapters(resolvePolicy)).map((adapter) =>
+          adapter(
+            {
+              method,
+              params: { workspaceRef: 'id:folder-1', relativePath: 'docs/readme.md' }
+            },
+            false
+          )
+        )
+      )
+
+      expect(outcomes[0]).toEqual({ ok: false, code: 'action_failed', error: 'host action failed' })
+      expect(outcomes[1]).toEqual(outcomes[0])
+      expect(JSON.stringify(outcomes)).not.toContain(providerMessage)
+    }
+  )
+
+  it('makes unknown and unpermitted workspace refusals indistinguishable', async () => {
+    const services = createServices()
+    vi.mocked(services.executeAuthorizedPluginHostCall).mockResolvedValue({ authorized: false })
+    const resolvePolicy = vi
+      .fn()
+      .mockResolvedValue(createPolicy([{ kind: 'files:read', paths: ['docs/**'] }], services))
+    const adapters = Object.values(createAdapters(resolvePolicy))
+
+    const outcomes = await Promise.all(
+      ['identity:unknown', 'identity:known-but-unpermitted'].flatMap((workspaceRef) =>
+        adapters.map((adapter) =>
+          adapter(
+            { method: 'files.stat', params: { workspaceRef, relativePath: 'docs/readme.md' } },
+            false
+          )
+        )
+      )
+    )
+
+    expect(new Set(outcomes.map((outcome) => JSON.stringify(outcome)))).toEqual(
+      new Set([
+        JSON.stringify({
+          ok: false,
+          code: 'resource_denied',
+          error: 'requested resource is unavailable'
+        })
+      ])
+    )
+  })
+
   it('enforces the same per-plugin panel budget on desktop main and relay', async () => {
     for (const adapterName of ['desktop-main', 'relay']) {
-      const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['notifications:show']))
+      const resolvePolicy = vi
+        .fn()
+        .mockResolvedValue(createPolicy([{ kind: 'notifications:show' }]))
       const adapter = createAdapters(resolvePolicy, {
         maxMessages: 1,
         perMs: 10_000
@@ -271,7 +471,9 @@ describe('plugin host main/relay conformance', () => {
 
   it('charges malformed and oversized panel traffic before schema parsing', async () => {
     for (const adapterName of ['desktop-main', 'relay']) {
-      const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['notifications:show']))
+      const resolvePolicy = vi
+        .fn()
+        .mockResolvedValue(createPolicy([{ kind: 'notifications:show' }]))
       const adapter = createAdapters(resolvePolicy, {
         maxBytes: 128,
         maxMessages: 2,
@@ -308,7 +510,7 @@ describe('plugin host main/relay conformance', () => {
   it('binds relay plugin identity to the requesting connection', async () => {
     const relayHandlers = new Map<string, MethodHandler>()
     const services = createServices()
-    const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['storage'], services))
+    const resolvePolicy = vi.fn().mockResolvedValue(createPolicy([{ kind: 'storage' }], services))
     const resolveIdentity = vi
       .fn()
       .mockImplementation(({ clientId }: { clientId: number }) =>
@@ -345,7 +547,7 @@ describe('plugin host main/relay conformance', () => {
         pluginKey: PLUGIN_KEY,
         method: 'storage.get',
         params: { key: 'alpha' },
-        grantedCapabilities: ['storage']
+        grantedCapabilities: [{ kind: 'storage' }]
       },
       {
         pluginKey: PLUGIN_KEY,
@@ -356,7 +558,7 @@ describe('plugin host main/relay conformance', () => {
     ]
     for (const request of requests) {
       for (const adapterName of ['desktop-main', 'relay']) {
-        const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['storage']))
+        const resolvePolicy = vi.fn().mockResolvedValue(createPolicy([{ kind: 'storage' }]))
         const outcome = await createAdapters(resolvePolicy)[adapterName]!(request, false)
         expect(outcome).toMatchObject({ ok: false, code: 'invalid_request' })
         expect(resolvePolicy).not.toHaveBeenCalled()

@@ -1,8 +1,5 @@
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
-import {
-  capabilityKinds,
-  type PluginCapabilityKind
-} from '../../shared/plugins/plugin-capabilities'
+import { capabilityKinds, type PluginCapability } from '../../shared/plugins/plugin-capabilities'
 import {
   getPluginActivationState,
   type PluginConsentLists
@@ -85,7 +82,10 @@ export class PluginService {
       workerFactory: options.workerFactory,
       registry: this.registry,
       contentVerifier: this.contentVerifier,
-      capabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
+      capabilities: (pluginKey) => {
+        const capabilities = this.getGrantedCapabilities(pluginKey)
+        return capabilities ? capabilityKinds(capabilities) : null
+      },
       isCurrentApproved: (plugin) =>
         this.findValidPlugin(plugin.pluginKey) === plugin && this.isRuntimeApproved(plugin),
       invokeCommand: (pluginKey, commandId, args) => this.invokeCommand(pluginKey, commandId, args),
@@ -237,12 +237,12 @@ export class PluginService {
 
   /** Consented capability kinds for an approved plugin; null otherwise so
    *  callers deny uniformly (no probe-able distinction). */
-  getGrantedCapabilities(pluginKey: string): PluginCapabilityKind[] | null {
+  getGrantedCapabilities(pluginKey: string): PluginCapability[] | null {
     const plugin = this.findValidPlugin(pluginKey)
     if (!plugin || !this.isRuntimeApproved(plugin)) {
       return null
     }
-    return capabilityKinds(plugin.manifest.capabilities)
+    return [...plugin.manifest.capabilities]
   }
 
   /** Host API chokepoint for both transports (worker fork IPC + panel

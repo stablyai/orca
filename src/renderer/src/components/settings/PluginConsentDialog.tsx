@@ -7,7 +7,7 @@ import { Button } from '../ui/button'
 import { PluginVmRecipeConsentPreview } from './PluginVmRecipeConsentPreview'
 import { PluginKeybindingConsentPreview } from './PluginKeybindingConsentPreview'
 import { PluginConsentProvenance } from './PluginConsentProvenance'
-import { pluginCapabilityDescription } from './plugin-capability-presentation'
+import { PluginCapabilityPresentation } from './plugin-capability-presentation'
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,19 @@ type PluginConsentDialogProps = {
     reviewedFingerprint: string,
     decision: 'approve' | 'keep-disabled'
   ) => Promise<void>
+}
+
+const capabilityIdentities = new WeakMap<object, number>()
+let nextCapabilityIdentity = 0
+
+function capabilityIdentity(capability: object): number {
+  const existing = capabilityIdentities.get(capability)
+  if (existing !== undefined) {
+    return existing
+  }
+  nextCapabilityIdentity += 1
+  capabilityIdentities.set(capability, nextCapabilityIdentity)
+  return nextCapabilityIdentity
 }
 
 function trustTier(plugin: PluginHostListEntry): string {
@@ -184,14 +197,18 @@ export function PluginConsentDialog({
                 </p>
                 <div className="space-y-2">
                   {plugin.capabilities.map((capability) => (
-                    <div key={capability.kind} className="flex items-start gap-2 text-sm leading-6">
-                      <Check className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
-                      <span>
-                        {pluginCapabilityDescription(capability.kind, capability.description)}{' '}
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          ({capability.kind})
-                        </span>
-                      </span>
+                    <div
+                      key={capabilityIdentity(capability)}
+                      className="flex items-start gap-2 text-sm leading-6"
+                    >
+                      <Check
+                        aria-hidden="true"
+                        className="mt-1 size-3.5 shrink-0 text-muted-foreground"
+                      />
+                      <PluginCapabilityPresentation
+                        capability={capability}
+                        fallback={capability.description}
+                      />
                     </div>
                   ))}
                 </div>

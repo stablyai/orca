@@ -113,6 +113,27 @@ afterEach(async () => {
 })
 
 describe('PluginService worker reconciliation', () => {
+  it('preserves scoped capabilities at the fresh host authority source', async () => {
+    const scopedManifest = manifest({ capabilities: [{ kind: 'files:read', paths: ['docs/**'] }] })
+    const root = await pluginRoot(scopedManifest)
+    const service = new PluginService({
+      userDataPath: root,
+      hostVersion: '1.4.0',
+      isPluginSystemEnabled: () => true,
+      getDisabledPlugins: () => [],
+      getPluginConsents: () => ({ [pluginKey]: fingerprintPluginConsent(scopedManifest) }),
+      getDevPluginPaths: () => [root],
+      workerFactory: vi.fn(async () => testWorker())
+    })
+    services.push(service)
+
+    await service.initialize()
+
+    expect(service.getGrantedCapabilities(pluginKey)).toEqual([
+      { kind: 'files:read', paths: ['docs/**'] }
+    ])
+  })
+
   it('blocks every runtime surface until a saved override resolves a content conflict', async () => {
     const conflictingManifest = (id: string): PluginManifest =>
       pluginManifestSchema.parse({
