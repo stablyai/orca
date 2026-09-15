@@ -1,3 +1,4 @@
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 
@@ -27,4 +28,18 @@ export function isStatusBarItemAvailable(
     return true
   }
   return detectedAgentIds.includes(id as TuiAgent)
+}
+
+// Why: Antigravity is read from a credential, so it can be signed in only on a remote execution
+// host with no `agy` on this machine's PATH. A named credential source is proof we found a
+// sign-in somewhere, which is what makes the slot useful — keying on `ok` instead would hide the
+// bar the moment that sign-in expires or its host drops, burying the very message that says so.
+export function isAntigravityStatusBarAvailable(
+  detectedAgentIds: TuiAgent[] | null,
+  antigravity: Pick<ProviderRateLimits, 'usageMetadata'> | null | undefined
+): boolean {
+  return (
+    isStatusBarItemAvailable('antigravity', detectedAgentIds) ||
+    Boolean(antigravity?.usageMetadata?.credentialSource)
+  )
 }
