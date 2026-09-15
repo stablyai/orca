@@ -3,6 +3,7 @@ import type {
   KeybindingInput,
   KeybindingOverrides,
   KeybindingMatchOptions,
+  LayoutCharacterLookup,
   ParsedKeybinding
 } from './types'
 import { DEFINITIONS_BY_ID, DIGIT_INDEX_KEY_PATTERN, isDigitIndexActionId } from './definitions'
@@ -19,7 +20,8 @@ import { getEffectiveKeybindingsForAction, keybindingIsActiveInContext } from '.
 export function keybindingMatchesInput(
   binding: string,
   input: KeybindingInput,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  layoutCharacterForCode?: LayoutCharacterLookup
 ): boolean {
   const parsed = parseKeybinding(binding)
   if (!parsed) {
@@ -37,7 +39,8 @@ export function keybindingMatchesInput(
     return false
   }
   return (
-    modifierStateMatches(parsed, input, platform) && keyMatches(parsed.key, input, parsed, platform)
+    modifierStateMatches(parsed, input, platform) &&
+    keyMatches(parsed.key, input, parsed, platform, layoutCharacterForCode)
   )
 }
 
@@ -96,7 +99,7 @@ export function keybindingMatchesAction(
     return false
   }
   return getEffectiveKeybindingsForAction(actionId, platform, overrides).some((binding) =>
-    keybindingMatchesInput(binding, input, platform)
+    keybindingMatchesInput(binding, input, platform, options.layoutCharacterForCode)
   )
 }
 
