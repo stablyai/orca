@@ -51,6 +51,10 @@ const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
 const INTERPRETER_OPTIONS_WITH_INLINE_SOURCE = new Set(['-e', '--eval', '-p', '--print', '--check'])
 const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
   codex: ['node_modules/@openai/codex/'],
+  // Why: npm's Windows shims launch the package's own `bin/*.js` by resolved path, so
+  // both DeepSeek entrypoints arrive as `deepseek.js` / `deepseek-tui.js` basenames.
+  deepseek: ['node_modules/deepseek-tui/'],
+  'deepseek-tui': ['node_modules/deepseek-tui/'],
   gemini: ['node_modules/@google/gemini-cli/']
 }
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']

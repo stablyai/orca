@@ -191,6 +191,38 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('kimi-code')).toBe(true)
   })
 
+  it('recognizes DeepSeek by the deepseek-tui process its dispatcher becomes', () => {
+    expect(recognizeAgentProcess('/usr/bin/deepseek')).toEqual({
+      agent: 'deepseek',
+      processName: 'deepseek'
+    })
+    expect(recognizeAgentProcess('deepseek-tui')).toEqual({
+      agent: 'deepseek',
+      processName: 'deepseek-tui'
+    })
+    expect(isExpectedAgentProcess('/usr/bin/deepseek-tui', 'deepseek-tui')).toBe(true)
+    expect(isRecognizedAgentType('deepseek-tui')).toBe(true)
+    // Why: `deepseek` is the CLI id; model ids that share the prefix are not agents.
+    expect(isRecognizedAgentType('deepseek-v4-flash')).toBe(false)
+  })
+
+  it('recognizes the DeepSeek npm entrypoints launched through node', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node C:\Users\dev\AppData\Roaming\npm\node_modules\deepseek-tui\bin\deepseek.js`
+      )
+    ).toEqual({ agent: 'deepseek', processName: 'deepseek' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        '/usr/bin/node /usr/lib/node_modules/deepseek-tui/bin/deepseek-tui.js'
+      )
+    ).toEqual({ agent: 'deepseek', processName: 'deepseek-tui' })
+    // Why: the package name must not make any unrelated node script a DeepSeek identity.
+    expect(
+      recognizeAgentProcessFromCommandLine(String.raw`node C:\repo\deepseek-tui\bin\deepseek.js`)
+    ).toBeNull()
+  })
+
   it('recognizes Qwen Code by its installed qwen executable', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/qwen')).toEqual({
       agent: 'qwen-code',
