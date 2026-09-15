@@ -149,3 +149,29 @@ describe('createTab tabId hint', () => {
     }
   })
 })
+
+describe('createTab launchAgent layout', () => {
+  it('pins a single-pane layout leaf when creating a launchAgent tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt-agent'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-agent' })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const tab = store.getState().createTab(wt, undefined, undefined, { launchAgent: 'claude' })
+    const layout = store.getState().terminalLayoutsByTabId[tab.id]
+
+    expect(layout?.root).toEqual({
+      type: 'leaf',
+      leafId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      )
+    })
+    expect(layout?.activeLeafId).toBe(layout?.root?.type === 'leaf' ? layout.root.leafId : null)
+  })
+})
