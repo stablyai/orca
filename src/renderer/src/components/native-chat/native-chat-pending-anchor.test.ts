@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { anchorPendingMessagesToSendBoundary } from './native-chat-pending-anchor'
+import {
+  anchorPendingMessagesToSendBoundary,
+  nativeChatMessagesWithPending
+} from './native-chat-pending-anchor'
 import { pendingSendsAsMessages, type NativeChatPendingSend } from './native-chat-pending'
 
 function message(
@@ -77,5 +80,32 @@ describe('anchorPendingMessagesToSendBoundary', () => {
     const anchored = anchorPendingMessagesToSendBoundary(messages, [], [])
     expect(anchored.messages).toBe(messages)
     expect(anchored.trailing).toEqual([])
+  })
+})
+
+describe('nativeChatMessagesWithPending', () => {
+  it('places an anchored echo before markers and streaming, and a trailing one after', () => {
+    const messages = [
+      message('u1', 'user', 'first'),
+      message('a1', 'assistant', 'working'),
+      message('a2', 'assistant', 'done', 2)
+    ]
+    const pending = [send('p1', 'sent mid-turn', 'a1'), send('p2', 'sent at the tail', 'a2')]
+    const combined = nativeChatMessagesWithPending(
+      messages,
+      pending,
+      pendingSendsAsMessages(pending, messages),
+      [message('marker', 'assistant', '/clear')],
+      [message('streaming', 'assistant', 'typing', 3)]
+    )
+    expect(combined.map((entry) => entry.id)).toEqual([
+      'u1',
+      'a1',
+      'pending:p1',
+      'a2',
+      'marker',
+      'streaming',
+      'pending:p2'
+    ])
   })
 })
