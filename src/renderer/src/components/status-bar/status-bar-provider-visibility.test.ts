@@ -3,6 +3,7 @@ import type {
   ProviderRateLimits,
   ProviderRateLimitStatus
 } from '../../../../shared/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import {
   getVisibleUsageProvider,
   hasUsageProviderSettings,
@@ -383,21 +384,7 @@ describe('getVisibleUsageProvider', () => {
 
 describe('isUsageEmptyState', () => {
   it('waits for provider snapshots before showing the setup CTA', () => {
-    expect(
-      isUsageEmptyState(
-        {
-          claude: null,
-          codex: null,
-          gemini: null,
-          opencodeGo: null,
-          kimi: null,
-          antigravity: null,
-          minimax: null,
-          grok: null
-        },
-        usageSettings()
-      )
-    ).toBe(false)
+    expect(isUsageEmptyState(createEmptyRateLimitState(), usageSettings())).toBe(false)
   })
 
   it('treats provider keys omitted by an older main process as pending', () => {
@@ -466,21 +453,7 @@ describe('isUsageEmptyState', () => {
   })
 
   it('waits for settings before showing the setup CTA', () => {
-    expect(
-      isUsageEmptyState(
-        {
-          claude: null,
-          codex: null,
-          gemini: null,
-          opencodeGo: null,
-          kimi: null,
-          antigravity: null,
-          minimax: null,
-          grok: null
-        },
-        null
-      )
-    ).toBe(false)
+    expect(isUsageEmptyState(createEmptyRateLimitState(), null)).toBe(false)
   })
 
   it('shows the setup CTA for a loaded profile with no configured usage provider', () => {

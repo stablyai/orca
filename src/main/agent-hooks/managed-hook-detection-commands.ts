@@ -7,6 +7,7 @@ import { MANAGED_AGENT_HOOK_TARGETS } from '../../shared/managed-agent-hook-targ
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TuiAgentDetectionCommand } from '../ipc/tui-agent-detection-commands'
+import { parseClaudeCliVersion } from '../claude/claude-session-end-hook-capability'
 
 export type ManagedHookDetectionSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents' | 'agentStatusHooksEnabled'>
@@ -26,7 +27,11 @@ export function buildManagedHookDetectionCommands(
       if (override && isSafeOverrideExecutableToken(override)) {
         commands.add(override)
       }
-      return [...commands].map((cmd) => ({ id: target.tuiAgent, cmd }))
+      return [...commands].map((cmd) => ({
+        id: target.tuiAgent,
+        cmd,
+        ...(target.agent === 'claude' ? { reportVersion: true as const } : {})
+      }))
     }
   )
 }
@@ -39,4 +44,23 @@ export function detectedManagedHookAgents(values: unknown): AgentHookTarget[] {
   return MANAGED_AGENT_HOOK_TARGETS.filter((target) => detected.has(target.tuiAgent)).map(
     (target) => target.agent
   )
+}
+
+export function readManagedHookDetectionResult(value: unknown): {
+  agents: AgentHookTarget[]
+  claudeVersion: string | null
+} {
+  if (value === null || typeof value !== 'object') {
+    return { agents: [], claudeVersion: null }
+  }
+  const agents = detectedManagedHookAgents(Reflect.get(value, 'agents'))
+  const versions = Reflect.get(value, 'versions')
+  const rawClaudeVersion =
+    versions !== null && typeof versions === 'object' ? Reflect.get(versions, 'claude') : null
+  return {
+    agents,
+    claudeVersion: parseClaudeCliVersion(
+      typeof rawClaudeVersion === 'string' ? rawClaudeVersion : null
+    )
+  }
 }

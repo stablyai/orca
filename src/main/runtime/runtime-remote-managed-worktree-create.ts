@@ -222,7 +222,7 @@ export async function createRuntimeRemoteManagedWorktree(
         didSpawnSetup = true
       }
     }
-  } else if (!shouldActivate && deps.canSpawn()) {
+  } else if (!shouldActivate && deps.canSpawn() && !args.createdWithAgent) {
     try {
       await deps.createTerminal(`path:${result.worktree.path}`, { surfaceOwner: false })
     } catch (err) {

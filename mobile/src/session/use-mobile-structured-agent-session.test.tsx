@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  AgentJournalDispatchState,
   AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../../src/shared/agent-session-journal-types'
@@ -9,7 +10,18 @@ import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-sessi
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
+import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+
+const asyncStorage = vi.hoisted(() => ({
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn()
+}))
+
+vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
+
+import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
 
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -138,15 +150,19 @@ function runningStatusItem(): AgentJournalRenderItem {
   }
 }
 
+function sendResult(dispatchState: AgentJournalDispatchState, reason: string | null = null) {
+  return ok({
+    ok: true,
+    replayed: false,
+    fence: 3,
+    cursor: { epoch: 'epoch-1', sequence: 1 },
+    value: structuredSendResultFixture(dispatchState, reason)
+  })
+}
+
 async function defaultSendRequest(method: string, params?: Record<string, unknown>) {
   if (method === 'agentSession.send') {
-    return ok({
-      ok: true,
-      replayed: false,
-      fence: 3,
-      cursor: { epoch: 'epoch-1', sequence: 1 },
-      value: { turnId: 'turn-1' }
-    })
+    return sendResult('accepted')
   }
   if (method === 'agentSession.options') {
     return ok({
@@ -227,6 +243,7 @@ describe('useMobileStructuredAgentSession', () => {
     sendRequest,
     subscribe
   } as unknown as RpcClient
+  let storedOperations: Map<string, string>
 
   function Harness({
     sessionId = 'session-1',
@@ -253,6 +270,17 @@ describe('useMobileStructuredAgentSession', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    resetMobileStructuredSendOperationJournalForTests()
+    storedOperations = new Map()
+    asyncStorage.getItem.mockImplementation(
+      async (key: string) => storedOperations.get(key) ?? null
+    )
+    asyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
+      storedOperations.set(key, value)
+    })
+    asyncStorage.removeItem.mockImplementation(async (key: string) => {
+      storedOperations.delete(key)
+    })
     sendRequest.mockImplementation(defaultSendRequest)
     listener = null
   })
@@ -671,36 +699,6 @@ describe('useMobileStructuredAgentSession', () => {
     expect(firstId).toMatch(/^\d{13}-[0-9a-f]{32}$/)
     expect(retryId).toMatch(/^\d{13}-[0-9a-f]{32}$/)
     expect(retryId).not.toBe(firstId)
-  })
-
-  it('marks a retried send as retryUnknown after ambiguous delivery', async () => {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
-    act(() => listener?.(snapshotEvent(3)))
-    let attempts = 0
-    sendRequest.mockImplementation(async (method, params) => {
-      if (method === 'agentSession.send' && attempts++ === 0) {
-        throw markRpcDeliveryUnknown(new Error('Connection closed'))
-      }
-      return defaultSendRequest(method, params)
-    })
-
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('retry me')).toBe('accepted')
-    })
-
-    const calls = sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send')
-    expect(calls).toHaveLength(2)
-    expect(calls[0]![1]).not.toHaveProperty('retryUnknown')
-    expect(calls[1]![1]).toMatchObject({ retryUnknown: true })
-    const firstId = (calls[0]![1] as { envelope: { clientOperationId: string } }).envelope
-      .clientOperationId
-    const retryId = (calls[1]![1] as { envelope: { clientOperationId: string } }).envelope
-      .clientOperationId
-    expect(retryId).toBe(firstId)
   })
 
   it('keeps structured option changes dispatched after unknown delivery', async () => {

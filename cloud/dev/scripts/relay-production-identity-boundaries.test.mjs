@@ -167,3 +167,12 @@ test('fence broker pins the production-proven Terraform planner', async () => {
   const dockerfile = await source('apps/relay-fence-broker/Dockerfile')
   assert.match(dockerfile, /FROM hashicorp\/terraform:1\.15\.8 AS terraform/)
 })
+
+ test('push uses its dedicated identity and rollout lease', () => {
+  const workflow = readRelayWorkflow('push-deploy.yml')
+  assert.match(workflow, /PRODUCTION_GCP_PUSH_DEPLOY_WORKLOAD_IDENTITY_PROVIDER/)
+  assert.match(workflow, /PRODUCTION_GCP_PUSH_DEPLOY_SERVICE_ACCOUNT/)
+  assert.doesNotMatch(workflow, /PRODUCTION_GCP_RELAY_DEPLOY_/)
+  assert.match(workflow, /group: production-push-rollout/)
+  assert.match(workflow, /object: terraform\/state\/push-rollout\/production.lock/)
+})

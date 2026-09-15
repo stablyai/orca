@@ -87,7 +87,9 @@ describe('projectSessionTabAgentStatus', () => {
         }
       ]
     }
-    const oldClient = projectSessionTabAgentStatus(snapshot, 'mobile', [])
+    // A paired client that never negotiated the capability, with the setting on: mobile keeps an
+    // unrenderable row under a fallback title, so only a non-mobile old client still loses them.
+    const oldClient = projectSessionTabAgentStatus(snapshot, 'runtime', [], true)
     expect(oldClient.tabs.map((tab) => tab.type)).toEqual(['terminal'])
     expect(oldClient.activeTabId).toBe('tab-1::leaf-1')
     expect(oldClient.activeTabType).toBe('terminal')
@@ -96,11 +98,6 @@ describe('projectSessionTabAgentStatus', () => {
     expect(oldClient.tabGroups).toHaveLength(1)
     expect(oldClient.tabGroupLayout).toEqual({ type: 'leaf', groupId: 'group-a' })
 
-    expect(
-      projectSessionTabAgentStatus(snapshot, 'mobile', [
-        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-      ])
-    ).toEqual(oldClient)
     expect(
       projectSessionTabAgentStatus(
         snapshot,
@@ -118,10 +115,25 @@ describe('projectSessionTabAgentStatus', () => {
     )
     expect(capableMobile).toBe(snapshot)
 
-    const capable = projectSessionTabAgentStatus(snapshot, 'runtime', [
-      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-    ])
+    const capable = projectSessionTabAgentStatus(
+      snapshot,
+      'runtime',
+      [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      true
+    )
     expect(capable).toBe(snapshot)
+
+    // The host setting is policy for every caller, so a capable desktop client with the
+    // setting off sees the same projection an old client does.
+    expect(
+      projectSessionTabAgentStatus(
+        snapshot,
+        'runtime',
+        [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+        false
+      )
+    ).toEqual(oldClient)
+    expect(projectSessionTabAgentStatus(snapshot, undefined, undefined, false)).toEqual(oldClient)
   })
 
   const claudeSnapshot = {
@@ -276,8 +288,10 @@ describe('projectSessionTabAgentStatus', () => {
   )
 
   it('keeps Claude rows on the local renderer, which negotiates nothing', () => {
-    expect(projectSessionTabAgentStatus(claudeSnapshot, undefined, undefined)).toBe(claudeSnapshot)
-    expect(projectSessionTabAgentStatus(claudeSnapshot, undefined, [])).toBe(claudeSnapshot)
+    expect(projectSessionTabAgentStatus(claudeSnapshot, undefined, undefined, true)).toBe(
+      claudeSnapshot
+    )
+    expect(projectSessionTabAgentStatus(claudeSnapshot, undefined, [], true)).toBe(claudeSnapshot)
   })
 
   it('leaves Codex rows untouched whether or not the Claude capability is present', () => {
@@ -295,11 +309,11 @@ describe('projectSessionTabAgentStatus', () => {
         )
       }
     }
-    expect(projectSessionTabAgentStatus(codexOnly, undefined, undefined)).toBe(codexOnly)
+    expect(projectSessionTabAgentStatus(codexOnly, undefined, undefined, true)).toBe(codexOnly)
   })
 
   it('withholds session boundaries from legacy paired clients', () => {
-    const projected = projectSessionTabAgentStatus(makeSnapshot(true), 'runtime', [])
+    const projected = projectSessionTabAgentStatus(makeSnapshot(true), 'runtime', [], true)
 
     expect(projected.tabs[0]).not.toHaveProperty('agentStatus')
   })
@@ -308,7 +322,12 @@ describe('projectSessionTabAgentStatus', () => {
     const snapshot = makeSnapshot(true)
 
     expect(
-      projectSessionTabAgentStatus(snapshot, 'runtime', [AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY])
+      projectSessionTabAgentStatus(
+        snapshot,
+        'runtime',
+        [AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY],
+        true
+      )
     ).toBe(snapshot)
   })
 
@@ -317,8 +336,12 @@ describe('projectSessionTabAgentStatus', () => {
     const mobileBoundary = makeSnapshot(true)
     const runtimeCompletion = makeSnapshot(false)
 
-    expect(projectSessionTabAgentStatus(localBoundary, undefined, undefined)).toBe(localBoundary)
-    expect(projectSessionTabAgentStatus(mobileBoundary, 'mobile', [])).toBe(mobileBoundary)
-    expect(projectSessionTabAgentStatus(runtimeCompletion, 'runtime', [])).toBe(runtimeCompletion)
+    expect(projectSessionTabAgentStatus(localBoundary, undefined, undefined, true)).toBe(
+      localBoundary
+    )
+    expect(projectSessionTabAgentStatus(mobileBoundary, 'mobile', [], true)).toBe(mobileBoundary)
+    expect(projectSessionTabAgentStatus(runtimeCompletion, 'runtime', [], true)).toBe(
+      runtimeCompletion
+    )
   })
 })

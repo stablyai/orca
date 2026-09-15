@@ -278,7 +278,13 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     expect(pr?.number).toBe(8)
     expect(pr?.state).toBe('open')
     // Open results never consult git for the default branch (lazy resolution).
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    // Remote-name listing is a separate concern from default-branch resolution,
+    // so allow it and keep every other git command forbidden here.
+    expect(
+      gitExecFileAsyncMock.mock.calls
+        .map(([args]) => args[0])
+        .filter((command) => command !== 'remote')
+    ).toEqual([])
   })
 
   it('keeps a CLOSED PR on a feature branch visible (behavior preserved)', async () => {

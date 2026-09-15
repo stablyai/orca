@@ -30,6 +30,10 @@ export type StructuredAgentSessionReadRestoreDeps = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   hasSession: (sessionId: string) => boolean
   onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
+  retrySettlement: (
+    sessionId: string,
+    params: RestoredStructuredAgentSessionRead['params']
+  ) => Promise<boolean>
   restoreHandoff: (sessionId: string) => Promise<void>
 }
 
@@ -64,6 +68,7 @@ export async function restoreOneStructuredAgentSessionRead(
       return
     }
     input.onReadable(sessionId, restored)
+    await input.retrySettlement(sessionId, restored.params)
     await input.restoreHandoff(sessionId)
   })
 }

@@ -170,7 +170,7 @@ describe('agent hook completion notifications', () => {
 
   afterEach(() => vi.useRealTimers())
 
-  it('requires fresh working after notifications start disabled and later re-enable', async () => {
+  it('keeps completion tracking active across desktop notification changes', async () => {
     mockStoreState.settings.notifications.agentTaskComplete = false
     const {
       observeAgentHookCompletionForNotification,
@@ -187,7 +187,7 @@ describe('agent hook completion notifications', () => {
       payload: hookStatus('done')
     })
 
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
 
     observeAgentHookCompletionForNotification({
       paneKey,
@@ -201,6 +201,7 @@ describe('agent hook completion notifications', () => {
     })
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(2)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       'wt-1',
       expect.objectContaining({
@@ -216,7 +217,7 @@ describe('agent hook completion notifications', () => {
     )
   }, 15_000)
 
-  it('accepts hook lifecycle while every completion alert consumer is disabled', async () => {
+  it('offers hook completion to mobile while desktop notifications and attention are disabled', async () => {
     mockStoreState.settings.notifications.agentTaskComplete = false
     mockStoreState.settings.experimentalTerminalAttention = false
     const {
@@ -240,13 +241,13 @@ describe('agent hook completion notifications', () => {
       paneKey,
       expect.objectContaining({ state: 'done', agentType: 'codex' })
     )
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
 
     mockStoreState.settings.notifications.agentTaskComplete = true
     syncAgentHookCompletionNotificationSettings()
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })
 
   it('tracks hook completion for terminal attention when OS completion notifications are disabled', async () => {
@@ -266,8 +267,7 @@ describe('agent hook completion notifications', () => {
       'wt-1',
       expect.objectContaining({
         source: 'agent-task-complete',
-        paneKey,
-        suppressOsNotification: true
+        paneKey
       })
     )
   }, 15_000)

@@ -262,13 +262,17 @@ type ColorFieldProps = {
 type NumberFieldProps = {
   label: string
   description: string
-  value: number
+  /** undefined renders the field empty — pair it with `placeholder` and `onClear` for an unset state. */
+  value: number | undefined
   defaultValue?: number
   min: number
   max?: number
   step?: number
   integer?: boolean
   onChange: (value: number) => void
+  /** When set, emptying the field clears the setting instead of snapping back to the current value. */
+  onClear?: () => void
+  placeholder?: string
   suffix?: string
   className?: string
 }
@@ -316,6 +320,8 @@ export function NumberField({
   step = 1,
   integer = false,
   onChange,
+  onClear,
+  placeholder,
   suffix,
   className
 }: NumberFieldProps): React.JSX.Element {
@@ -331,6 +337,11 @@ export function NumberField({
   const commit = (): void => {
     const trimmed = draft.trim()
     if (trimmed === '') {
+      if (onClear) {
+        // Clearable fields treat empty as "unset" so the caller can fall back to its automatic value.
+        onClear()
+        return
+      }
       // Empty input — reset to current value rather than committing 0
       setDraft(Number.isFinite(value) ? String(value) : '')
       return
@@ -369,6 +380,7 @@ export function NumberField({
             max={max}
             step={step}
             aria-label={label}
+            placeholder={placeholder}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}

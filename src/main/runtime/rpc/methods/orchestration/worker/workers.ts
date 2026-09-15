@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { startFederatedWorker } from '../federation/federated-worker-start'
 import { startLocalWorker } from './local-worker-start'
 import {
@@ -14,7 +14,7 @@ import {
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
 
-export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
     name: 'orchestration.workerStart',
     params: WorkerStartParams,
@@ -51,8 +51,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
       const mode = decideWorkerStartMode({
         params,
-        settings: readWorkerStartModeSettings(runtime),
-        platform: process.platform
+        settings: readWorkerStartModeSettings(runtime)
       })
       if (params.on) {
         // A remote worker is always a terminal agent; the mode receipt rides along so the

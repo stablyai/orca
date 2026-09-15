@@ -83,6 +83,7 @@ export type AgentLaunchConfigRegistryEntry = {
 }
 
 export type AgentStatusPayload = ParsedAgentStatusPayload & {
+  subagentObservation?: AgentStatusEntry['subagentObservation']
   orchestration?: AgentStatusOrchestrationContext
   promptInteractionKey?: string
   restoredUnconfirmed?: boolean
@@ -108,6 +109,8 @@ export type AgentStatusRouting = {
 }
 
 export type AgentStatusMetadata = {
+  /** Structured status rows remain fresh while the host owns the session; cleared on feed loss. */
+  structuredHostOwned?: true
   providerSession?: AgentProviderSessionMetadata
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string

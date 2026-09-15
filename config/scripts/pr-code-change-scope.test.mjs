@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -352,6 +352,54 @@ describe('per-job path classification', () => {
     expect(result.stdout).toContain('git_compatibility=false\n')
     expect(result.stdout).toContain('package=false\n')
     expect(result.stdout).toContain('test=true\n')
+  })
+
+  // A long-lived PR whose base.sha has gone stale diffs thousands of files, so the writer
+  // outruns one pipe buffer. A single fd-0 read then returns early, breaks the writer's pipe,
+  // and still exits 0 -- emitting no pairs at all, which silently skips every lane.
+  it('classifies a path that arrives after the first pipe buffer', async () => {
+    const filler = Array.from(
+      { length: 12_000 },
+      (_, index) => `docs/reference/generated-placeholder-${index}.md`
+    )
+    const input = `${[...filler, 'config/patches/xterm-upstream.json'].join('\n')}\n`
+    expect(input.length).toBeGreaterThan(64 * 1024)
+
+    const child = spawn(process.execPath, ['config/scripts/pr-code-change-scope.mjs'], {
+      cwd: projectDir,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    let stdout = ''
+    let stderr = ''
+    let brokePipe = false
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => (stdout += chunk))
+    child.stderr.on('data', (chunk) => (stderr += chunk))
+    child.stdin.on('error', (error) => {
+      brokePipe ||= error.code === 'EPIPE'
+    })
+
+    const exitCode = await new Promise((resolvePromise) => {
+      child.on('close', resolvePromise)
+      let offset = 0
+      const step = () => {
+        if (offset >= input.length) {
+          child.stdin.end()
+          return
+        }
+        child.stdin.write(input.slice(offset, offset + 64 * 1024))
+        offset += 64 * 1024
+        setTimeout(step, 20)
+      }
+      step()
+    })
+
+    expect(stderr).not.toContain('EAGAIN')
+    expect(brokePipe).toBe(false)
+    expect(exitCode, stderr).toBe(0)
+    expect(stdout).toContain('should_run=true\n')
+    expect(stdout).toContain('xterm_patch_sync=true\n')
   })
 })
 

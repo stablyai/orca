@@ -6,6 +6,7 @@ import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type {
   GitFileStatus,
@@ -35,6 +36,7 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
   node,
   mode,
   worktreePath,
+  sourceWorkspaceId,
   activeSectionKey,
   sectionIndexByKey,
   isCollapsed,
@@ -45,6 +47,7 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
   node: CombinedDiffTreeNode
   mode: CombinedDiffFileTreeMode
   worktreePath: string
+  sourceWorkspaceId?: string
   activeSectionKey: string | null
   sectionIndexByKey: ReadonlyMap<string, number>
   isCollapsed: boolean
@@ -62,6 +65,9 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
         draggable
         onDragStart={(event) => {
           event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, joinPath(worktreePath, node.path))
+          if (sourceWorkspaceId) {
+            writeWorkspaceFileDragSourceForWorkspace(event.dataTransfer, sourceWorkspaceId)
+          }
           event.dataTransfer.effectAllowed = 'copy'
         }}
       >
@@ -117,6 +123,9 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
           WORKSPACE_FILE_PATH_MIME,
           joinPath(worktreePath, node.entry.path)
         )
+        if (sourceWorkspaceId) {
+          writeWorkspaceFileDragSourceForWorkspace(event.dataTransfer, sourceWorkspaceId)
+        }
         event.dataTransfer.effectAllowed = 'copy'
       }}
       onClick={() => onNavigate(node.entry)}

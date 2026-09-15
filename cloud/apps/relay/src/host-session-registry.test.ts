@@ -3,6 +3,8 @@ import {
   ASSIGNMENT_LIMITS,
   CONTROL_CONTINUITY_LIMITS,
   RELAY_CLOSE_CODE,
+  RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS,
+  RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME,
   RELAY_PROTOCOL_LIMITS
 } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -109,6 +111,7 @@ function createRegistry(
   renewControlActivity: ReturnType<typeof vi.fn>
   releaseActivity: ReturnType<typeof vi.fn>
   observer: {
+    recordAuth: ReturnType<typeof vi.fn>
     recordControlClose: ReturnType<typeof vi.fn>
     recordSpliceClose: ReturnType<typeof vi.fn>
   }
@@ -139,7 +142,10 @@ function createRegistry(
     store as RelayCredentialStore,
     assignments,
     new ProcessQueuedByteBudget(),
-    observer
+    observer,
+    Date.now,
+    Math.random,
+    'incarnation-1'
   )
   // Mirrors the production signature exactly so a future positional shift fails to compile.
   const bound = (
@@ -165,7 +171,14 @@ function createRegistry(
     assignmentEpoch,
     appVersion = '1.4.173'
   ) => bound(socket, identity, existing, generation, rebind, assignmentEpoch, appVersion)
-  return { registry, activate, acquireActivity, renewControlActivity, releaseActivity, observer }
+  return {
+    registry,
+    activate,
+    acquireActivity,
+    renewControlActivity,
+    releaseActivity,
+    observer
+  }
 }
 
 describe('host session cleanup races', () => {
@@ -397,26 +410,20 @@ describe('host session cleanup races', () => {
         attemptId: '22222222-2222-4222-8222-222222222222'
       })
     ).toThrow('regional_rehome_attempt_conflict')
-    expect(() =>
-      registry.drainHost({ ...request, sourceAssignmentEpoch: 8 })
-    ).toThrow('regional_rehome_assignment_epoch_mismatch')
+    expect(() => registry.drainHost({ ...request, sourceAssignmentEpoch: 8 })).toThrow(
+      'regional_rehome_assignment_epoch_mismatch'
+    )
 
     const rebound = new FakeSocket()
-    await activate(
-      rebound as unknown as WebSocket,
-      identity,
-      registry.get(request),
-      1,
-      true,
-      7
-    )
+    await activate(rebound as unknown as WebSocket, identity, registry.get(request), 1, true, 7)
     expect(registry.get(request)?.state).toBe('drain-only')
     expect(rebound.send).toHaveBeenCalledWith(expect.stringContaining('"type":"drain"'))
 
     await vi.advanceTimersByTimeAsync(30_000)
     expect(registry.get(request)).toBeNull()
-    expect(registry.get({ userId: secondIdentity.sub, relayHostId: secondIdentity.relayHostId }))
-      .not.toBeNull()
+    expect(
+      registry.get({ userId: secondIdentity.sub, relayHostId: secondIdentity.relayHostId })
+    ).not.toBeNull()
     expect(secondSocket.close).not.toHaveBeenCalled()
   })
 
@@ -512,14 +519,7 @@ describe('host session cleanup races', () => {
     expect(original).not.toBeNull()
 
     const rebindSocket = new FakeSocket()
-    const rebinding = activate(
-      rebindSocket as unknown as WebSocket,
-      identity,
-      original,
-      1,
-      true,
-      1
-    )
+    const rebinding = activate(rebindSocket as unknown as WebSocket, identity, original, 1, true, 1)
     rebindSocket.close()
     blocked.resolve('control:production-gce-c3:1')
     await rebinding
@@ -658,14 +658,7 @@ describe('host session cleanup races', () => {
     originalSocket.close()
 
     const replacementSocket = new FakeSocket()
-    await activate(
-      replacementSocket as unknown as WebSocket,
-      identity,
-      original,
-      2,
-      false,
-      1
-    )
+    await activate(replacementSocket as unknown as WebSocket, identity, original, 2, false, 1)
     const replacement = registry.get({
       userId: identity.sub,
       relayHostId: identity.relayHostId
@@ -695,14 +688,7 @@ describe('host session cleanup races', () => {
     })
     expect(original).not.toBeNull()
 
-    await activate(
-      new FakeSocket() as unknown as WebSocket,
-      identity,
-      original,
-      2,
-      false,
-      1
-    )
+    await activate(new FakeSocket() as unknown as WebSocket, identity, original, 2, false, 1)
     vi.advanceTimersByTime(15_000)
 
     expect(renewControlActivity).toHaveBeenCalledOnce()
@@ -715,6 +701,53 @@ describe('host session cleanup races', () => {
     )
     registry.drain(0)
     vi.advanceTimersByTime(0)
+  })
+
+  it('ignores a denial belonging to the socket before a same-generation rebind', async () => {
+    const h = createRegistry(vi.fn().mockResolvedValue('control:production-gce-c3:1'))
+    const oldSocket = new FakeSocket()
+    await h.activate(oldSocket as unknown as WebSocket, identity, null, 1, false, 1)
+    const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+    let reject!: (error: Error) => void
+    h.renewControlActivity.mockReturnValueOnce(
+      new Promise<void>((_, fail) => {
+        reject = fail
+      })
+    )
+    await vi.advanceTimersByTimeAsync(15_000)
+    const replacement = new FakeSocket()
+    await h.activate(replacement as unknown as WebSocket, identity, session, 1, true, 1)
+    reject(new Error('activity_cell_not_authoritative'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(replacement.close).not.toHaveBeenCalled()
+    expect(session.socket).toBe(replacement)
+    expect(session.generation).toBe(1)
+  })
+
+  it('ignores missing-activity recovery denial after an authority transition', async () => {
+    const h = createRegistry(vi.fn().mockResolvedValue('control:production-gce-c3:1'))
+    const socket = new FakeSocket()
+    await h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+    h.renewControlActivity.mockRejectedValueOnce(new Error('control_activity_not_found'))
+    let reject!: (error: Error) => void
+    h.acquireActivity.mockReturnValueOnce(
+      new Promise<void>((_, fail) => {
+        reject = fail
+      })
+    )
+    await vi.advanceTimersByTimeAsync(15_000)
+    h.registry.drainHost({
+      attemptId: 'attempt',
+      userId: identity.sub,
+      relayHostId: identity.relayHostId,
+      sourceAssignmentEpoch: 1,
+      graceMs: 60_000
+    })
+    reject(new Error('activity_cell_not_authoritative'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(socket.close).not.toHaveBeenCalled()
+    expect(session.state).toBe('drain-only')
   })
 
   it('keeps 15s pings while halving steady-state control renewals', async () => {
@@ -731,9 +764,7 @@ describe('host session cleanup races', () => {
       socket.emit('message', Buffer.from(JSON.stringify({ type: 'pong' })), false)
     }
 
-    const pings = socket.send.mock.calls.filter((call) =>
-      String(call[0]).includes('"ping"')
-    )
+    const pings = socket.send.mock.calls.filter((call) => String(call[0]).includes('"ping"'))
     expect(pings).toHaveLength(4)
     expect(renewControlActivity).toHaveBeenCalledTimes(2)
     const firstExpiry = Number(renewControlActivity.mock.calls[0]![1].expiresAt)
@@ -1003,5 +1034,665 @@ describe('control lease recovery after the session is gone', () => {
       registry.drain(0)
       vi.advanceTimersByTime(0)
     }
+  })
+})
+
+describe('host hello ack pending connections', () => {
+  const DETAILS = new Set([RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS])
+  const LEGACY_ENTRY = { connId: 'conn-1', connTicket: 'T'.repeat(43) }
+  const DETAILED_ENTRY = { ...LEGACY_ENTRY, kind: 'invite', relayDeviceId: 'device-1' }
+
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  function newRegistry(): ReturnType<typeof createRegistry> {
+    return createRegistry(
+      vi
+        .fn<RelayAssignmentStore['activateControl']>()
+        .mockResolvedValue('control:production-gce-c3:1')
+    )
+  }
+
+  function addPendingConnection(session: HostSession): void {
+    session.pendingConns.set('conn-1', {
+      ...LEGACY_ENTRY,
+      reservation: {
+        userId: identity.sub,
+        relayHostId: identity.relayHostId,
+        credentialKind: 'invite',
+        relayDeviceId: 'device-1'
+      },
+      client: new FakeSocket() as unknown as WebSocket,
+      attachTimer: setTimeout(() => {}, 60_000),
+      credentialActivityId: null
+    } as unknown as Parameters<typeof session.pendingConns.set>[1])
+  }
+
+  function sentAck(socket: FakeSocket): Record<string, unknown> {
+    const acks = socket.send.mock.calls
+      .map((call) => JSON.parse(String(call[0])) as Record<string, unknown>)
+      .filter((message) => message.type === 'host-hello-ack')
+    return acks.at(-1)!
+  }
+
+  function sessionOf(registry: HostSessionRegistry): HostSession {
+    return registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+  }
+
+  async function ackFor(capabilities?: ReadonlySet<string>): Promise<Record<string, unknown>> {
+    const { registry, activate } = newRegistry()
+    const socket = new FakeSocket()
+    registry.acceptControl(
+      socket as unknown as WebSocket,
+      identity,
+      undefined,
+      capabilities ?? new Set()
+    )
+    await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    const session = sessionOf(registry)
+    addPendingConnection(session)
+    socket.send.mockClear()
+    ;(registry as unknown as { sendHelloAck(session: HostSession): void }).sendHelloAck(session)
+    return sentAck(socket)
+  }
+
+  async function ackAfterRebind(
+    first: ReadonlySet<string>,
+    successor: ReadonlySet<string>
+  ): Promise<{ opening: Record<string, unknown>; rebound: Record<string, unknown> }> {
+    const { registry, activate } = newRegistry()
+    const opening = new FakeSocket()
+    registry.acceptControl(opening as unknown as WebSocket, identity, undefined, first)
+    await activate(opening as unknown as WebSocket, identity, null, 1, false, 1)
+    const session = sessionOf(registry)
+    addPendingConnection(session)
+    opening.send.mockClear()
+    ;(registry as unknown as { sendHelloAck(session: HostSession): void }).sendHelloAck(session)
+
+    const rebound = new FakeSocket()
+    registry.acceptControl(rebound as unknown as WebSocket, identity, undefined, successor)
+    await activate(rebound as unknown as WebSocket, identity, session, 1, true, 1)
+    return { opening: sentAck(opening), rebound: sentAck(rebound) }
+  }
+
+  it('states the pending kind and device to a host that advertised it can read them', async () => {
+    const ack = await ackFor(DETAILS)
+
+    expect(ack.pendingConns).toEqual([DETAILED_ENTRY])
+  })
+
+  it('restates only the identifiers to a host that never advertised the capability', async () => {
+    // A shipped host parses these entries strictly, so an unannounced key fails
+    // the whole ack parse and kills a control that was working.
+    const ack = await ackFor()
+
+    expect(ack.pendingConns).toEqual([LEGACY_ENTRY])
+  })
+
+  it('downgrades the restated entry when the successor control drops the capability', async () => {
+    // The capability belongs to the socket, not the session: a rebind can land a
+    // control whose decoder is older than the one that opened the session.
+    const { opening, rebound } = await ackAfterRebind(DETAILS, new Set())
+
+    expect(opening.pendingConns).toEqual([DETAILED_ENTRY])
+    expect(rebound.pendingConns).toEqual([LEGACY_ENTRY])
+  })
+
+  it('upgrades the restated entry when the successor control adds the capability', async () => {
+    const { opening, rebound } = await ackAfterRebind(new Set(), DETAILS)
+
+    expect(opening.pendingConns).toEqual([LEGACY_ENTRY])
+    expect(rebound.pendingConns).toEqual([DETAILED_ENTRY])
+  })
+})
+
+describe('source-owned idle cutover', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+  const request = {
+    attemptId: 'idle-1',
+    userId: identity.sub,
+    relayHostId: identity.relayHostId,
+    sourceAssignmentEpoch: 1,
+    sourceGeneration: 1,
+    sourceCellIncarnation: 'incarnation-1',
+    targetCellId: 'target'
+  }
+  async function source(store: Partial<RelayCredentialStore> = {}) {
+    const h = createRegistry(vi.fn().mockResolvedValue('control:1'), store)
+    const socket = new FakeSocket()
+    h.registry.acceptControl(
+      socket as unknown as WebSocket,
+      identity,
+      undefined,
+      new Set([RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME])
+    )
+    socket.removeAllListeners('message')
+    await h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    return { ...h, socket, session: h.registry.get(request)! }
+  }
+  it('keeps either established client busy until both actually leave', async () => {
+    const h = await source()
+    h.session.activeConnIds.add('phone')
+    h.session.activeConnIds.add('ipad')
+    const commit = vi.fn().mockResolvedValue({ outcome: 'committed' })
+    h.session.activeConnIds.delete('ipad')
+    expect(
+      await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome: 'busy' })
+    expect(commit).not.toHaveBeenCalled()
+    h.session.activeConnIds.delete('phone')
+    expect(
+      await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome: 'committed' })
+    expect(h.socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
+    expect(h.releaseActivity).toHaveBeenCalled()
+  })
+  it.each([
+    { userId: 'other-user' },
+    { sourceAssignmentEpoch: 2 },
+    { sourceGeneration: 2 },
+    { sourceCellIncarnation: 'other-incarnation' },
+    { targetCellId: 'other-target' }
+  ])('rejects a reused operation ID with changed authority %j', async (change) => {
+    const h = await source()
+    const result = deferred<{ outcome: 'deferred' }>()
+    const commit = vi.fn().mockReturnValue(result.promise)
+    const reconcile = vi.fn().mockResolvedValue('not-committed')
+    const moving = h.registry.idleRehome(request, commit, reconcile)
+    const conflicting = h.registry.idleRehome({ ...request, ...change }, commit, reconcile)
+    result.resolve({ outcome: 'deferred' })
+    expect(await conflicting).toEqual({ outcome: 'stale' })
+    expect(await moving).toEqual({ outcome: 'deferred' })
+    expect(commit).toHaveBeenCalledOnce()
+    expect(h.socket.close).not.toHaveBeenCalled()
+  })
+  it('accounts for accepts before credential identity resolves', async () => {
+    const lookup = deferred<null>()
+    const h = await source({
+      resolveResume: vi.fn().mockReturnValue(lookup.promise),
+      resolveInviteForMove: vi.fn().mockResolvedValue(null)
+    })
+    const client = new FakeSocket()
+    const accept = h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential'
+    )
+    expect(
+      await h.registry.idleRehome(request, vi.fn(), vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome: 'busy' })
+    lookup.resolve(null)
+    await accept
+    expect(h.socket.close).not.toHaveBeenCalled()
+  })
+  it('rejects new accepts and replacements synchronously while a commit awaits', async () => {
+    const h = await source()
+    const result = deferred<{ outcome: 'deferred' }>()
+    const commit = vi.fn().mockReturnValue(result.promise)
+    const moving = h.registry.idleRehome(
+      request,
+      commit,
+      vi.fn().mockResolvedValue('not-committed')
+    )
+    const duplicate = h.registry.idleRehome(
+      request,
+      commit,
+      vi.fn().mockResolvedValue('not-committed')
+    )
+    const client = new FakeSocket()
+    const release = vi.fn()
+    await h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential',
+      { release } as never
+    )
+    expect(client.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.WRONG_CELL, expect.any(String))
+    expect(release).toHaveBeenCalledOnce()
+    const replacement = new FakeSocket()
+    await h.activate(replacement as unknown as WebSocket, identity, h.session, 2, false, 1)
+    expect(replacement.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.WRONG_CELL, expect.any(String))
+    result.resolve({ outcome: 'deferred' })
+    await moving
+    await duplicate
+    expect(commit).toHaveBeenCalledOnce()
+    expect(h.socket.close).not.toHaveBeenCalled()
+    expect(
+      await h.registry.idleRehome(
+        { ...request, attemptId: 'next' },
+        vi.fn().mockResolvedValue({ outcome: 'committed' }),
+        vi.fn().mockResolvedValue('not-committed')
+      )
+    ).toEqual({ outcome: 'committed' })
+  })
+  it.each(['ambiguous', 'deferred'])(
+    'keeps %s outcomes fenced until locked reconciliation succeeds',
+    async (claim) => {
+      const h = await source()
+      const reconcile = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('database unavailable'))
+        .mockRejectedValueOnce(new Error('database unavailable'))
+        .mockResolvedValue('not-committed')
+      const moving = h.registry.idleRehome(
+        request,
+        claim === 'ambiguous'
+          ? vi.fn().mockRejectedValue(new Error('lost commit reply'))
+          : vi.fn().mockResolvedValue({ outcome: 'deferred' }),
+        reconcile
+      )
+      await vi.advanceTimersByTimeAsync(50)
+      expect(
+        await h.registry.idleRehome(
+          { ...request, attemptId: 'other' },
+          vi.fn(),
+          vi.fn().mockResolvedValue('not-committed')
+        )
+      ).toEqual({ outcome: 'busy' })
+      expect(h.socket.close).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(300)
+      expect(await moving).toEqual({ outcome: 'deferred' })
+      expect(reconcile).toHaveBeenCalledTimes(3)
+      expect(h.socket.close).not.toHaveBeenCalled()
+    }
+  )
+  it('owns accepted control mutations before the handler first awaits', async () => {
+    const mutation = deferred<RelayTokenClaims | null>()
+    const h = await source()
+    ;(h.registry as unknown as { verifyRelayToken: unknown }).verifyRelayToken = vi
+      .fn()
+      .mockReturnValue(mutation.promise)
+    h.socket.emit(
+      'message',
+      Buffer.from(JSON.stringify({ type: 'auth-refresh', relayJwt: 'token' })),
+      false
+    )
+    const commit = vi.fn().mockResolvedValue({ outcome: 'deferred' })
+    expect(
+      await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome: 'busy' })
+    mutation.resolve(identity)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(
+      await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome: 'deferred' })
+  })
+  it('owns queued replacement activation before its first persistence await', async () => {
+    const h = await source()
+    const activation = deferred<string>()
+    const assignments = (h.registry as unknown as { assignments: { activateControl: unknown } })
+      .assignments
+    assignments.activateControl = vi.fn().mockReturnValue(activation.promise)
+    const replacement = new FakeSocket()
+    const activating = h.activate(
+      replacement as unknown as WebSocket,
+      identity,
+      h.session,
+      2,
+      false,
+      1
+    )
+    expect(
+      await h.registry.idleRehome(request, vi.fn(), vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome: 'busy' })
+    activation.resolve('control:2')
+    await activating
+  })
+  it('retires changed authority even when the claim definitively deferred', async () => {
+    const h = await source()
+    expect(
+      await h.registry.idleRehome(
+        request,
+        vi.fn().mockResolvedValue({ outcome: 'deferred' }),
+        vi.fn().mockResolvedValue('stale')
+      )
+    ).toEqual({ outcome: 'stale' })
+    expect(h.session.state).toBe('closed')
+    expect(h.releaseActivity).toHaveBeenCalled()
+  })
+  it('holds attach ownership through basis failure reservation cleanup', async () => {
+    const basis = deferred<void>()
+    const cleanup = deferred<void>()
+    const h = await source({
+      recordConnectionBasis: vi.fn().mockImplementation(async () => {
+        await basis.promise
+        throw new Error('basis failed')
+      }),
+      failReservation: vi.fn().mockReturnValue(cleanup.promise)
+    })
+    const client = new FakeSocket()
+    h.session.pendingConns.set('conn', {
+      connId: 'conn',
+      connTicket: 'ticket',
+      client: client as unknown as WebSocket,
+      reservation: {
+        userId: identity.sub,
+        relayHostId: identity.relayHostId,
+        credentialKind: 'invite',
+        leaseExpiresAt: Date.now() + 1000
+      },
+      attachTimer: setTimeout(() => {}, 1000),
+      credentialActivityId: null
+    } as never)
+    const attached = h.registry.acceptHostData(
+      new FakeSocket() as unknown as WebSocket,
+      'conn',
+      'ticket',
+      1
+    )
+    const commit = vi.fn().mockResolvedValue({ outcome: 'deferred' })
+    expect(await h.registry.idleRehome(request, commit, vi.fn())).toEqual({ outcome: 'busy' })
+    basis.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.session.activeConnIds.size).toBe(0)
+    expect(await h.registry.idleRehome(request, commit, vi.fn())).toEqual({ outcome: 'busy' })
+    expect(commit).not.toHaveBeenCalled()
+    cleanup.resolve()
+    await attached
+  })
+  it('rejects an attach mid-cutover before its ticket is ever examined', async () => {
+    const h = await source({ failReservation: vi.fn().mockResolvedValue(undefined) })
+    const result = deferred<{ outcome: 'deferred' }>()
+    // The cutover must already be in flight: an idle host is what it claims.
+    const moving = h.registry.idleRehome(request, () => result.promise, vi.fn())
+    const client = new FakeSocket()
+    h.session.pendingConns.set('conn', {
+      connId: 'conn',
+      connTicket: 'ticket',
+      client: client as unknown as WebSocket,
+      reservation: {
+        userId: identity.sub,
+        relayHostId: identity.relayHostId,
+        credentialKind: 'invite',
+        leaseExpiresAt: Date.now() + 1000
+      },
+      attachTimer: setTimeout(() => {}, 1000),
+      credentialActivityId: null
+    } as never)
+    const host = new FakeSocket()
+    // The ticket below is the live one: only the cutover fence may reject it.
+    expect(
+      await h.registry.acceptHostData(host as unknown as WebSocket, 'conn', 'ticket', 1)
+    ).toBe(false)
+    expect(host.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.WRONG_CELL, expect.any(String))
+    expect(h.observer.recordAuth).not.toHaveBeenCalled()
+    expect(h.session.pendingConns.has('conn')).toBe(true)
+    expect(h.session.activeConnIds.size).toBe(0)
+    result.resolve({ outcome: 'deferred' })
+    await moving
+  })
+  it('holds no attach ownership when no session owns the connection', async () => {
+    const h = await source()
+    const host = new FakeSocket()
+    expect(
+      await h.registry.acceptHostData(host as unknown as WebSocket, 'stranger', 'ticket', 1)
+    ).toBe(false)
+    expect(h.observer.recordAuth).toHaveBeenCalledWith(false)
+    expect(host.close).toHaveBeenCalledWith(
+      RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+      expect.any(String)
+    )
+    // A leaked idle-work hold from the unowned attach would report `busy` here.
+    expect(
+      await h.registry.idleRehome(
+        request,
+        vi.fn().mockResolvedValue({ outcome: 'committed' }),
+        vi.fn()
+      )
+    ).toEqual({ outcome: 'committed' })
+  })
+  it('returns the durable operation outcome after source retirement', async () => {
+    const h = await source()
+    const commit = vi.fn().mockResolvedValue({ outcome: 'committed' })
+    await h.registry.idleRehome(request, commit, vi.fn())
+    expect(
+      await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('committed'))
+    ).toEqual({ outcome: 'committed' })
+    expect(commit).toHaveBeenCalledOnce()
+  })
+  it('does not reopen a source overtaken by emergency drain', async () => {
+    const h = await source()
+    const result = deferred<{ outcome: 'deferred' }>()
+    const moving = h.registry.idleRehome(
+      request,
+      () => result.promise,
+      vi.fn().mockResolvedValue('not-committed')
+    )
+    h.registry.drain(0)
+    await vi.advanceTimersByTimeAsync(0)
+    result.resolve({ outcome: 'deferred' })
+    await moving
+    expect(h.session.state).toBe('closed')
+    expect(h.registry.get(request)).toBeNull()
+  })
+})
+
+// The host data leg's owner lookup is the registry's only whole-inventory scan on
+// an attach. These count what that scan touches, not how long it takes.
+describe('host data attach owner lookup', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  const SESSION_COUNT = 1000
+  const CONN_ID = 'conn-owned'
+  const OWNER_INDEX = { first: 0, middle: 499, last: 999 } as const
+  type Placement = keyof typeof OWNER_INDEX | 'absent'
+  type LookupCounts = { visits: number; membership: number }
+
+  function bindOwn<K, V>(map: Map<K, V>, property: string | symbol): unknown {
+    const value: unknown = Reflect.get(map, property, map)
+    return typeof value === 'function' ? value.bind(map) : value
+  }
+
+  // One visit per session the scan pulls off the map iterator; answers unchanged.
+  function countingValues<K, V>(map: Map<K, V>, counts: LookupCounts): Map<K, V> {
+    return new Proxy(map, {
+      get(target, property) {
+        if (property !== 'values') return bindOwn(target, property)
+        return function* (): Generator<V> {
+          for (const value of target.values()) {
+            counts.visits += 1
+            yield value
+          }
+        }
+      }
+    })
+  }
+
+  // One membership check per `pendingConns.has`; answers unchanged.
+  function countingHas<K, V>(map: Map<K, V>, counts: LookupCounts): Map<K, V> {
+    return new Proxy(map, {
+      get(target, property) {
+        if (property !== 'has') return bindOwn(target, property)
+        return (key: K) => {
+          counts.membership += 1
+          return target.has(key)
+        }
+      }
+    })
+  }
+
+  // The pre-change implementation, kept inline as the oracle the new counts are
+  // differenced against: two inventory arrays, two independent finds.
+  function legacyOwnerLookup(
+    sessions: Map<string, HostSession>,
+    connId: string
+  ): { owner: HostSession | undefined; session: HostSession | undefined } {
+    const owner = [...sessions.values()].find((candidate) => candidate.pendingConns.has(connId))
+    const session = [...sessions.values()].find((candidate) => candidate.pendingConns.has(connId))
+    return { owner, session }
+  }
+
+  function pendingConn(client: FakeSocket, connTicket: string) {
+    return {
+      connId: CONN_ID,
+      connTicket,
+      client: client as unknown as WebSocket,
+      reservation: {
+        userId: identity.sub,
+        relayHostId: identity.relayHostId,
+        credentialKind: 'invite',
+        leaseExpiresAt: Date.now() + 1000
+      },
+      attachTimer: setTimeout(() => {}, 1000),
+      credentialActivityId: null
+    } as never
+  }
+
+  // Every decoy holds a pending conn of its own, so each membership check the
+  // scan makes is real work rather than a lookup in an empty map.
+  function decoySession(index: number, counts: LookupCounts): HostSession {
+    const pendingConns = new Map<string, unknown>([[`conn-decoy-${index}`, { connId: 'decoy' }]])
+    return {
+      relayHostId: `decoy-host-${index}`,
+      generation: 1,
+      state: 'active',
+      activeConnIds: new Set<string>(),
+      pendingConns: countingHas(pendingConns, counts)
+    } as unknown as HostSession
+  }
+
+  async function attachRegistry(placement: Placement, store: Partial<RelayCredentialStore> = {}) {
+    const h = createRegistry(vi.fn().mockResolvedValue('control:1'), {
+      failReservation: vi.fn().mockResolvedValue(undefined),
+      recordConnectionBasis: vi.fn().mockResolvedValue(undefined),
+      deactivateBasis: vi.fn().mockResolvedValue(undefined),
+      ...store
+    })
+    const control = new FakeSocket()
+    await h.activate(control as unknown as WebSocket, identity, null, 1, false, 1)
+    const internals = h.registry as unknown as { sessions: Map<string, HostSession> }
+    const [ownerKey, owner] = [...internals.sessions.entries()][0]!
+    const counts: LookupCounts = { visits: 0, membership: 0 }
+    const client = new FakeSocket()
+    if (placement !== 'absent') owner.pendingConns.set(CONN_ID, pendingConn(client, 'ticket'))
+    owner.pendingConns = countingHas(owner.pendingConns, counts)
+    const ordered: HostSession[] = []
+    const sessions = new Map<string, HostSession>()
+    const ownerIndex = placement === 'absent' ? 0 : OWNER_INDEX[placement]
+    for (let index = 0; index < SESSION_COUNT; index += 1) {
+      const session = index === ownerIndex ? owner : decoySession(index, counts)
+      ordered.push(session)
+      sessions.set(index === ownerIndex ? ownerKey : `decoy-${index}`, session)
+    }
+    internals.sessions = countingValues(sessions, counts)
+    return { ...h, owner, ordered, counts, client, control, sessions: internals.sessions }
+  }
+
+  it.each([
+    {
+      placement: 'first',
+      before: { visits: 2000, membership: 2 },
+      after: { visits: 1, membership: 1 }
+    },
+    {
+      placement: 'middle',
+      before: { visits: 2000, membership: 1000 },
+      after: { visits: 500, membership: 500 }
+    },
+    {
+      placement: 'last',
+      before: { visits: 2000, membership: 2000 },
+      after: { visits: 1000, membership: 1000 }
+    },
+    {
+      placement: 'absent',
+      before: { visits: 2000, membership: 2000 },
+      after: { visits: 1000, membership: 1000 }
+    }
+  ] as const)(
+    'visits the inventory once, not twice, for a $placement owner',
+    async ({ placement, before, after }) => {
+      const h = await attachRegistry(placement)
+      expect(h.sessions.size).toBe(SESSION_COUNT)
+      const oracle = legacyOwnerLookup(h.sessions, CONN_ID)
+      const legacy = { ...h.counts }
+      h.counts.visits = 0
+      h.counts.membership = 0
+      const host = new FakeSocket()
+      // An unusable ticket stops the attach immediately after the lookup, so the
+      // counts below belong to the lookup alone.
+      expect(
+        await h.registry.acceptHostData(host as unknown as WebSocket, CONN_ID, 'wrong', 1)
+      ).toBe(false)
+      expect(h.observer.recordAuth).toHaveBeenCalledExactlyOnceWith(false)
+      expect(host.close).toHaveBeenCalledWith(
+        RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+        'invalid host data ticket'
+      )
+      expect(legacy).toEqual(before)
+      expect({ ...h.counts }).toEqual(after)
+      expect(oracle.owner).toBe(placement === 'absent' ? undefined : h.owner)
+      expect(oracle.owner).toBe(oracle.session)
+    }
+  )
+
+  it.each([
+    { reason: 'ticket', ticket: 'wrong', generation: 1, state: 'active' },
+    { reason: 'generation', ticket: 'ticket', generation: 2, state: 'active' },
+    { reason: 'state', ticket: 'ticket', generation: 1, state: 'orphaned' }
+  ] as const)('fails an attach whose $reason does not match the owner', async (input) => {
+    const h = await attachRegistry('middle')
+    h.owner.state = input.state
+    const host = new FakeSocket()
+    expect(
+      await h.registry.acceptHostData(
+        host as unknown as WebSocket,
+        CONN_ID,
+        input.ticket,
+        input.generation
+      )
+    ).toBe(false)
+    expect(h.observer.recordAuth).toHaveBeenCalledExactlyOnceWith(false)
+    expect(host.close).toHaveBeenCalledWith(
+      RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+      'invalid host data ticket'
+    )
+    expect(h.owner.pendingConns.has(CONN_ID)).toBe(true)
+    expect(h.owner.activeConnIds.size).toBe(0)
+  })
+
+  it('rejects on the earlier duplicate owner rather than the later live one', async () => {
+    const h = await attachRegistry('middle')
+    h.ordered[0]!.pendingConns.set(CONN_ID, pendingConn(new FakeSocket(), 'stale-ticket') as never)
+    expect(legacyOwnerLookup(h.sessions, CONN_ID).owner).toBe(h.ordered[0])
+    h.counts.visits = 0
+    h.counts.membership = 0
+    const host = new FakeSocket()
+    expect(
+      await h.registry.acceptHostData(host as unknown as WebSocket, CONN_ID, 'ticket', 1)
+    ).toBe(false)
+    expect({ ...h.counts }).toEqual({ visits: 1, membership: 1 })
+    expect(h.owner.pendingConns.has(CONN_ID)).toBe(true)
+  })
+
+  it('splices the earlier duplicate owner and leaves the later one untouched', async () => {
+    const basis = vi.fn().mockRejectedValue(new Error('basis failed'))
+    const h = await attachRegistry('first', { recordConnectionBasis: basis })
+    const duplicate = h.ordered[3]!
+    duplicate.pendingConns.set(CONN_ID, pendingConn(new FakeSocket(), 'ticket') as never)
+    h.counts.visits = 0
+    h.counts.membership = 0
+    const host = new FakeSocket()
+    expect(
+      await h.registry.acceptHostData(host as unknown as WebSocket, CONN_ID, 'ticket', 1)
+    ).toBe(false)
+    expect({ ...h.counts }).toEqual({ visits: 1, membership: 1 })
+    expect(h.observer.recordAuth).toHaveBeenCalledWith(true)
+    expect(basis).toHaveBeenCalledOnce()
+    // The first owner's entry was consumed; the later duplicate never was.
+    expect(h.owner.pendingConns.has(CONN_ID)).toBe(false)
+    expect(duplicate.pendingConns.has(CONN_ID)).toBe(true)
+    expect(h.owner.activeConnIds.size).toBe(0)
   })
 })

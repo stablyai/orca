@@ -132,12 +132,14 @@ export async function listQuickOpenFiles(
         if (maxResults !== undefined && files.size >= maxResults) {
           return true
         }
-        const nextBytes = serializedQuickOpenPathBytes(relPath) + (files.size === 0 ? 0 : 1)
-        if (maxSerializedBytes !== undefined && serializedBytes + nextBytes > maxSerializedBytes) {
-          return true
+        if (maxSerializedBytes !== undefined) {
+          const nextBytes = serializedQuickOpenPathBytes(relPath) + (files.size === 0 ? 0 : 1)
+          if (serializedBytes + nextBytes > maxSerializedBytes) {
+            return true
+          }
+          serializedBytes += nextBytes
         }
         files.add(relPath)
-        serializedBytes += nextBytes
         return maxResults !== undefined && files.size >= maxResults
       }
 

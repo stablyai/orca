@@ -13,8 +13,6 @@ export type SkillSourceInventoryEntry = {
 }
 
 function ownsSkill(source: SkillDiscoverySource, skill: DiscoveredSkill): boolean {
-  // Why: a symlinked skill is deduped to one row but keeps every root that
-  // reached it, so counting only `rootPath` would zero out the co-owning roots.
   return skill.rootPath === source.path || (skill.rootPaths?.includes(source.path) ?? false)
 }
 
@@ -37,12 +35,38 @@ function sourceStatus(source: SkillDiscoverySource): SkillSourceStatus {
 export function summarizeSkillSources(
   result: SkillDiscoveryResult | null
 ): SkillSourceInventoryEntry[] {
-  if (!result) {
+  if (!result || result.sources.length === 0) {
     return []
+  }
+  // With no repeated skill traversal, the direct count needs no index.
+  if (result.sources.length === 1 || result.skills.length === 0) {
+    return result.sources.map((source) => ({
+      source,
+      skillCount: result.skills.filter((skill) => ownsSkill(source, skill)).length,
+      status: sourceStatus(source)
+    }))
+  }
+  const counts = new Map(
+    result.sources.map((source) => [source.path, { count: 0, lastSkillIndex: -1 }])
+  )
+  const countRoot = (rootPath: string, skillIndex: number): void => {
+    const count = counts.get(rootPath)
+    // Symlinked skills can name one owning root more than once.
+    if (count && count.lastSkillIndex !== skillIndex) {
+      count.count++
+      count.lastSkillIndex = skillIndex
+    }
+  }
+  for (let index = 0; index < result.skills.length; index++) {
+    const skill = result.skills[index]
+    countRoot(skill.rootPath, index)
+    for (const rootPath of skill.rootPaths ?? []) {
+      countRoot(rootPath, index)
+    }
   }
   return result.sources.map((source) => ({
     source,
-    skillCount: result.skills.filter((skill) => ownsSkill(source, skill)).length,
+    skillCount: counts.get(source.path)?.count ?? 0,
     status: sourceStatus(source)
   }))
 }

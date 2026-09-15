@@ -82,14 +82,15 @@ check "relay_gce_fixed_one_topology" {
 
   assert {
     condition = alltrue([
+      # Region is not asserted here: the director's own rehome source and target predicates
+      # own eligibility, so this pins only cell shape.
       for cell_id in var.relay_region_rehome_source_cell_ids : try(
-        var.relay_gce_cells[cell_id].region == var.region &&
         var.relay_gce_cells[cell_id].connection_hard_cap != null &&
         !contains(var.relay_gce_fenced_cells, cell_id),
         false
       )
     ])
-    error_message = "Regional rehome sources must be configured, unfenced primary-region GCE cells with explicit connection limits."
+    error_message = "Regional rehome sources must be configured, unfenced GCE cells with explicit connection limits."
   }
 
   assert {

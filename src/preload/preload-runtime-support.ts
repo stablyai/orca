@@ -13,7 +13,8 @@ import {
   resolveNativeFileDropPath,
   type NativeDropResolution,
   type NativeFileDropPayload,
-  type NativeFileDropPathEntry
+  type NativeFileDropPathEntry,
+  type NativeFileDropRejectedPayload
 } from '../shared/native-file-drop'
 
 /** Joins the synchronous unload checkpoint with its durable renderer write. */
@@ -77,6 +78,7 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
       pathEntries.push({
         nativeFileDropTarget: entry.dataset.nativeFileDropTarget,
         nativeFileDropDir: entry.dataset.nativeFileDropDir,
+        composerScopeKey: entry.dataset.composerScopeKey,
         terminalTabId: entry.dataset.terminalTabId,
         terminalPaneLeafId: entry.dataset.terminalPaneLeafId ?? entry.dataset.leafId
       })
@@ -132,7 +134,18 @@ export function installNativeFileDropHandlers(): void {
           paths.push(filePath)
         }
       }
-      if (paths.length === 0 || resolution?.target === 'rejected') {
+      if (resolution?.target === 'rejected') {
+        return
+      }
+      if (paths.length === 0) {
+        // The OS offered file items we could read no path from (promised or
+        // virtual files). Report it — silence here is #15782.
+        ipcRenderer.send('terminal:file-dropped-from-preload', {
+          byteLength: 0,
+          pathCount: files.length,
+          reason: 'unresolved-paths',
+          target: 'rejected'
+        } satisfies NativeFileDropRejectedPayload)
         return
       }
       const payload = createNativeFileDropPayload(resolution, paths)

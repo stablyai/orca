@@ -117,6 +117,7 @@ describe('buildActivityEvents cleared cutoff', () => {
     })
     expect(liveAgentByPaneKey[PANE_KEY]?.state).toBe('working')
     // The historical done at 1_000 stays hidden by the cutoff.
-    expect(events).toHaveLength(0)
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ state: 'working', timestamp: 99_000, unread: true })
   })
 })

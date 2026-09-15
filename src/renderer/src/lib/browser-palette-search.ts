@@ -223,14 +223,14 @@ export function searchBrowserPages(
 
   const results: BrowserPaletteSearchResult[] = []
   for (const entry of entries) {
-    const base = baseResult(entry, context)
-    const secondaryTexts = browserPaletteSecondaryTexts(entry.page)
     const match = matchPaletteTabDocument(entry.document, prepared, {
       isFieldAllowed: options.fieldMode === 'omnibox' ? isOmniboxPaletteTabFieldAllowed : undefined
     })
     if (!match) {
       continue
     }
+    const base = baseResult(entry, context)
+    const secondaryTexts = browserPaletteSecondaryTexts(entry.page)
     results.push({
       ...base,
       secondaryText:

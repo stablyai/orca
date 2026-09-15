@@ -147,6 +147,7 @@ describe('registerRuntimeHandlers', () => {
     }
     const runtime = {
       getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
+      getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat: true })),
       restoreStructuredAgentSessionTabs: vi.fn(async () => undefined),
       listMobileSessionTabs: vi.fn(async () => ({
         worktree: 'workspace-1',

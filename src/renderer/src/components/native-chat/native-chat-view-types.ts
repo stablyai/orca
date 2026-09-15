@@ -10,6 +10,8 @@ export type NativeChatBridgeViewProps = {
   terminalTabId: string
   /** Whether the hosted terminal surface is currently visible. */
   isVisible: boolean
+  /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
+  isFocusedGroup: boolean
   /** Specific split leaf this chat surface replaces. */
   paneKey?: string
   /** PTY bound to `paneKey`, used for composer and interactive-card sends. */
@@ -35,6 +37,8 @@ export type NativeChatStructuredViewProps = {
   target: RuntimeClientTarget
   agent: AgentType
   isVisible: boolean
+  /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
+  isFocusedGroup: boolean
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
@@ -44,6 +48,8 @@ export type NativeChatResolvedViewProps = {
   sessionId: string | null
   transcriptPath: string | null
   isVisible: boolean
+  /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
+  isFocusedGroup: boolean
   targetPtyId: string | null
   terminalTabId: string
   ownsTabWideLaunchDraft: boolean

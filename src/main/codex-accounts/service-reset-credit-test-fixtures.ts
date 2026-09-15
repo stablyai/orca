@@ -1,4 +1,5 @@
 import type { ProviderRateLimits, RateLimitState } from '../../shared/rate-limit-types'
+import { createEmptyRateLimitState } from '../../shared/rate-limit-state-factory'
 
 export function createResetCreditLimits(updatedAt = 30): ProviderRateLimits {
   return {
@@ -26,21 +27,5 @@ export function createResetRateLimitState(
   codex: ProviderRateLimits,
   target: RateLimitState['codexTarget'] = { runtime: 'host', wslDistro: null }
 ): RateLimitState {
-  return {
-    claude: null,
-    codex,
-    gemini: null,
-    opencodeGo: null,
-    kimi: null,
-    antigravity: null,
-    minimax: null,
-    grok: null,
-    minimaxCookieConfigured: false,
-    minimaxApiKeyConfigured: false,
-    grokAuthConfigured: false,
-    claudeTarget: { runtime: 'host', wslDistro: null },
-    codexTarget: target,
-    inactiveClaudeAccounts: [],
-    inactiveCodexAccounts: []
-  }
+  return createEmptyRateLimitState({ codex, codexTarget: target })
 }

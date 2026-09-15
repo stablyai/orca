@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { estimateCostUsd } from './claude-model-pricing'
 
+describe('model pricing name matching', () => {
+  it.each([
+    [' ANTHROPIC/claude-opus-4.1-thinking ', 15],
+    ['claude-opus-4.10', 5],
+    ['claude-opus-4-20250514', 15],
+    ['claude-opus-4.20250514', 15],
+    ['claude.opus.4.9', null],
+    ['claude-opus-4.9', 5],
+    ['claude-sonnet-50', null],
+    ['claude-sonnet-5-thinking', 2],
+    ['claude-sonnet-5-opus-5', 5],
+    ['claude-3.5-sonnet-20241022', 3]
+  ])('preserves version boundaries and match priority for %s', (model, inputPrice) => {
+    expect(estimateCostUsd(model, 1_000_000, 0, 0, 0)).toBe(inputPrice)
+  })
+})
+
 describe('estimateCostUsd cache-write TTL rates', () => {
   it('bills 5-minute cache writes at 1.25x base input', () => {
     expect(estimateCostUsd('claude-opus-5', 0, 0, 0, 1_000_000, 0)).toBeCloseTo(6.25)

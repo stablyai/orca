@@ -1,3 +1,4 @@
+import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import type { ElectronApplication, Locator, Page } from '@stablyai/playwright-test'
 import type { GitHubWorkItem } from '../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../src/shared/gitlab-types'
@@ -254,7 +255,7 @@ test('a pasted GitHub URL never selects a stale cached issue', async ({
   await waitForActiveWorktree(orcaPage)
   await installHeldGitHubLookup(electronApp, orcaPage)
 
-  await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   const input = dialog.locator('[data-workspace-name-input="true"]')
   await expect(input).toBeVisible()
@@ -300,7 +301,7 @@ test('a pasted GitLab URL never selects a stale cached merge request', async ({
   await waitForActiveWorktree(orcaPage)
   await installHeldGitLabLookup(electronApp, orcaPage)
 
-  await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   const input = dialog.locator('[data-workspace-name-input="true"]')
   await expect(input).toBeVisible()

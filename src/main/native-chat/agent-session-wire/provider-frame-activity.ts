@@ -100,40 +100,29 @@ export function codexProviderFrameActivity(
   return itemType ? (CODEX_ITEM_ACTIVITY[itemType] ?? null) : null
 }
 
+/**
+ * Claude does not narrate its own turn, so the activity line stays the generic fallback.
+ *
+ * Codex names each item it starts, which is what makes its line worth reading. Claude's only
+ * turn-wide frame is `system/status`, whose payload is a bare token — every sentence Orca ever
+ * put on this line for it was Orca's own wording for `requesting`, which is true for nearly the
+ * whole turn and says no more than the fallback does. Its `task_*` frames do carry prose, but
+ * they are keyed by task id and subagent type: they describe a spawned task, not this turn, and
+ * the background-tasks strip already owns that. Compaction is the one exception kept — a real,
+ * rare state that explains an otherwise unexplained wait, and the Codex map reports it too.
+ */
 export function claudeProviderFrameActivity(kind: string, payload: unknown): ActivityText {
   const source = record(payload)
-  if (kind === 'message:system:task_started') {
-    if (source?.ambient === true || source?.skip_transcript === true) {
-      return null
-    }
-    const description = providerActivityText(stringField(source, 'description'))
-    return description ? providerActivityText(`Working on: ${description}`) : null
-  }
-  if (kind === 'message:system:task_progress') {
-    return providerActivityText(
-      stringField(source, 'summary') ?? stringField(source, 'description')
-    )
-  }
-  if (kind === 'message:system:task_updated') {
-    return providerActivityText(stringField(record(source?.patch), 'description'))
-  }
   if (kind === 'message:system:status') {
-    const status = stringField(source, 'status')
-    return status === 'compacting'
-      ? 'Compacting the conversation'
-      : status === 'requesting'
-        ? 'Requesting a response'
-        : null
+    return stringField(source, 'status') === 'compacting' ? 'Compacting the conversation' : null
   }
-  if (kind === 'message:system:control_request_progress') {
-    const status = stringField(source, 'status')
-    return status === 'started'
-      ? 'Exploring a side question'
-      : status === 'api_retry'
-        ? 'Retrying a side question'
-        : null
-  }
-  if (kind === 'message:tool_progress') {
+  if (
+    kind === 'message:system:task_started' ||
+    kind === 'message:system:task_progress' ||
+    kind === 'message:system:task_updated' ||
+    kind === 'message:system:control_request_progress' ||
+    kind === 'message:tool_progress'
+  ) {
     return null
   }
   return undefined

@@ -70,6 +70,8 @@ export type StructuredAgentSessionHandoffDeps = {
   transport?: StructuredAgentSessionHandoffTransport
   session: (sessionId: string) => { journal: AgentSessionJournal; fence: number }
   suspendNative: (sessionId: string) => Promise<StructuredNativeSuspendResult>
+  /** Consumes the router's stop proof after `old-owner-stopped` is durable. */
+  acknowledgeNativeRelease?: (sessionId: string) => void
   acquireNative: (input: {
     sessionId: string
     fence: number
@@ -81,6 +83,7 @@ export type StructuredAgentSessionHandoffDeps = {
     fence: number
     transcriptPath?: string
   }) => Promise<void>
+  retryPendingSettlement: (sessionId: string) => Promise<boolean>
   prepareTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<void>
   recoverTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<void>
   activateTuiHistoryCatchup?: (sessionId: string) => Promise<void>

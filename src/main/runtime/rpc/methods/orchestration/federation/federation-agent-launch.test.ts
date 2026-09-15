@@ -56,6 +56,7 @@ describe('federated worker agent launch', () => {
 
     const result = (await method.handler(
       method.params!.parse({
+        runId: 'run-home',
         dispatchId: 'ctx_remote',
         taskId: 'task_remote',
         taskSpec: 'remote cursor worker',

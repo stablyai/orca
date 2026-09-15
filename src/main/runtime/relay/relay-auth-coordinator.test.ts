@@ -31,6 +31,50 @@ describe('RelayAuthCoordinator', () => {
     expect(statuses.at(-1)).toBe('standby')
   })
 
+  it('republishes the owned broker cell instead of blanking what the broker set', async () => {
+    const broker = { closeNow: vi.fn(), endpoint: { cellUrl: 'https://c27.relay.example.test' } }
+    const onStatus = vi.fn()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker: async () => broker,
+      onStatus
+    })
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+
+    // Why: the broker announces its cell, then the coordinator republishes the
+    // same status; a republish without the cell would erase it immediately.
+    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+  })
+
+  it('drops the cell from every status the host is not served on', async () => {
+    let demanded = true
+    const broker = { closeNow: vi.fn(), endpoint: { cellUrl: 'https://c27.relay.example.test' } }
+    const onStatus = vi.fn()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      hasDemand: () => demanded,
+      openBroker: async () => broker,
+      onStatus,
+      lingerMs: 0
+    })
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+    demanded = false
+    coordinator.reconcile()
+    await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith('standby', undefined))
+
+    coordinator.fenceAndCloseNow()
+    expect(onStatus).toHaveBeenLastCalledWith('offline', undefined)
+    for (const [status, cellUrl] of onStatus.mock.calls) {
+      expect(status === 'registered' || cellUrl === undefined).toBe(true)
+    }
+  })
+
   it('opens on demand and lingers before closing the last control', async () => {
     let demanded = false
     const broker = { closeNow: vi.fn() }

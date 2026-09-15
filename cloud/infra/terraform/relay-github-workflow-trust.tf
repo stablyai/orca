@@ -10,6 +10,7 @@
 locals {
   relay_github_workflow_clauses = {
     github                           = local.github_production_relay_workflow_clauses
+    github_push                      = local.github_push_workflow_clauses
     github_monitor                   = local.github_monitor_workflow_clauses
     github_fence                     = local.github_fence_workflow_clauses
     github_production_relay_capacity = local.github_production_relay_capacity_workflow_clauses

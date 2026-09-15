@@ -7,6 +7,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../store'
+import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 
 const storeMocks = vi.hoisted(() => ({
   refreshGrokRateLimits: vi.fn(),
@@ -16,14 +17,7 @@ const storeMocks = vi.hoisted(() => ({
 }))
 
 const mockStoreState = {
-  rateLimits: {
-    claude: null,
-    codex: null,
-    gemini: null,
-    opencodeGo: null,
-    kimi: null,
-    antigravity: null,
-    minimax: null,
+  rateLimits: createEmptyRateLimitState({
     grok: {
       provider: 'grok',
       session: null,
@@ -37,14 +31,8 @@ const mockStoreState = {
       error: null,
       status: 'ok'
     },
-    minimaxCookieConfigured: false,
-    minimaxApiKeyConfigured: false,
-    grokAuthConfigured: true,
-    claudeTarget: { runtime: 'host', wslDistro: null },
-    codexTarget: { runtime: 'host', wslDistro: null },
-    inactiveClaudeAccounts: [],
-    inactiveCodexAccounts: []
-  },
+    grokAuthConfigured: true
+  }),
   refreshGrokRateLimits: storeMocks.refreshGrokRateLimits,
   openSettingsPage: storeMocks.openSettingsPage,
   openSettingsTarget: storeMocks.openSettingsTarget,

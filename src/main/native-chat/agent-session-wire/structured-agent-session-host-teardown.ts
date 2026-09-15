@@ -18,6 +18,26 @@ export type StructuredAgentSessionTeardownPhase = {
 /** Quit must not wait indefinitely on an in-flight handoff; see `drain-handoffs` below. */
 const HANDOFF_DRAIN_TIMEOUT_MS = 5_000
 
+/** Eight steps at ten seconds each would outlast the global quit deadline, and a quit that dies
+ *  mid-eviction leaves the lease unreleased — the exact state restart has to clean up. Bounded
+ *  well below that deadline so the phases after this one still get to run. */
+const CHILD_EVICTION_TIMEOUT_MS = 8_000
+
+/** Bounds a phase without swallowing its failure, which `withTimeout` alone would. */
+async function withPhaseTimeout(run: () => Promise<void>, timeoutMs: number): Promise<void> {
+  const settled = run().then(
+    () => ({ failed: false }) as const,
+    (error: unknown) => ({ failed: true, error }) as const
+  )
+  const outcome = await withTimeout<Awaited<typeof settled> | null>(settled, timeoutMs, null)
+  if (outcome === null) {
+    throw new Error(`agent session host teardown phase did not finish within ${timeoutMs}ms`)
+  }
+  if (outcome.failed) {
+    throw outcome.error
+  }
+}
+
 /**
  * The quit-path phase order, which is load-bearing rather than incidental.
  *
@@ -34,6 +54,7 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
   }
   handoffs: { stopTuiHistoryCatchup: () => void; drain: () => Promise<void> }
   tasks: { drainAttaches: () => Promise<void> }
+  evictOwnedSessions: () => Promise<void>
 }): StructuredAgentSessionTeardownPhase[] {
   return [
     { name: 'dispose-holds', run: () => collaborators.holds.dispose() },
@@ -44,6 +65,10 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
       run: () => withTimeout(collaborators.handoffs.drain(), HANDOFF_DRAIN_TIMEOUT_MS, undefined)
     },
     { name: 'drain-attaches', run: () => collaborators.tasks.drainAttaches() },
+    {
+      name: 'evict-owned-sessions',
+      run: () => withPhaseTimeout(collaborators.evictOwnedSessions, CHILD_EVICTION_TIMEOUT_MS)
+    },
     { name: 'flush-event-sinks', run: () => collaborators.runtimeState.flushAllEventSinks() }
   ]
 }
@@ -51,6 +76,8 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
 export async function tearDownStructuredAgentSessionHost(input: {
   phases: readonly StructuredAgentSessionTeardownPhase[]
   sessions: Map<string, StructuredAgentSessionHostSession>
+  retainSessionIds?: ReadonlySet<string>
+  acknowledgeSessionRelease?: (sessionId: string) => void
 }): Promise<void> {
   const failures: unknown[] = []
   for (const phase of input.phases) {
@@ -61,7 +88,9 @@ export async function tearDownStructuredAgentSessionHost(input: {
     }
   }
 
-  const entries = [...input.sessions.entries()]
+  const entries = [...input.sessions.entries()].filter(
+    ([sessionId]) => !input.retainSessionIds?.has(sessionId)
+  )
   // `allSettled`, so one rejected close cannot skip the others.
   const closed = await Promise.allSettled(entries.map(([, session]) => session.journal.close()))
   closed.forEach((result, index) => {
@@ -71,6 +100,7 @@ export async function tearDownStructuredAgentSessionHost(input: {
       // which is what makes a later close a real retry rather than a no-op.
       if (sessionId !== undefined) {
         input.sessions.delete(sessionId)
+        input.acknowledgeSessionRelease?.(sessionId)
       }
       return
     }

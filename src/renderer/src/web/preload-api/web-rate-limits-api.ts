@@ -1,25 +1,9 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { RateLimitState } from '../../../../shared/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import { noopUnsubscribe } from './web-storage'
 
 export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
-  const empty: RateLimitState = {
-    claude: null,
-    codex: null,
-    gemini: null,
-    opencodeGo: null,
-    kimi: null,
-    antigravity: null,
-    minimax: null,
-    grok: null,
-    minimaxCookieConfigured: false,
-    minimaxApiKeyConfigured: false,
-    grokAuthConfigured: false,
-    claudeTarget: { runtime: 'host', wslDistro: null },
-    codexTarget: { runtime: 'host', wslDistro: null },
-    inactiveClaudeAccounts: [],
-    inactiveCodexAccounts: []
-  }
+  const empty = createEmptyRateLimitState()
   return {
     get: () => Promise.resolve(empty),
     refresh: () => Promise.resolve(empty),

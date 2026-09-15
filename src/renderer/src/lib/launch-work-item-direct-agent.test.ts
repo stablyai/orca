@@ -6,11 +6,17 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, value: string) => value }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, value: string, vars?: Record<string, string>) =>
+    value.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => vars?.[name] ?? '')
+}))
 
+import { toast } from 'sonner'
+import { track } from '@/lib/telemetry'
 import {
   buildDirectWorkItemAgentStartupPlan,
-  buildDirectWorkItemStartupOpts
+  buildDirectWorkItemStartupOpts,
+  notifyDirectWorkItemAgentStartTimeout
 } from './launch-work-item-direct-agent'
 import type { AgentStartupPlan } from './tui-agent-startup'
 
@@ -106,5 +112,25 @@ describe('buildDirectWorkItemAgentStartupPlan', () => {
       model: 'gpt-5.2-codex',
       effort: 'medium'
     })
+  })
+})
+
+describe('notifyDirectWorkItemAgentStartTimeout', () => {
+  it('toasts the paste hint and records the startup timeout', () => {
+    notifyDirectWorkItemAgentStartTimeout('codex', true)
+
+    expect(toast.message).toHaveBeenCalledWith(expect.stringContaining('paste the prompt'))
+    expect(track).toHaveBeenCalledWith('agent_error', {
+      error_class: 'unknown',
+      agent_kind: 'codex'
+    })
+  })
+
+  it('names the work item context for an unsubmitted paste', () => {
+    notifyDirectWorkItemAgentStartTimeout('codex', false)
+
+    expect(toast.message).toHaveBeenCalledWith(
+      expect.stringContaining('paste the work item context')
+    )
   })
 })

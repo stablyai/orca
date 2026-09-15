@@ -6,6 +6,21 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 
+const { isWindowsProcessStartTimeAvailable } = vi.hoisted(() => ({
+  isWindowsProcessStartTimeAvailable: vi.fn(() => true)
+}))
+
+vi.mock('../windows/windows-process-table', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isWindowsProcessStartTimeAvailable
+}))
+
+const originalPlatform = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+}
+
 type InstallEffects = {
   storeOpened: boolean
   writeGateAttached: boolean
@@ -94,6 +109,9 @@ async function expectSupportWithoutInstall(input: {
 
 describe('structured agent-session create-support probe', () => {
   afterEach(() => {
+    setPlatform(originalPlatform)
+    isWindowsProcessStartTimeAvailable.mockReset()
+    isWindowsProcessStartTimeAvailable.mockReturnValue(true)
     setStructuredAgentSessionHost(null)
     agentSessionPtyWriteGate.detachRecordLookup()
     vi.restoreAllMocks()
@@ -108,6 +126,27 @@ describe('structured agent-session create-support probe', () => {
         expected: { supported: true },
         repetitions: 3
       })
+    }
+  )
+
+  it.each([
+    ['codex', true, { supported: true }],
+    ['codex', false, { supported: false, reason: 'agent' }],
+    ['claude', true, { supported: true }],
+    ['claude', false, { supported: false, reason: 'agent' }]
+  ] as const)(
+    'requires native Windows process identity proof before answering %s support (%s)',
+    async (agent, proofAvailable, expected) => {
+      setPlatform('win32')
+      isWindowsProcessStartTimeAvailable.mockReturnValue(proofAvailable)
+
+      await expectSupportWithoutInstall({
+        agent,
+        location: { executionHostId: 'local', wslDistro: null },
+        expected
+      })
+
+      expect(isWindowsProcessStartTimeAvailable).toHaveBeenCalled()
     }
   )
 

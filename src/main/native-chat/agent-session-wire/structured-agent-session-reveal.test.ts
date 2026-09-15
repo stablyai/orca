@@ -58,6 +58,7 @@ function harness(
     serialize,
     hasSession: (sessionId) => live.has(sessionId),
     onReadable: (sessionId, restored) => live.set(sessionId, restored),
+    retrySettlement: async () => true,
     restoreHandoff
   })
   return { restorer, live, restoreHandoff, serializedIds }

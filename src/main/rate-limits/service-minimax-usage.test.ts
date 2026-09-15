@@ -3,7 +3,7 @@ import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
-import { fetchMiniMaxRateLimits } from './minimax-fetcher'
+import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import {
   deferred,
@@ -33,7 +33,7 @@ vi.mock('./opencode-go-usage-fetcher', () => ({
   fetchOpenCodeGoRateLimits: vi.fn()
 }))
 
-vi.mock('./minimax-fetcher', () => ({
+vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
 

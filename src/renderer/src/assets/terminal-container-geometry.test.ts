@@ -15,4 +15,8 @@ describe('terminal container geometry', () => {
       /\.pane-link-tooltip\s*{[^}]*height:\s*var\(--orca-terminal-link-tooltip-height\);/s
     )
   })
+
+  it('bounds cursor-blink repaints to the terminal surface (#10481)', () => {
+    expect(terminalCss).toMatch(/\.xterm-container\s*{[^}]*contain:\s*paint;/s)
+  })
 })

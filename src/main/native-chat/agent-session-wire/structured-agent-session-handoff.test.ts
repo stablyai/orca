@@ -179,6 +179,7 @@ function createCoordinator(): StructuredAgentSessionHandoffCoordinator {
         { fence, recovered: true }
       )
     },
+    retryPendingSettlement: async () => true,
     prepareTuiHistoryCatchup,
     recoverTuiHistoryCatchup,
     activateTuiHistoryCatchup,
@@ -243,6 +244,9 @@ describe('structured session handoff failure handling', () => {
   it('parks a stopped native cleanup failure in manual recovery without launching TUI', async () => {
     const operation = operationId()
     const cleanupError = new Error('journal drain failed')
+    const acknowledgeNativeRelease = vi.fn((sessionId: string) => {
+      expect(store.getRecord(sessionId)?.lease.handoffStage).toBe('old-owner-stopped')
+    })
     const retainOwner = vi.fn()
     const releaseOwner = vi.fn()
     const context = createStructuredHandoffFlowContext({
@@ -269,11 +273,13 @@ describe('structured session handoff failure handling', () => {
           state: 'stopped-cleanup-failed' as const,
           error: cleanupError
         })),
+        acknowledgeNativeRelease,
         acquireNative: vi.fn(async () => {
           throw new Error('native acquisition should not run')
         }),
         acquireNativeStop: (_sessionId, turnId) => acquireNativeStop(turnId),
         importTuiHistory: vi.fn(async () => undefined),
+        retryPendingSettlement: vi.fn(async () => true),
         prepareTuiHistoryCatchup,
         recoverTuiHistoryCatchup,
         activateTuiHistoryCatchup,
@@ -302,6 +308,7 @@ describe('structured session handoff failure handling', () => {
     expect(launchTui).not.toHaveBeenCalled()
     expect(retainOwner).not.toHaveBeenCalled()
     expect(releaseOwner).not.toHaveBeenCalled()
+    expect(acknowledgeNativeRelease).toHaveBeenCalledExactlyOnceWith(SESSION)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'released',

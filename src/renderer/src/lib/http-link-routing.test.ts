@@ -139,6 +139,41 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
+  it('keeps explicitly local links local while a remote runtime is active', () => {
+    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'remote-1' }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true,
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openRuntimeBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('routes opted-in links without a source owner through the active runtime', () => {
+    storeState.settings = {
+      openLinksInApp: true,
+      activeRuntimeEnvironmentId: ' remote-1 '
+    }
+
+    openHttpLink('https://github.com/acme/widgets/pull/123', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true
+    })
+
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: 'wt-1',
+      url: 'https://github.com/acme/widgets/pull/123',
+      intent: { kind: 'url' }
+    })
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
   it('routes to the system browser when a remote runtime environment is active', () => {
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-1' }
 

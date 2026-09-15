@@ -391,6 +391,7 @@ beforeEach(async () => {
   }
   const runtime = {
     getRuntimeId: () => 'runtime-1',
+    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async (input: { envelope: unknown }) => ({
       ...ensureParams(1),

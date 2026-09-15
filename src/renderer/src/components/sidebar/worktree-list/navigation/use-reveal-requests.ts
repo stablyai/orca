@@ -10,16 +10,30 @@ import {
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
+
+function workspacePassesFilters(
+  worktree: Worktree,
+  worktrees: readonly Worktree[],
+  folderWorkspaces: readonly FolderWorkspace[]
+): boolean {
+  const identity = getWorktreeHostIdentity(worktree)
+  return (
+    worktrees.some((candidate) => getWorktreeHostIdentity(candidate) === identity) ||
+    folderWorkspaces.some((workspace) => folderWorkspaceKey(workspace.id) === worktree.id)
+  )
+}
 
 // Turns a "show me the current workspace" request into whatever the sidebar must change
 // first — grouping mode, active filters — before the viewport can scroll to it.
 export function useSidebarRevealRequests(args: {
   groupBy: WorktreeGroupBy
   renderedSidebarRowKeys: ReadonlySet<string>
-  renderedWorktreeIdentities: readonly string[]
+  visibleWorktrees: readonly Worktree[]
+  visibleFolderWorkspaces: readonly FolderWorkspace[]
   currentSidebarWorktreeId: string | null
   currentSidebarExecutionHostId: ExecutionHostId | null
   worktreeMap: Map<string, Worktree>
@@ -31,7 +45,8 @@ export function useSidebarRevealRequests(args: {
   const {
     groupBy,
     renderedSidebarRowKeys,
-    renderedWorktreeIdentities,
+    visibleWorktrees,
+    visibleFolderWorkspaces,
     currentSidebarWorktreeId,
     currentSidebarExecutionHostId,
     worktreeMap,
@@ -106,11 +121,11 @@ export function useSidebarRevealRequests(args: {
       if (!activeWorktree || activeWorktree.isArchived) {
         return
       }
-      const currentIdentity = composeWorktreeHostIdentity(
-        currentSidebarExecutionHostId ?? undefined,
-        currentSidebarWorktreeId
-      )
-      if (hasFilters && !renderedWorktreeIdentities.includes(currentIdentity)) {
+      // Collapsed groups hide rows without excluding their workspaces from the filter results.
+      if (
+        hasFilters &&
+        !workspacePassesFilters(activeWorktree, visibleWorktrees, visibleFolderWorkspaces)
+      ) {
         if (confirmationPending.current) {
           return
         }
@@ -141,7 +156,14 @@ export function useSidebarRevealRequests(args: {
         ) {
           return
         }
-        if (latest.hasFilters && !latest.renderedWorktreeIdentities.includes(currentIdentity)) {
+        if (
+          latest.hasFilters &&
+          !workspacePassesFilters(
+            activeWorktree,
+            latest.visibleWorktrees,
+            latest.visibleFolderWorkspaces
+          )
+        ) {
           latest.clearFilters()
         }
       }
@@ -159,7 +181,8 @@ export function useSidebarRevealRequests(args: {
       currentSidebarExecutionHostId,
       folderWorkspaces,
       revealSidebarRow,
-      renderedWorktreeIdentities,
+      visibleWorktrees,
+      visibleFolderWorkspaces,
       revealWorktreeInSidebar,
       worktreeMap,
       worktrees

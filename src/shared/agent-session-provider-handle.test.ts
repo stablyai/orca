@@ -300,3 +300,94 @@ describe('chain lookup and validation', () => {
     ).toBe(false)
   })
 })
+
+describe('adopted chain heads', () => {
+  // What a resume-from-history builds: the create seeds an `adopted` head, then the provider's own
+  // proof lands on top of it.
+  const adopted = (overrides: Partial<AgentSessionProviderHandleLink> = {}) =>
+    link({
+      linkId: 'claude-1-sess-1-empty',
+      origin: 'adopted',
+      handle: { ...CLAUDE, leafUuid: null },
+      ...overrides
+    })
+
+  it('appends a Claude resume that lands on the adopted root with a leaf', () => {
+    // The adopted head names no leaf; the provider answers with one. Same root, so it is a resume.
+    const resumed = link({
+      linkId: 'claude-1-sess-1-leaf-1',
+      origin: 'resumed',
+      handle: CLAUDE,
+      mintedAtFence: 1
+    })
+    const chain = appendAgentSessionProviderHandleLink([adopted()], resumed)
+
+    expect(chain.map((entry) => entry.origin)).toEqual(['adopted', 'resumed'])
+    expect(agentSessionProviderHandleChainHead(chain)).toBe(resumed)
+  })
+
+  it('elides a Claude re-proof of the identical adopted handle at the same fence', () => {
+    const chain = [adopted()]
+    const elided = appendAgentSessionProviderHandleLink(
+      chain,
+      link({
+        linkId: 'claude-1-sess-1-empty-retry',
+        origin: 'resumed',
+        handle: { ...CLAUDE, leafUuid: null },
+        mintedAtFence: 1
+      })
+    )
+
+    expect(elided).toEqual(chain)
+  })
+
+  it('appends a Codex resume only once the fence has moved', () => {
+    const codexAdopted = link({
+      linkId: 'codex-1-thread-1',
+      origin: 'adopted',
+      handle: { provider: 'codex', threadId: 'thread-1' }
+    })
+    const reproved = link({
+      linkId: 'codex-1-thread-1-retry',
+      origin: 'resumed',
+      handle: { provider: 'codex', threadId: 'thread-1' },
+      mintedAtFence: 1
+    })
+
+    // Codex's thread id is the whole key, so a same-fence re-proof can only ever be a retry.
+    expect(appendAgentSessionProviderHandleLink([codexAdopted], reproved)).toEqual([codexAdopted])
+    expect(
+      appendAgentSessionProviderHandleLink([codexAdopted], { ...reproved, mintedAtFence: 2 })
+    ).toHaveLength(2)
+  })
+
+  it('refuses a second origin link on top of an adopted head', () => {
+    // Nothing re-origins a chain: a create landing here would erase where the conversation came from.
+    for (const origin of ['created', 'adopted'] as const) {
+      expect(() =>
+        appendAgentSessionProviderHandleLink(
+          [adopted()],
+          link({ linkId: 'claude-2-sess-1-leaf-1', origin, handle: CLAUDE, mintedAtFence: 2 })
+        )
+      ).toThrow('agent_session_provider_handle_invalid')
+    }
+  })
+
+  it('refuses a resume that landed on another conversation entirely', () => {
+    expect(() =>
+      appendAgentSessionProviderHandleLink(
+        [adopted()],
+        link({
+          linkId: 'claude-1-sess-9-leaf-9',
+          origin: 'resumed',
+          handle: { provider: 'claude', sessionId: 'sess-9', leafUuid: 'leaf-9' },
+          mintedAtFence: 1
+        })
+      )
+    ).toThrow('agent_session_provider_handle_forked')
+  })
+
+  it('accepts an adopted head as a persisted chain', () => {
+    expect(isAgentSessionProviderHandleChain([adopted()])).toBe(true)
+  })
+})

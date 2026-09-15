@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract'
+import { RELAY_CLOSE_CODE, RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
 import type { RelayAssignmentStore } from './assignment-store.js'
@@ -102,7 +102,9 @@ function harness(options: { random?: () => number; now?: () => number } = {}) {
   const store = {
     resolveResume: vi.fn().mockResolvedValue({ userId: identity.sub }),
     reserveCredential: vi.fn().mockResolvedValue(reservation),
-    failReservation: vi.fn().mockResolvedValue(undefined)
+    failReservation: vi.fn().mockResolvedValue(undefined),
+    recordConnectionBasis: vi.fn().mockResolvedValue(undefined),
+    deactivateBasis: vi.fn().mockResolvedValue(undefined)
   }
   const observer = {
     recordAuth: vi.fn(),
@@ -110,7 +112,9 @@ function harness(options: { random?: () => number; now?: () => number } = {}) {
     recordHttp: vi.fn(),
     recordReconnect: vi.fn(),
     recordSql: vi.fn(),
-    recordClientAcceptAbandoned: vi.fn()
+    recordClientAcceptAbandoned: vi.fn(),
+    recordClientAcceptCompleted: vi.fn(),
+    recordControlRtt: vi.fn()
   } satisfies RelayRuntimeObserver
   const registry = new HostSessionRegistry(
     config,
@@ -149,6 +153,66 @@ describe('client accept abandoned mid-DB-phase', () => {
   afterEach(() => {
     vi.clearAllTimers()
     vi.useRealTimers()
+  })
+
+  it('does not admit new source work after a drain crosses activity acquisition', async () => {
+    const h = harness()
+    const control = await activeHost(h)
+    const slow = deferred<void>()
+    h.acquireActivity.mockReturnValueOnce(slow.promise)
+    const client = new FakeSocket()
+    const capacity = { bind: vi.fn(), release: vi.fn() }
+    const accepting = h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential',
+      capacity
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    h.registry.drainHost({
+      attemptId: 'attempt',
+      userId: identity.sub,
+      relayHostId: identity.relayHostId,
+      sourceAssignmentEpoch: 1,
+      graceMs: 60_000
+    })
+    slow.resolve()
+    await accepting
+    expect(control.send).not.toHaveBeenCalledWith(expect.stringContaining('conn-open'))
+    expect(capacity.bind).not.toHaveBeenCalled()
+    expect(client.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.WRONG_CELL, expect.any(String))
+    expect(h.releaseActivity).toHaveBeenCalled()
+  })
+
+  it('does not splice an attachment whose generation retired during basis persistence', async () => {
+    const h = harness()
+    await activeHost(h)
+    const client = new FakeSocket()
+    await h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential'
+    )
+    const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+    const pending = [...session.pendingConns.values()][0]!
+    const slow = deferred<void>()
+    h.store.recordConnectionBasis.mockReturnValueOnce(slow.promise)
+    const host = new FakeSocket()
+    const attaching = h.registry.acceptHostData(
+      host as unknown as WebSocket,
+      pending.connId,
+      pending.connTicket,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    h.registry.drain(0)
+    await vi.advanceTimersByTimeAsync(0)
+    slow.resolve()
+    expect(await attaching).toBe(false)
+    expect(session.activeSplices.size).toBe(0)
+    expect(h.store.deactivateBasis).toHaveBeenCalledWith(pending.connId)
+    expect(client.send).not.toHaveBeenCalledWith(expect.stringContaining('\"ok\":true'))
+    expect(host.close).toHaveBeenCalled()
   })
 
   it('stops after a slow activity acquire when the phone already hung up', async () => {
@@ -322,6 +386,291 @@ describe('client accept abandoned mid-DB-phase', () => {
     expect(client.close).not.toHaveBeenCalled()
     h.registry.drain(0)
     vi.advanceTimersByTime(0)
+  })
+})
+
+describe('successful client accept timing', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  it('times every serialized stage plus the attach window once relay-hello lands', async () => {
+    let now = 1_700_000_000_000
+    const h = harness({ now: () => now })
+    const control = await activeHost(h)
+    h.store.resolveResume.mockImplementationOnce(async () => {
+      now += 5
+      return { userId: identity.sub }
+    })
+    h.store.reserveCredential.mockImplementationOnce(async () => {
+      now += 7
+      return reservation
+    })
+    h.acquireActivity.mockImplementationOnce(async () => {
+      now += 11
+    })
+    h.store.recordConnectionBasis.mockImplementationOnce(async () => {
+      now += 3
+    })
+    const client = new FakeSocket()
+    const hostData = new FakeSocket()
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    try {
+      await h.registry.acceptClient(client as unknown as WebSocket, identity.relayHostId, 'cred')
+      const connOpen = JSON.parse(
+        String(control.send.mock.calls.find((call) => String(call[0]).includes('conn-open'))![0])
+      ) as { connId: string; connTicket: string }
+      // The desktop's data leg is the attach window this is meant to expose.
+      now += 23
+      const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+      const ownerProbe = vi.spyOn(session.pendingConns, 'has')
+      const accepted = await h.registry.acceptHostData(
+        hostData as unknown as WebSocket,
+        connOpen.connId,
+        connOpen.connTicket,
+        1
+      )
+
+      expect(accepted).toBe(true)
+      expect(ownerProbe).toHaveBeenCalledOnce()
+      expect(h.observer.recordClientAcceptCompleted).toHaveBeenCalledWith({
+        totalMs: 49,
+        stageMs: { assignment: 5, credential: 7, activity: 11, attach: 23, basis: 3 }
+      })
+      const line = log.mock.calls
+        .map((call) => String(call[0]))
+        .find((entry) => entry.includes('orca_relay_client_accept_completed'))
+      expect(line).toBeDefined()
+      const event = JSON.parse(line!) as {
+        role: string
+        cellId: string
+        region: string
+        credentialKind: string
+        stageMs: Record<string, number>
+        totalMs: number
+        relayHostIdDigest: string
+      }
+      expect(event.credentialKind).toBe('resume')
+      expect(event).toMatchObject({ assignmentEpoch: 1, controlGeneration: 1, drainMode: 'none' })
+      // Joins the line back to the emitting process, like the runtime metrics event.
+      expect(event).toMatchObject({ role: 'cell', cellId: config.cellId, region: 'us-central1' })
+      expect(Object.keys(event.stageMs).sort()).toEqual([
+        'activity',
+        'assignment',
+        'attach',
+        'basis',
+        'credential'
+      ])
+      for (const stage of Object.values(event.stageMs)) expect(stage).toBeGreaterThanOrEqual(0)
+      // The stages tile the accept end to end: every millisecond is attributed.
+      const summed = Object.values(event.stageMs).reduce((total, stage) => total + stage, 0)
+      expect(summed).toBe(event.totalMs)
+      expect(event.relayHostIdDigest).toMatch(/^[0-9a-f]{12}$/)
+      expect(line).not.toContain(identity.relayHostId)
+    } finally {
+      log.mockRestore()
+      h.registry.drain(0)
+      vi.advanceTimersByTime(0)
+    }
+  })
+})
+
+// Fires one heartbeat and returns the `t` of the ping it sent, which is the only
+// echo the registry will time.
+async function advanceToPing(control: FakeSocket, clock: { now: number }): Promise<number> {
+  clock.now += RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
+  await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+  const ping = control.send.mock.calls
+    .filter((call) => String(call[0]).includes('"type":"ping"'))
+    .at(-1)!
+  return (JSON.parse(String(ping[0])) as { t: number }).t
+}
+
+// The attach resolves its owning session once and hands it to the unfenced leg;
+// these hold the session it must be and the order the client hears about it.
+describe('host data attach ownership', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  const bystander = { ...identity, sub: 'user-2', relayHostId: 'qponmlkjihgfedcb' }
+
+  async function pendingAttach(h: ReturnType<typeof harness>) {
+    const client = new FakeSocket()
+    await h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential'
+    )
+    const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+    return { client, session, pending: [...session.pendingConns.values()][0]! }
+  }
+
+  it('attaches the session that owns the connection, not the first one registered', async () => {
+    const h = harness()
+    const idle = new FakeSocket()
+    await h.activate(idle as unknown as WebSocket, bystander, null, 1, false, 1, '1.4.197')
+    await activeHost(h)
+    const { client, session, pending } = await pendingAttach(h)
+    const idleSession = h.registry.get({
+      userId: bystander.sub,
+      relayHostId: bystander.relayHostId
+    })!
+    const host = new FakeSocket()
+    expect(
+      await h.registry.acceptHostData(
+        host as unknown as WebSocket,
+        pending.connId,
+        pending.connTicket,
+        1
+      )
+    ).toBe(true)
+    expect(client.send).toHaveBeenCalledWith(expect.stringContaining('"type":"relay-hello"'))
+    expect(session.activeSplices.has(pending.connId)).toBe(true)
+    expect(idleSession.activeSplices.size).toBe(0)
+    expect(idleSession.activeConnIds.size).toBe(0)
+    h.registry.drain(0)
+    vi.advanceTimersByTime(0)
+  })
+
+  it('acknowledges the client only after the connection basis is persisted', async () => {
+    const h = harness()
+    await activeHost(h)
+    const { client, session, pending } = await pendingAttach(h)
+    const basis = deferred<void>()
+    h.store.recordConnectionBasis.mockReturnValueOnce(basis.promise)
+    const host = new FakeSocket()
+    const attaching = h.registry.acceptHostData(
+      host as unknown as WebSocket,
+      pending.connId,
+      pending.connTicket,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.store.recordConnectionBasis).toHaveBeenCalledOnce()
+    expect(client.send).not.toHaveBeenCalledWith(expect.stringContaining('relay-hello'))
+    basis.resolve()
+    expect(await attaching).toBe(true)
+    expect(client.send).toHaveBeenCalledWith(expect.stringContaining('"type":"relay-hello"'))
+    expect(session.activeSplices.has(pending.connId)).toBe(true)
+    h.registry.drain(0)
+    vi.advanceTimersByTime(0)
+  })
+})
+
+describe('control round-trip sampling', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  it('logs a host once at the fourth sample and not again within the hour', async () => {
+    const clock = { now: 1_700_000_000_000 }
+    const h = harness({ now: () => clock.now })
+    const control = await activeHost(h)
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const rttLines = (): string[] =>
+      log.mock.calls
+        .map((call) => String(call[0]))
+        .filter((entry) => entry.includes('orca_relay_host_control_rtt'))
+    // One heartbeat, then the desktop's echo of that ping's own `t` 40 ms later.
+    const roundTrip = async (): Promise<void> => {
+      const pingAt = await advanceToPing(control, clock)
+      clock.now += 40
+      control.emit('message', JSON.stringify({ type: 'pong', t: pingAt }), false)
+    }
+    try {
+      for (let round = 0; round < 3; round++) await roundTrip()
+      expect(h.observer.recordControlRtt).toHaveBeenCalledTimes(3)
+      expect(rttLines()).toHaveLength(0)
+
+      await roundTrip()
+      expect(h.observer.recordControlRtt).toHaveBeenLastCalledWith(40)
+      expect(rttLines()).toHaveLength(1)
+      expect(JSON.parse(rttLines()[0]!)).toMatchObject({
+        event: 'orca_relay_host_control_rtt',
+        role: 'cell',
+        cellId: config.cellId,
+        region: 'us-central1',
+        rttMsMedian: 40,
+        assignmentEpoch: 1,
+        controlGeneration: 1,
+        drainMode: 'none',
+        sampleCount: 4
+      })
+      expect(rttLines()[0]).not.toContain(identity.relayHostId)
+
+      // Later samples keep feeding the fleet metric, but stay silent for an hour.
+      for (let round = 0; round < 8; round++) await roundTrip()
+      expect(h.observer.recordControlRtt).toHaveBeenCalledTimes(12)
+      expect(rttLines()).toHaveLength(1)
+
+      const elapsedStart = clock.now
+      while (clock.now - elapsedStart < 60 * 60 * 1000) await roundTrip()
+      expect(rttLines()).toHaveLength(2)
+    } finally {
+      log.mockRestore()
+      h.registry.drain(0)
+      vi.advanceTimersByTime(0)
+    }
+  })
+
+  it('ignores a pong that answers no outstanding ping', async () => {
+    const clock = { now: 1_700_000_000_000 }
+    const h = harness({ now: () => clock.now })
+    const control = await activeHost(h)
+    try {
+      // Nothing has been pinged yet, so even a plausible echo is not a round trip.
+      control.emit('message', JSON.stringify({ type: 'pong' }), false)
+      control.emit('message', JSON.stringify({ type: 'pong', t: 'later' }), false)
+      control.emit('message', JSON.stringify({ type: 'pong', t: clock.now }), false)
+      control.emit('message', JSON.stringify({ type: 'pong', t: clock.now - 10 }), false)
+      expect(h.observer.recordControlRtt).not.toHaveBeenCalled()
+
+      const pingAt = await advanceToPing(control, clock)
+      // A guessed timestamp is not the outstanding ping's `t`, so it is dropped.
+      control.emit('message', JSON.stringify({ type: 'pong', t: pingAt - 1 }), false)
+      control.emit('message', JSON.stringify({ type: 'pong', t: pingAt + 1 }), false)
+      expect(h.observer.recordControlRtt).not.toHaveBeenCalled()
+
+      clock.now += 10
+      control.emit('message', JSON.stringify({ type: 'pong', t: pingAt }), false)
+      expect(h.observer.recordControlRtt).toHaveBeenCalledWith(10)
+    } finally {
+      h.registry.drain(0)
+      vi.advanceTimersByTime(0)
+    }
+  })
+
+  it('records one sample per ping however many pongs a host floods', async () => {
+    const clock = { now: 1_700_000_000_000 }
+    const h = harness({ now: () => clock.now })
+    const control = await activeHost(h)
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    try {
+      const pingAt = await advanceToPing(control, clock)
+      clock.now += 12
+      for (let flood = 0; flood < 5_000; flood++) {
+        control.emit('message', JSON.stringify({ type: 'pong', t: pingAt }), false)
+        control.emit('message', JSON.stringify({ type: 'pong', t: clock.now }), false)
+      }
+      // One answered ping is one process-wide sample and one per-session sample, so
+      // neither the metric window nor the hourly log line can be flooded.
+      expect(h.observer.recordControlRtt).toHaveBeenCalledTimes(1)
+      expect(h.observer.recordControlRtt).toHaveBeenCalledWith(12)
+      expect(
+        log.mock.calls.filter((call) => String(call[0]).includes('orca_relay_host_control_rtt'))
+      ).toHaveLength(0)
+    } finally {
+      log.mockRestore()
+      h.registry.drain(0)
+      vi.advanceTimersByTime(0)
+    }
   })
 })
 

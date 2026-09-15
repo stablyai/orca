@@ -32,7 +32,7 @@ vi.mock('../minimax/minimax-api-key-store', () => ({
   hasMiniMaxApiKey: hasMiniMaxApiKeyMock
 }))
 
-vi.mock('../rate-limits/minimax-request-context', () => ({
+vi.mock('../rate-limits/minimax/minimax-request-context', () => ({
   clearMiniMaxSessionCookieJar: clearMiniMaxSessionCookieJarMock
 }))
 

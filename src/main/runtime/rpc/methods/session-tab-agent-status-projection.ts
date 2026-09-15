@@ -55,7 +55,7 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   payload: TPayload,
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: readonly RuntimeCapability[] | undefined,
-  structuredNativeChatEnabled?: boolean
+  structuredNativeChatEnabled: boolean
 ): TPayload {
   const structuredVisible = structuredNativeChatProjectionEnabled({
     clientKind,

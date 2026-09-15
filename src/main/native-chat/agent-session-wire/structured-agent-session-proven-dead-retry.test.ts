@@ -3,12 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionHandoffRequest } from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { recoverStoredDeadTuiOwnerForHandoff } from '../../runtime/agent-session-handoff-record-transitions'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { StructuredAgentSessionHandoffCoordinator } from './structured-agent-session-handoff'
 import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
+import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-proven-dead-retry'
@@ -89,6 +91,15 @@ describe('structured session proven-dead TUI retry', () => {
       },
       journalDir: join(root, 'journal')
     })
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: 'running-turn' },
+      {
+        kind: 'status',
+        text: 'Working',
+        turnLifecycle: { turnId: 'turn-1', state: 'running' }
+      },
+      { fence: store.getRecord(SESSION)?.lease.runtimeFence ?? tuiFence }
+    )
     const closeTuiOwner =
       vi.fn<NonNullable<StructuredAgentSessionHandoffTransport['closeTuiOwner']>>()
     const coordinator = new StructuredAgentSessionHandoffCoordinator({
@@ -134,6 +145,17 @@ describe('structured session proven-dead TUI retry', () => {
       },
       acquireNativeStop: vi.fn(async () => true),
       importTuiHistory: vi.fn(),
+      retryPendingSettlement: (sessionId) =>
+        retryLoadedStructuredAgentSessionSettlement({
+          deps: { store },
+          sessionId,
+          session: {
+            journal,
+            fence: store.getRecord(sessionId)?.lease.runtimeFence ?? 1,
+            acquisitionGeneration: null
+          },
+          now: () => NOW
+        }),
       publish: vi.fn(),
       schedule: async (_sessionId, task) => task(),
       now: () => NOW
@@ -174,5 +196,7 @@ describe('structured session proven-dead TUI retry', () => {
       claimStatus: 'live',
       handoffStage: null
     })
+    expect(store.getRecord(SESSION)?.lease.settlementRetryRequired).toBeUndefined()
+    expect(activeStructuredAgentSessionTurnId(journal.snapshot().items)).toBe(null)
   })
 })

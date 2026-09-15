@@ -70,6 +70,7 @@ async function failingFlowRunner(
         throw new Error('unused')
       },
       importTuiHistory: async () => {},
+      retryPendingSettlement: async () => true,
       publish: () => {},
       schedule: async () => {
         throw new Error('scheduling failed')

@@ -131,6 +131,25 @@ async function readWindowsProcessStartTimeMs(pid: number): Promise<number | null
   }
 }
 
+async function readWindowsProcessStartTimesMs(
+  pids: readonly number[]
+): Promise<Map<number, number | null>> {
+  const observed = new Map<number, number | null>(pids.map((pid) => [pid, null]))
+  if (pids.length === 0 || !isWindowsProcessStartTimeAvailable()) {
+    return observed
+  }
+  try {
+    const table = await readWindowsProcessIdentityTableFresh()
+    const startTimesByPid = new Map(table.map((row) => [row.pid, row.creationTimeMs ?? null]))
+    for (const pid of pids) {
+      observed.set(pid, startTimesByPid.get(pid) ?? null)
+    }
+  } catch {
+    // A missing process table is unknown, never evidence that every owner exited.
+  }
+  return observed
+}
+
 /**
  * Process start time is the cross-platform PID-reuse guard when no provider hook can echo the
  * spawn token back to the owner probe.
@@ -159,6 +178,9 @@ export async function readProcessStartTimesMs(
   if (platform === 'darwin') {
     const table = await readDarwinProcessStartTimesMs(uniquePids)
     return new Map(uniquePids.map((pid) => [pid, table.get(pid) ?? null]))
+  }
+  if (platform === 'win32') {
+    return readWindowsProcessStartTimesMs(uniquePids)
   }
   return new Map(
     await Promise.all(

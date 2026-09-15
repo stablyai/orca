@@ -1262,6 +1262,8 @@ jobs:
       # Electron binary from GitHub release assets. GitHub's download CDN
       # occasionally returns 504s that fail the whole release. Retry on
       # failure so transient network errors don't require a manual re-run.
+      # Why host-only: this job packages only for its own runner OS and
+      # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:

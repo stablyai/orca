@@ -73,6 +73,7 @@ export function createStructuredAgentSessionHandoffTestCoordinator(
         { fence, recovered: true }
       )
     },
+    retryPendingSettlement: async () => true,
     publish: (_sessionId, status) => input.statuses.push(status),
     schedule: async (_sessionId, task) => task(),
     now: () => input.now

@@ -1,0 +1,265 @@
+{
+  "operation": "workspace.file-inventory",
+  "family": "legacy-inventory",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "262eaad263a45aa13ec5b27c12b59946b12c202474229fff7a5727dba6d702ca",
+  "scenarioSha256": "d6c57a5153d915f0a0c0fd9e305cac70b41b7eb8be226fc865227ebf1821e5d1",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2837f481a843": {
+      "name": "files.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+    },
+    "602e35a92eec": {
+      "files": []
+    },
+    "9dea95bddfe5": {
+      "name": "files.searchPaths#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+    },
+    "b5b30ad54c76": {
+      "name": "files.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 120,
+        "settledAt": 120,
+        "error": {
+          "category": "Error",
+          "message": "Connection lost",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c0821dc354d7": {
+      "name": "files.searchPaths#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "old",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "ccb16672d904": {
+      "name": "files.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 120,
+        "settledAt": 120,
+        "error": {
+          "category": "LogicalClientCutoverError",
+          "message": "RPC interrupted by connection migration",
+          "isRpcDeliveryUnknown": true,
+          "cause": {
+            "category": "Error",
+            "message": "Connection closed",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    },
+    "d2ad71e601c4": {
+      "status": "fulfilled",
+      "startedAt": 120,
+      "settledAt": 120,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ee88659ed950": {
+      "name": "files.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 120,
+        "settledAt": 30120,
+        "error": {
+          "category": "Error",
+          "message": "Request timed out: files.list",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "interruptions-inventory-lifecycle",
+    "checkpoints": [
+      {
+        "id": "inventory-lifecycle.timeout:interrupted",
+        "observation": {
+          "sender": ["c0821dc354d7", "ee88659ed950"],
+          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.timeout:settled",
+        "observation": {
+          "sender": ["c0821dc354d7", "ee88659ed950"],
+          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.disconnect:interrupted",
+        "observation": {
+          "sender": ["c0821dc354d7", "b5b30ad54c76"],
+          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "disconnect": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.disconnect:settled",
+        "observation": {
+          "sender": ["c0821dc354d7", "b5b30ad54c76"],
+          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "disconnect": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.cutover:interrupted",
+        "observation": {
+          "sender": ["c0821dc354d7", "ccb16672d904"],
+          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "cutover": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.cutover:settled",
+        "observation": {
+          "sender": ["c0821dc354d7", "ccb16672d904"],
+          "payloads": ["9dea95bddfe5", "2837f481a843"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "cutover": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      }
+    ]
+  }
+}
