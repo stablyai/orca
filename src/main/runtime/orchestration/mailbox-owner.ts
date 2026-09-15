@@ -1,5 +1,6 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import type { OrchestrationDb } from './db'
+import { isEquivalentPaneKey } from './db/pane-key-match'
 
 export type OrchestrationMailboxLeaf = {
   tabId: string
@@ -57,7 +58,27 @@ export class OrchestrationMailboxOwner {
       return null
     }
     const paneKey = `${leaf.tabId}:${leaf.leafId}`
-    const run = db.getCurrentRunForPane?.(paneKey)
+    let run = db.getCurrentRunForPane?.(paneKey)
+    if (requestedMailbox?.startsWith('run:')) {
+      const requestedRunId = requestedMailbox.slice('run:'.length)
+      if (!run) {
+        const candidateRun = db.getRun?.(requestedRunId)
+        if (
+          candidateRun &&
+          (candidateRun.coordinator_handle === terminalHandle ||
+            (candidateRun.coordinator_pane_key &&
+              isEquivalentPaneKey(candidateRun.coordinator_pane_key, paneKey)) ||
+            (db.getRunMailboxOwnerIdsForHandle?.(terminalHandle) ?? []).includes(requestedRunId))
+        ) {
+          run = candidateRun
+        }
+      }
+    } else if (!requestedMailbox && !run) {
+      const ownerRunIds = db.getRunMailboxOwnerIdsForHandle?.(terminalHandle) ?? []
+      if (ownerRunIds.length === 1) {
+        run = db.getRun?.(ownerRunIds[0])
+      }
+    }
     if (run) {
       return this.resolveRunMailbox(db, leaf, terminalHandle, run.id, requestedMailbox, options)
     }
