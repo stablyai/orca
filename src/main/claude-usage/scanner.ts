@@ -1,4 +1,6 @@
 import { stat } from 'node:fs/promises'
+import { isWslUncPath } from '../../shared/wsl-paths'
+import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import type {
   ClaudeUsageDailyAggregate,
   ClaudeUsageParsedTurn,
@@ -22,6 +24,11 @@ import {
 
 const FILE_SCAN_BATCH_SIZE = 4
 
+export type ClaudeUsageScanTarget = {
+  configDir: string
+  includeWslHomes?: boolean
+}
+
 // Why setImmediate: setTimeout(0) is clamped to ~1ms, and this yields once per
 // 4-file batch, so a 7.5k-transcript scan spent ~2s parked on timers.
 async function yieldToEventLoop(): Promise<void> {
@@ -30,28 +37,50 @@ async function yieldToEventLoop(): Promise<void> {
 
 async function getProcessedFileStat(
   filePath: string
-): Promise<Omit<ClaudeUsageProcessedFile, 'lineCount'>> {
-  const fileStat = await stat(filePath)
-  return {
-    path: filePath,
-    mtimeMs: fileStat.mtimeMs,
-    size: fileStat.size
+): Promise<Omit<ClaudeUsageProcessedFile, 'lineCount'> | undefined> {
+  try {
+    const fileStat = isWslUncPath(filePath)
+      ? await wslGatedStat(filePath, 'scan')
+      : await stat(filePath)
+    return {
+      path: filePath,
+      mtimeMs: fileStat.mtimeMs,
+      size: fileStat.size
+    }
+  } catch (error) {
+    console.warn('[claude-usage] Failed to stat transcript, skipping:', filePath, error)
+    return undefined
   }
 }
 
 export async function scanClaudeUsageFiles(
   worktrees: ClaudeUsageWorktreeRef[],
-  previousProcessedFiles: ClaudeUsagePersistedFile[] = []
+  previousProcessedFiles: ClaudeUsagePersistedFile[] = [],
+  target?: ClaudeUsageScanTarget
 ): Promise<{
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
-  const files = await listClaudeTranscriptFiles()
+  const files = await listClaudeTranscriptFiles(target)
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
   const worktreeLookup = await buildWorktreeLookup(worktrees)
 
-  const currentPaths = new Set(files)
+  const fileInfoByPath = new Map<string, Omit<ClaudeUsageProcessedFile, 'lineCount'>>()
+  for (let index = 0; index < files.length; index += FILE_SCAN_BATCH_SIZE) {
+    const batch = files.slice(index, index + FILE_SCAN_BATCH_SIZE)
+    const fileInfos = await Promise.all(batch.map((filePath) => getProcessedFileStat(filePath)))
+    for (const [batchIndex, fileInfo] of fileInfos.entries()) {
+      if (fileInfo) {
+        fileInfoByPath.set(batch[batchIndex], fileInfo)
+      }
+    }
+    if (index + batch.length < files.length) {
+      await yieldToEventLoop()
+    }
+  }
+
+  const currentPaths = new Set(fileInfoByPath.keys())
   // Why: when a file that owned dedupe keys is deleted, remaining forks still
   // contain those turns but their caches record them as unowned. Only files
   // that previously deferred claims can reclaim, so invalidate those — not the
@@ -65,37 +94,29 @@ export async function scanClaudeUsageFiles(
 
   const reusedByPath = new Map<string, ClaudeUsagePersistedFile>()
   const pathsToParse: string[] = []
-  for (let index = 0; index < files.length; index += FILE_SCAN_BATCH_SIZE) {
-    const batch = files.slice(index, index + FILE_SCAN_BATCH_SIZE)
-    const reusable = await Promise.all(
-      batch.map(async (filePath) => {
-        const fileInfo = await getProcessedFileStat(filePath)
-        const previous = previousByPath.get(filePath)
-        // Why: Claude histories can be gigabytes. Unchanged files should pay
-        // only stat cost on refresh while preserving exactly the old projection.
-        // When an owner disappears, only deferred-claim files need reparse.
-        const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
-        const canReuse =
-          !mustReclaimDeferred &&
-          previous &&
-          previous.mtimeMs === fileInfo.mtimeMs &&
-          previous.size === fileInfo.size &&
-          Array.isArray(previous.sessions) &&
-          Array.isArray(previous.dailyAggregates) &&
-          Array.isArray(previous.ownedDedupeKeys) &&
-          typeof previous.hasDeferredClaims === 'boolean'
-        return canReuse ? previous : null
-      })
-    )
-    for (const [batchIndex, previous] of reusable.entries()) {
-      if (previous) {
-        reusedByPath.set(batch[batchIndex], previous)
-      } else {
-        pathsToParse.push(batch[batchIndex])
-      }
+  for (const filePath of files) {
+    const fileInfo = fileInfoByPath.get(filePath)
+    if (!fileInfo) {
+      continue
     }
-    if (index + batch.length < files.length) {
-      await yieldToEventLoop()
+    const previous = previousByPath.get(filePath)
+    // Why: Claude histories can be gigabytes. Unchanged files should pay
+    // only stat cost on refresh while preserving exactly the old projection.
+    // When an owner disappears, only deferred-claim files need reparse.
+    const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
+    const canReuse =
+      !mustReclaimDeferred &&
+      previous &&
+      previous.mtimeMs === fileInfo.mtimeMs &&
+      previous.size === fileInfo.size &&
+      Array.isArray(previous.sessions) &&
+      Array.isArray(previous.dailyAggregates) &&
+      Array.isArray(previous.ownedDedupeKeys) &&
+      typeof previous.hasDeferredClaims === 'boolean'
+    if (canReuse) {
+      reusedByPath.set(filePath, previous)
+    } else {
+      pathsToParse.push(filePath)
     }
   }
 

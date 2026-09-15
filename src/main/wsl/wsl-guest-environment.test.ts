@@ -27,6 +27,12 @@ function respondWithPayload(payload: string, code = 0): void {
 }
 
 const GOOD = ['/home/u/.nvm/bin:/usr/bin', '/home/u', '/usr/bin/env'].join('\0')
+const CLAUDE_CONFIGURED = [
+  '/home/u/.nvm/bin:/usr/bin',
+  '/home/u',
+  '/usr/bin/env',
+  '/home/u/.claude-alt'
+].join('\0')
 
 beforeEach(() => {
   runProcessMock.mockReset()
@@ -41,6 +47,14 @@ describe('probing', () => {
       path: '/home/u/.nvm/bin:/usr/bin',
       home: '/home/u',
       envBinary: '/usr/bin/env'
+    })
+  })
+
+  it('reads Claude config dir from the login-shell environment', async () => {
+    respondWithPayload(CLAUDE_CONFIGURED)
+
+    await expect(getWslGuestEnvironment('Ubuntu')).resolves.toMatchObject({
+      claudeConfigDir: '/home/u/.claude-alt'
     })
   })
 
