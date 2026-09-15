@@ -8,6 +8,9 @@ import {
 } from './constants'
 
 describe('getDefaultSettings', () => {
+  it('keeps file icons monochrome by default', () => {
+    expect(getDefaultSettings('/tmp').coloredFileIcons).toBe(false)
+  })
   it('uses platform-consistent separators for the default workspace directory', () => {
     expect(getDefaultSettings('/Users/alice').workspaceDir).toBe('/Users/alice/orca/workspaces')
     expect(getDefaultSettings('C:\\Users\\alice').workspaceDir).toBe(

@@ -116,11 +116,10 @@ vi.mock('../browser-pane/describe-page/live-browser-url-registry', () => ({
   getLiveBrowserUrl: () => 'https://live.example/not-the-tab-label'
 }))
 
-vi.mock('@/lib/file-type-icons', () => ({
-  getFileTypeIcon: () =>
-    function FileIcon() {
-      return <span data-file-icon />
-    }
+vi.mock('@/components/FileTypeIcon', () => ({
+  FileTypeIcon: function FileIcon() {
+    return <span data-file-icon />
+  }
 }))
 
 vi.mock('@/lib/rename-file', () => ({

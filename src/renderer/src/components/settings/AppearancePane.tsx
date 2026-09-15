@@ -1,3 +1,4 @@
+import { getFileIconEntries } from './file-icon-search'
 import type React from 'react'
 import { useLayoutEffect, useState } from 'react'
 import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
@@ -138,6 +139,7 @@ export function AppearancePane({
   const interfaceSearchEntries = [
     { title: interfaceTitle },
     ...getThemeEntries(),
+    ...getFileIconEntries(),
     ...getZoomEntries(),
     ...getTypographyEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
