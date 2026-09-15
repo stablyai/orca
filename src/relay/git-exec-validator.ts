@@ -30,7 +30,8 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'commit',
   'for-each-ref',
   'check-ref-format',
-  'config'
+  'config',
+  'blame'
 ])
 const CONFIG_READ_ONLY_FLAGS = new Set(['--get', '--get-all', '--list', '--get-regexp', '-l'])
 // Why: checking presence of a read-only flag is insufficient — a request could
@@ -132,6 +133,41 @@ function validateInitArgs(args: string[]): void {
   }
 }
 
+// Why: blame is read-only, but `--contents <file>` and `-S <revs-file>` turn it
+// into an arbitrary file reader, so permit only the two exact shapes the blame
+// surfaces send — whole-file `blame --porcelain -- <path>` and single-line
+// `blame --porcelain -L <n>,<n> -- <path>` — and nothing else, so an option value
+// cannot smuggle a path.
+//
+// Why the single-line range must be exactly one line even though the whole-file
+// shape is allowed: the two are separate grants. `-L 1,999999` would deliver
+// whole-file authorship through a path whose callers, argument budget, and
+// timeout are all sized for one line.
+const BLAME_SHAPE_ERROR =
+  'git blame via exec is restricted to blame --porcelain [-L <n>,<n>] -- <path>'
+
+function validateBlameArgs(args: string[]): void {
+  if (args.length === 4) {
+    if (args[1] !== '--porcelain' || args[2] !== '--' || !args[3] || args[3].includes('\0')) {
+      throw new Error(BLAME_SHAPE_ERROR)
+    }
+    return
+  }
+  const range = /^(\d+),(\d+)$/.exec(args[3] ?? '')
+  if (
+    args.length !== 6 ||
+    args[1] !== '--porcelain' ||
+    args[2] !== '-L' ||
+    !range ||
+    range[1] !== range[2] ||
+    args[4] !== '--' ||
+    !args[5] ||
+    args[5].includes('\0')
+  ) {
+    throw new Error(BLAME_SHAPE_ERROR)
+  }
+}
+
 function validateCommitArgs(args: string[]): void {
   if (args.length !== 4 || args[1] !== '--allow-empty' || args[2] !== '-m' || !args[3]) {
     throw new Error('git commit via exec is restricted to commit --allow-empty -m <message>')
@@ -222,6 +258,9 @@ export function validateGitExecArgs(args: string[]): void {
     if (unsupportedArg) {
       throw new Error(`git diff flag not allowed via exec: ${unsupportedArg}`)
     }
+  }
+  if (subcommand === 'blame') {
+    validateBlameArgs(args)
   }
   if (subcommand === 'clone') {
     validateCloneArgs(args)

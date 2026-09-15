@@ -14,6 +14,8 @@ const RPC_TO_RUNTIME_COMMAND = {
   'git.checkout': 'checkoutRuntimeGitBranch',
   'git.localBranches': 'listRuntimeGitLocalBranches',
   'git.diff': 'getRuntimeGitDiff',
+  'git.fileBlame': 'getRuntimeGitFileBlame',
+  'git.lineBlame': 'getRuntimeGitLineBlame',
   'git.branchDiff': 'getRuntimeGitBranchDiff',
   'git.commitDiff': 'getRuntimeGitCommitDiff',
   'git.branchCompare': 'getRuntimeGitBranchCompare',
