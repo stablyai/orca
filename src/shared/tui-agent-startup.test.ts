@@ -351,6 +351,36 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it.each([
+    ['yolo', 'linux', 'posix', undefined, "muse --trust-workspace '--yolo'"],
+    ['manual', 'linux', 'posix', { muse: '' }, 'muse --trust-workspace'],
+    ['yolo', 'darwin', 'posix', undefined, "muse --trust-workspace '--yolo'"],
+    ['manual', 'darwin', 'posix', { muse: '' }, 'muse --trust-workspace'],
+    ['yolo', 'win32', 'powershell', undefined, "muse --trust-workspace '--yolo'"],
+    ['manual', 'win32', 'powershell', { muse: '' }, 'muse --trust-workspace'],
+    ['yolo', 'win32', 'cmd', undefined, 'muse --trust-workspace "--yolo"'],
+    ['manual', 'win32', 'cmd', { muse: '' }, 'muse --trust-workspace']
+  ] as const)(
+    'launches Muse Spark in %s mode on %s/%s with the prompt as followup',
+    (_, platform, shell, defaults, command) => {
+      const plan = buildAgentStartupPlan({
+        agent: 'muse',
+        prompt: 'fix it',
+        cmdOverrides: {},
+        platform,
+        shell,
+        agentArgs: resolveTuiAgentLaunchArgs('muse', defaults)
+      })
+
+      expect(plan).toMatchObject({
+        agent: 'muse',
+        launchCommand: command,
+        expectedProcess: 'muse',
+        followupPrompt: 'fix it'
+      })
+    }
+  )
+
   it('leaves Claude command overrides untouched', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
