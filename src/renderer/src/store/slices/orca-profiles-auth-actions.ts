@@ -74,6 +74,23 @@ export const createOrcaProfilesAuthActions: StateCreator<
       return null
     }
     set({ orcaProfileConnecting: true })
+    // Why: an abandoned browser tab otherwise locks every sign-in button until main's loopback timeout.
+    const pendingToastId = toast.loading(
+      translate(
+        'auto.store.slices.orca.profiles.signInPending',
+        'Waiting for sign-in in your browser…'
+      ),
+      {
+        cancel: {
+          label: translate('auto.store.slices.orca.profiles.cancelSignIn', 'Cancel'),
+          onClick: () => {
+            window.api.orcaProfiles.cancelConnect().catch((err: unknown) => {
+              console.error('Failed to cancel Orca profile sign-in:', err)
+            })
+          }
+        }
+      }
+    )
     try {
       const result = await window.api.orcaProfiles.connectCurrent()
       set({
@@ -115,6 +132,8 @@ export const createOrcaProfilesAuthActions: StateCreator<
         }
       )
       return null
+    } finally {
+      toast.dismiss(pendingToastId)
     }
   },
 

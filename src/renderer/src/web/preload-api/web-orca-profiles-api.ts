@@ -48,6 +48,7 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
         status: 'unconfigured',
         auth: await webOrcaProfileAuthStatus()
       }),
+      cancelConnect: () => Promise.resolve(),
       refreshAuth: async () => ({
         status: 'unconfigured',
         auth: await webOrcaProfileAuthStatus()

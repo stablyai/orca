@@ -164,19 +164,22 @@ describe('Orca cloud profile service', () => {
     })
   })
 
-  it('treats provider-denied sign-in as a cancelled connect attempt', async () => {
-    configureCloudEnv()
-    beginOrcaCloudPkceFlowMock.mockRejectedValue(new Error('orca_cloud_auth_denied'))
+  it.each(['orca_cloud_auth_denied', 'orca_cloud_auth_cancelled'])(
+    'treats %s as a cancelled connect attempt',
+    async (message) => {
+      configureCloudEnv()
+      beginOrcaCloudPkceFlowMock.mockRejectedValue(new Error(message))
 
-    const result = await connectCurrentOrcaProfile(userDataPath)
+      const result = await connectCurrentOrcaProfile(userDataPath)
 
-    expect(result.status).toBe('cancelled')
-    expect(exchangeOrcaCloudAuthCodeMock).not.toHaveBeenCalled()
-    expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
-      state: 'local',
-      persistence: 'none'
-    })
-  })
+      expect(result.status).toBe('cancelled')
+      expect(exchangeOrcaCloudAuthCodeMock).not.toHaveBeenCalled()
+      expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
+        state: 'local',
+        persistence: 'none'
+      })
+    }
+  )
 
   it('reports callback failures as failed instead of cancelled', async () => {
     configureCloudEnv()

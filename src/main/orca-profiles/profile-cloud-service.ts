@@ -35,9 +35,14 @@ import { getOrcaProfileAuthStatusFromProfile } from './profile-cloud-auth-status
 import { selectCloudOrgWithMutationFence } from './profile-cloud-org-selection'
 
 export { refreshCurrentOrcaProfileAuth } from './profile-cloud-capability-refresh'
+export { cancelOrcaCloudPkceFlows as cancelCurrentOrcaProfileConnect } from './profile-cloud-pkce'
 
 function isUserCancelledAuthError(message: string): boolean {
-  return message === 'orca_cloud_auth_timeout' || message === 'orca_cloud_auth_denied'
+  return (
+    message === 'orca_cloud_auth_timeout' ||
+    message === 'orca_cloud_auth_denied' ||
+    message === 'orca_cloud_auth_cancelled'
+  )
 }
 
 function activeAuth(

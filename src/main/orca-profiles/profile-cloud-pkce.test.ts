@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { beginOrcaCloudPkceFlow } from './profile-cloud-pkce'
+import { beginOrcaCloudPkceFlow, cancelOrcaCloudPkceFlows } from './profile-cloud-pkce'
 
 type HttpResponse = {
   body: string
@@ -131,6 +131,16 @@ describe('Orca cloud PKCE flow', () => {
       })
     }
   )
+
+  it('cancels a pending flow and closes its loopback listener', async () => {
+    const { flow, redirectUri, state } = await startedFlow()
+    const observedFlow = flow.catch((error: unknown) => error)
+
+    cancelOrcaCloudPkceFlows()
+
+    await expect(observedFlow).resolves.toMatchObject({ message: 'orca_cloud_auth_cancelled' })
+    await expect(readHttp(callbackUrl(redirectUri, { code: 'late-code', state }))).rejects.toThrow()
+  })
 
   it('adds desktop PKCE parameters to the authorize URL', async () => {
     const { authUrl, flow, nonce, redirectUri, state } = await startedFlow()

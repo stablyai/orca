@@ -37,6 +37,7 @@ import { findOrcaProfileProjectsByPath } from '../orca-profiles/profile-project-
 import { flushActiveProfileBeforeFileMutation } from '../orca-profiles/profile-persistence-deadline'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import {
+  cancelCurrentOrcaProfileConnect,
   createCloudLinkedOrcaProfile,
   connectCurrentOrcaProfile,
   getCurrentOrcaProfileAuthStatus,
@@ -276,6 +277,8 @@ export function registerOrcaProfileHandlers(
       return result
     }
   )
+
+  ipcMain.handle('orcaProfiles:cancelConnect', (): void => cancelCurrentOrcaProfileConnect())
 
   ipcMain.handle(
     'orcaProfiles:createCloudLinked',
