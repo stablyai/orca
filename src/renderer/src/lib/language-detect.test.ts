@@ -82,4 +82,16 @@ describe('detectLanguage', () => {
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')
     expect(detectLanguage('notes/scratch.unknownext')).toBe('plaintext')
   })
+
+  it('maps open-ended dotenv filenames to ini after exact and extension lookups miss', () => {
+    expect(detectLanguage('.env.functions.local')).toBe('ini')
+    expect(detectLanguage('config/.env.staging')).toBe('ini')
+    expect(detectLanguage('.ENV.STAGING')).toBe('ini')
+    expect(detectLanguage('C:\\repo\\.env.test.example')).toBe('ini')
+  })
+
+  it('preserves envrc and dotenv files with real language extensions', () => {
+    expect(detectLanguage('.envrc')).toBe('plaintext')
+    expect(detectLanguage('.env.sh')).toBe('shell')
+  })
 })

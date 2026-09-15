@@ -76,6 +76,10 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
   '.env.production': 'ini'
 }
 
+function detectDotenvLanguage(filename: string): string | null {
+  return filename.toLowerCase().startsWith('.env.') ? 'ini' : null
+}
+
 export function detectMobileFileLanguage(filePath: string, preferredLanguage?: string): string {
   const normalizedPreferred = preferredLanguage?.trim().toLowerCase()
   if (normalizedPreferred && normalizedPreferred !== 'plaintext') {
@@ -89,5 +93,9 @@ export function detectMobileFileLanguage(filePath: string, preferredLanguage?: s
     return exact
   }
 
-  return EXT_TO_LANGUAGE[extname(filename).toLowerCase()] ?? 'plaintext'
+  return (
+    EXT_TO_LANGUAGE[extname(filename).toLowerCase()] ??
+    detectDotenvLanguage(filename) ??
+    'plaintext'
+  )
 }
