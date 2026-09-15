@@ -245,4 +245,85 @@ describe('orca cli worktree awareness', () => {
       expect.objectContaining({ devMode: true })
     )
   })
+
+  it('renders the record-only dispatch warning in text mode', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    callMock.mockResolvedValueOnce({
+      id: 'req_dispatch',
+      ok: true,
+      result: {
+        dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' },
+        injected: false,
+        warning: 'Recorded only: terminal term_worker was not told about task task_1.'
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    // Why: an explicit --from skips the env-handle liveness probe, so the single mocked reply is the dispatch.
+    await main(
+      [
+        'orchestration',
+        'dispatch',
+        '--task',
+        'task_1',
+        '--to',
+        'term_worker',
+        '--from',
+        'term_sender'
+      ],
+      '/tmp/repo'
+    )
+
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Dispatched task_1 -> ctx_1 [dispatched]')
+    expect(output).toContain(
+      'Warning: Recorded only: terminal term_worker was not told about task task_1.'
+    )
+  })
+
+  it('prints no warning line for an injected dispatch', async () => {
+    callMock.mockResolvedValueOnce({
+      id: 'req_dispatch',
+      ok: true,
+      result: {
+        dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' },
+        injected: true
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'orchestration',
+        'dispatch',
+        '--task',
+        'task_1',
+        '--to',
+        'term_worker',
+        '--from',
+        'term_sender',
+        '--inject'
+      ],
+      '/tmp/repo'
+    )
+
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Dispatched task_1 -> ctx_1 [dispatched]')
+    expect(output).not.toContain('Warning:')
+  })
+
+  it('documents record-only dispatch in the dispatch help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['orchestration', 'dispatch', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('Without --inject the dispatch is recorded only')
+    expect(help).toContain('task-update')
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })

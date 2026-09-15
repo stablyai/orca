@@ -111,6 +111,8 @@ orca terminal wait --terminal <workerHandle> --for tui-idle --timeout-ms 60000 -
 orca orchestration dispatch --task <taskId> --to <workerHandle> --inject --json
 ```
 
+Without `--inject`, `dispatch` only records the attempt: the task turns `dispatched`, the terminal is not told, and the response reports `injected: false` (newer runtimes also add a `warning` saying so). Deliver the task yourself, or reset it (`orca orchestration task-update --id <taskId> --status failed`, then the same command with `--status ready`) and dispatch again with `--inject`.
+
 ## Messaging notes
 
 - Default `check` is the bound Run's oldest unacked Delivery (FIFO). Replay until `--ack`.

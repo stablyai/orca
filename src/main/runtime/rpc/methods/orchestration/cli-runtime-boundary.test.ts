@@ -89,6 +89,22 @@ describe('orchestration CLI/runtime boundary', () => {
     ])
     expect(db.getTask(child.id)?.status).toBe('dispatched')
     expect(db.getDispatchContext(child.id)?.assignee_handle).toBe('term_worker')
+    // Why: the record-only warning must survive the real CLI handler, not just the RPC method.
+    // A variable specifier keeps src/cli out of the node tsconfig project, like cliModulePath below.
+    const formatModulePath = '../../../../../cli/format'
+    const { printResult } = (await import(formatModulePath)) as {
+      printResult: ReturnType<typeof vi.fn>
+    }
+    expect(printResult).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          injected: false,
+          warning: expect.stringContaining('term_worker was not told')
+        })
+      }),
+      true,
+      expect.any(Function)
+    )
   })
 
   /** Looks up real DB-created tasks by unique fixture spec after the CLI allocates their IDs. */

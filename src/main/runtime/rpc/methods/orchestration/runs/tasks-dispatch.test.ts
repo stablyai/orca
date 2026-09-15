@@ -232,10 +232,74 @@ describe('orchestration RPC methods', () => {
       const result = (await call('orchestration.dispatch', {
         task: task.id,
         to: 'term_a'
-      })) as { dispatch: { task_id: string; status: string } }
+      })) as { dispatch: { task_id: string; status: string }; injected: boolean; warning?: string }
 
       expect(result.dispatch.task_id).toBe(task.id)
       expect(result.dispatch.status).toBe('dispatched')
+      // Why: without --inject nobody tells the terminal (#14809); the response is the only place the coordinator can learn that.
+      expect(result.injected).toBe(false)
+      expect(result.warning).toContain('term_a was not told')
+      expect(result.warning).toContain(task.id)
+      expect(result.warning).toContain('--inject')
+      // Why: the recovery half must stay in sync with the help note and docs that promise it.
+      expect(result.warning).toContain('task-update')
+      expect(result.warning).toContain('--status ready')
+    })
+
+    it('omits the record-only warning when the preamble is injected', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true,
+        from: 'term_coord'
+      })) as { injected: boolean; warning?: string }
+
+      expect(result.injected).toBe(true)
+      expect(result.warning).toBeUndefined()
+    })
+
+    it('recovers a recorded-only task through the reset path the warning names', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+      await call('orchestration.dispatch', { task: task.id, to: 'term_a' })
+
+      await expect(
+        call('orchestration.dispatch', {
+          task: task.id,
+          to: 'term_a',
+          inject: true,
+          from: 'term_coord'
+        })
+      ).rejects.toThrow(`Task ${task.id} is dispatched`)
+
+      await call('orchestration.taskUpdate', { id: task.id, status: 'failed' })
+      await call('orchestration.taskUpdate', { id: task.id, status: 'ready' })
+      const retried = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true,
+        from: 'term_coord'
+      })) as { injected: boolean; warning?: string }
+
+      expect(retried.injected).toBe(true)
+      expect(retried.warning).toBeUndefined()
     })
 
     it('records the assignee pane key on the dispatch context', async () => {
@@ -443,11 +507,14 @@ describe('orchestration RPC methods', () => {
         dryRun: boolean
         preamble: string
         injected: boolean
+        warning?: string
       }
 
       expect(result.dryRun).toBe(true)
       expect(result.dispatch).toBeNull()
       expect(result.injected).toBe(false)
+      // Why: a preview delivers nothing by design, so it must not warn like a record-only dispatch.
+      expect(result.warning).toBeUndefined()
       expect(result.preamble).toContain('work')
       expect(result.preamble).toContain(task.id)
       expect(result.preamble).toContain('term_coord')
