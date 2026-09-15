@@ -1,10 +1,12 @@
 import type {
   KeybindingActionId,
   KeybindingDefinition,
+  KeybindingInput,
   KeybindingMatchOptions,
   KeybindingOverrides,
   TerminalShortcutPolicy
 } from './types'
+import { isChordReservedForTextEntry, STRICTEST_TEXT_ENTRY_CLAIM } from './text-entry-reservation'
 import { DEFINITIONS_BY_ID, getKeybindingPlatform, isDigitIndexActionId } from './definitions'
 import {
   normalizeKeybindingWithOptions,
@@ -81,10 +83,36 @@ export function isKeybindingPotentialTerminalConflict(definition: KeybindingDefi
   return definition.scope !== 'terminal' && definition.allowInTerminal !== true
 }
 
+/**
+ * Whether an action may fire while the caret sits in a text surface. Only global
+ * actions are candidates: every other scope belongs to a surface the caret is not
+ * in, and the tab scope already reaches text fields through its own listener.
+ */
+function keybindingIsActiveInTextEntry(
+  definition: KeybindingDefinition,
+  options: KeybindingMatchOptions,
+  input: KeybindingInput | undefined,
+  platform: NodeJS.Platform | undefined
+): boolean {
+  if (definition.scope !== 'global' || !input || !platform) {
+    return false
+  }
+  return !isChordReservedForTextEntry(
+    input,
+    options.textEntryClaim ?? STRICTEST_TEXT_ENTRY_CLAIM,
+    platform
+  )
+}
+
 export function keybindingIsActiveInContext(
   definition: KeybindingDefinition,
-  options: KeybindingMatchOptions = {}
+  options: KeybindingMatchOptions = {},
+  input?: KeybindingInput,
+  platform?: NodeJS.Platform
 ): boolean {
+  if (options.context === 'text-entry') {
+    return keybindingIsActiveInTextEntry(definition, options, input, platform)
+  }
   if (options.context !== 'terminal') {
     return true
   }

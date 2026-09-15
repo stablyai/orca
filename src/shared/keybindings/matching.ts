@@ -92,7 +92,7 @@ export function keybindingMatchesAction(
   if (!definition) {
     return false
   }
-  if (!keybindingIsActiveInContext(definition, options)) {
+  if (!keybindingIsActiveInContext(definition, options, input, platform)) {
     return false
   }
   return getEffectiveKeybindingsForAction(actionId, platform, overrides).some((binding) =>
@@ -119,7 +119,7 @@ export function matchKeybindingDigitIndex(
   options: KeybindingMatchOptions = {}
 ): number | null {
   const definition = DEFINITIONS_BY_ID.get(actionId)
-  if (!definition || !keybindingIsActiveInContext(definition, options)) {
+  if (!definition || !keybindingIsActiveInContext(definition, options, input, platform)) {
     return null
   }
   const digit = digitFromInput(input, platform)
