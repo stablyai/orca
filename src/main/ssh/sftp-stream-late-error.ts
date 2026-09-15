@@ -9,8 +9,9 @@
  * throw* out of `Protocol.parse` -> `Socket.emit('data')`.
  *
  * That is an uncaught exception, not a rejection: `installUnhandledRejectionLogging`
- * absorbs rejections, but `installUncaughtPipeErrorGuard` re-throws uncaught exceptions
- * and the app dies (#15479). A jump host that sandboxes the SFTP subsystem into its own
+ * absorbs rejections, but `installUncaughtPipeErrorGuard` re-throws uncaught exceptions,
+ * which Electron's own handler turns into a modal error box (#15479 — it does not in fact
+ * end the process, but a dialog per late error is its own failure). A jump host that sandboxes the SFTP subsystem into its own
  * chroot makes a late `SSH_FX_NO_SUCH_FILE` the normal answer, so the listener has to
  * outlive the transfer rather than the other way round.
  *
