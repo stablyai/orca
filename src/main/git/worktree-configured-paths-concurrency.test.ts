@@ -56,10 +56,33 @@ describe('configured worktree path probe concurrency', () => {
 
     const result = await resolveWorktreeSharedDirectories('/repo')
 
-    expect(result).toEqual([...configuredPaths].sort())
+    expect(result.paths).toEqual([...configuredPaths].sort())
+    expect(result.skipped).toEqual([])
     expect(checkIgnoredPathsMock).toHaveBeenCalledWith('/repo', configuredPaths, {})
     expect(concurrency.max).toBeGreaterThan(1)
     expect(concurrency.max).toBeLessThanOrEqual(8)
+  })
+
+  it('records a non-ENOENT shared-directory stat failure as stat-failed', async () => {
+    loadHooksMock.mockReturnValue({ worktree: { sharedDirectories: ['secret'] } })
+    statMock.mockRejectedValueOnce(
+      Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+    )
+
+    await expect(resolveWorktreeSharedDirectories('/repo')).resolves.toEqual({
+      paths: [],
+      skipped: [{ mechanism: 'share', path: 'secret', reason: 'stat-failed' }]
+    })
+  })
+
+  it('records ENOENT shared-directory stats as missing', async () => {
+    loadHooksMock.mockReturnValue({ worktree: { sharedDirectories: ['absent'] } })
+    statMock.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+    await expect(resolveWorktreeSharedDirectories('/repo')).resolves.toEqual({
+      paths: [],
+      skipped: [{ mechanism: 'share', path: 'absent', reason: 'missing' }]
+    })
   })
 
   it('bounds include-path lstat probes while retaining candidate order', async () => {
@@ -75,7 +98,8 @@ describe('configured worktree path probe concurrency', () => {
 
     const result = await resolveWorktreeIncludePaths('/repo')
 
-    expect(result).toEqual([...configuredPaths].sort())
+    expect(result.paths).toEqual([...configuredPaths].sort())
+    expect(result.skipped).toEqual([])
     expect(checkIgnoredPathsMock).toHaveBeenCalledWith('/repo', configuredPaths, {})
     expect(concurrency.max).toBeGreaterThan(1)
     expect(concurrency.max).toBeLessThanOrEqual(8)
