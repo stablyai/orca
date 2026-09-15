@@ -26,6 +26,7 @@ function renderLocalStartStep(isSshLikely: boolean): string {
       nestedScanInProgress={false}
       nestedScanId={null}
       onBrowse={vi.fn()}
+      onGroupRepositories={vi.fn()}
       onOpenCloneStep={vi.fn()}
       onOpenRemoteStep={vi.fn()}
       onOpenCreateStep={vi.fn()}
@@ -82,6 +83,7 @@ async function renderLocalStartStepDom(
           nestedScanInProgress={options.nestedScanInProgress ?? false}
           nestedScanId={options.nestedScanId ?? null}
           onBrowse={vi.fn()}
+          onGroupRepositories={vi.fn()}
           onOpenCloneStep={vi.fn()}
           onOpenRemoteStep={vi.fn()}
           onOpenCreateStep={vi.fn()}
@@ -111,6 +113,7 @@ function getActionTitles(isSshLikely: boolean): {
   const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
     isSshLikely,
     onBrowse: vi.fn(),
+    onGroupRepositories: vi.fn(),
     onOpenCloneStep: vi.fn(),
     onOpenRemoteStep: vi.fn(),
     onOpenCreateStep: vi.fn()
@@ -130,6 +133,7 @@ function getHostAwareActionModel(): {
     isSshLikely: true,
     showRemoteAction: false,
     onBrowse: vi.fn(),
+    onGroupRepositories: vi.fn(),
     onOpenCloneStep: vi.fn(),
     onOpenRemoteStep: vi.fn(),
     onOpenCreateStep: vi.fn()
@@ -151,6 +155,7 @@ function getRuntimeHostActionModel(): {
     showRemoteAction: false,
     browseHostKind: 'runtime',
     onBrowse: vi.fn(),
+    onGroupRepositories: vi.fn(),
     onOpenCloneStep: vi.fn(),
     onOpenRemoteStep: vi.fn(),
     onOpenCreateStep: vi.fn()
@@ -171,6 +176,7 @@ describe('AddRepoLocalStartStep', () => {
     const markup = renderLocalStartStep(false)
 
     expect(markup).toContain('Browse folder')
+    expect(markup).toContain('Group repositories in folder')
     expect(markup).toContain('Clone from URL')
     expect(markup).toContain('Project on SSH host')
     expect(markup).toContain('Create new project')
@@ -183,6 +189,7 @@ describe('AddRepoLocalStartStep', () => {
 
     expect(titles.primary).toBe('Browse folder')
     expect(titles.secondary).toEqual([
+      'Group repositories in folder',
       'Clone from URL',
       'Project on SSH host',
       'Create new project'
@@ -203,6 +210,7 @@ describe('AddRepoLocalStartStep', () => {
 
     expect(titles.primary).toBe('Browse folder')
     expect(titles.secondary).toEqual([
+      'Group repositories in folder',
       'Project on SSH host',
       'Clone from URL',
       'Create new project'
@@ -212,7 +220,11 @@ describe('AddRepoLocalStartStep', () => {
   it('lets host-aware Add Project replace the separate remote row', () => {
     const model = getHostAwareActionModel()
 
-    expect(model.secondary).toEqual(['Clone from URL', 'Create new project'])
+    expect(model.secondary).toEqual([
+      'Group repositories in folder',
+      'Clone from URL',
+      'Create new project'
+    ])
     expect(model.createDisabled).toBe(false)
   })
 
@@ -366,7 +378,7 @@ describe('AddRepoLocalStartStep', () => {
     })
 
     // ArrowDown from Browse moves focus — and the ⏎ chip — to the first secondary action.
-    const firstSecondary = findButton(container, 'Clone from URL')
+    const firstSecondary = findButton(container, 'Group repositories in folder')
     expect(document.activeElement).toBe(firstSecondary)
     expect(firstSecondary.textContent).toContain('⏎')
 

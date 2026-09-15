@@ -12,6 +12,7 @@ async function readRules(content: string, baseSegments: string[] = []) {
     filesystem: {
       readDirectory: async () => [],
       readTextFile: async () => content,
+      lstat: async () => ({ isDirectory: true, isSymlink: false }),
       joinPath: (parent, child) => `${parent}/${child}`,
       basename: (path) => path.split('/').at(-1) ?? '',
       hasGitMarker: () => false,

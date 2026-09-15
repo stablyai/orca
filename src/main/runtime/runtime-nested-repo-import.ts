@@ -34,12 +34,15 @@ function sanitizeImportError(fallback: string, error: unknown): string {
 export class RuntimeNestedRepoImport {
   constructor(private readonly deps: RuntimeNestedRepoImportDependencies) {}
 
-  async scan(path: string): Promise<NestedRepoScanResult> {
+  async scan(path: string, options?: { traverseGitRoot?: boolean }): Promise<NestedRepoScanResult> {
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
     }
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
-    return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
+    return scanNestedRepos({
+      path,
+      options: { timeoutMs: 15_000, traverseGitRoot: options?.traverseGitRoot }
+    })
   }
 
   async import(args: {
@@ -56,7 +59,10 @@ export class RuntimeNestedRepoImport {
     if (!isAbsolute(args.parentPath)) {
       throw new Error('Project path must be an absolute path')
     }
-    const scan = await scanNestedRepos({ path: args.parentPath, options: { timeoutMs: 15_000 } })
+    const scan = await scanNestedRepos({
+      path: args.parentPath,
+      options: { timeoutMs: 15_000, traverseGitRoot: true }
+    })
     const selection = resolveNestedRepoSelection({ scan, projectPaths: args.projectPaths })
     const importPaths = includeSelectedGitRoot(scan, selection.selectedPaths)
     const groupResolver = createNestedProjectGroupResolver({

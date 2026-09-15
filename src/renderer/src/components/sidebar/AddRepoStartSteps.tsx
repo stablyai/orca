@@ -72,6 +72,7 @@ type AddRepoLocalStartStepProps = {
   actionsDisabled?: boolean
   browseHostKind?: 'local' | 'ssh' | 'runtime'
   onBrowse: () => void
+  onGroupRepositories: () => void
   onOpenCloneStep: () => void
   onOpenRemoteStep: () => void
   onOpenCreateStep: () => void
@@ -91,6 +92,7 @@ export function AddRepoLocalStartStep({
   actionsDisabled = false,
   browseHostKind = 'local',
   onBrowse,
+  onGroupRepositories,
   onOpenCloneStep,
   onOpenRemoteStep,
   onOpenCreateStep,
@@ -102,6 +104,7 @@ export function AddRepoLocalStartStep({
   const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
     isSshLikely,
     onBrowse,
+    onGroupRepositories,
     onOpenCloneStep,
     onOpenRemoteStep,
     onOpenCreateStep,

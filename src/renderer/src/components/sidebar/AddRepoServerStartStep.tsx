@@ -14,8 +14,9 @@ type AddRepoServerPathStartStepProps = {
   addProjectBusyLabel: string | null
   hostSelector?: ReactNode
   initialBrowsing?: boolean
+  groupRepositories?: boolean
   onServerPathChange: (path: string) => void
-  onAddServerPath: (kind: 'git' | 'folder') => void
+  onAddServerPath: (kind: 'git' | 'folder' | 'group') => void
   onOpenCloneStep: () => void
   onOpenCreateStep: () => void
 }
@@ -27,6 +28,7 @@ export function AddRepoServerPathStartStep({
   addProjectBusyLabel,
   hostSelector,
   initialBrowsing = false,
+  groupRepositories = false,
   onServerPathChange,
   onAddServerPath,
   onOpenCloneStep,
@@ -226,14 +228,19 @@ export function AddRepoServerPathStartStep({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Button
-            onClick={() => onAddServerPath('git')}
+            onClick={() => onAddServerPath(groupRepositories ? 'group' : 'git')}
             disabled={!serverPath.trim() || isAddingServerPath}
             className="h-10"
           >
-            {translate(
-              'auto.components.sidebar.AddRepoServerStartStep.8da4d1a5be',
-              'Add Git Project'
-            )}
+            {groupRepositories
+              ? translate(
+                  'auto.components.sidebar.AddRepoServerStartStep.groupRepositories',
+                  'Group repositories'
+                )
+              : translate(
+                  'auto.components.sidebar.AddRepoServerStartStep.8da4d1a5be',
+                  'Add Git Project'
+                )}
           </Button>
           <Button
             onClick={() => onAddServerPath('folder')}

@@ -16,6 +16,7 @@ type RemoteStepProps = {
   remoteError: string | null
   isAddingRemote: boolean
   isScanningNested?: boolean
+  groupRepositories?: boolean
   onSelectTarget: (id: string) => void
   onRemotePathChange: (value: string) => void
   onAdd: () => void
@@ -32,6 +33,7 @@ export function RemoteStep({
   remoteError,
   isAddingRemote,
   isScanningNested,
+  groupRepositories = false,
   onSelectTarget,
   onRemotePathChange,
   onAdd,
@@ -209,10 +211,15 @@ export function RemoteStep({
         >
           {isAddingRemote
             ? translate('auto.components.sidebar.AddRepoRemoteStep.35831a7312', 'Adding...')
-            : translate(
-                'auto.components.sidebar.AddRepoRemoteStep.36d427bb66',
-                'Add project on SSH host'
-              )}
+            : groupRepositories
+              ? translate(
+                  'auto.components.sidebar.AddRepoRemoteStep.groupRepositories',
+                  'Group repositories in folder'
+                )
+              : translate(
+                  'auto.components.sidebar.AddRepoRemoteStep.36d427bb66',
+                  'Add project on SSH host'
+                )}
         </Button>
         {isScanningNested ? (
           <Button variant="outline" className="w-full" onClick={onStopNestedScan}>

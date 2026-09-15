@@ -85,6 +85,7 @@ export type NestedRepoScanControls = {
   scanId?: string
   onProgress?: (scan: NestedRepoScanResult) => void
   runtimeEnvironmentId?: string | null
+  traverseGitRoot?: boolean
 }
 
 export type NestedRepoScanCancelOptions = {

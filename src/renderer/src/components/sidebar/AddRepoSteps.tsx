@@ -28,6 +28,7 @@ export function useRemoteRepo(
       scanId?: string
       onProgress?: (scan: NestedRepoScanResult) => void
       runtimeEnvironmentId?: string | null
+      traverseGitRoot?: boolean
     }
   ) => Promise<NestedRepoScanResult | null>,
   showNestedRepoReview?: (
@@ -46,6 +47,7 @@ export function useRemoteRepo(
   const [remoteError, setRemoteError] = useState<string | null>(null)
   const [isAddingRemote, setIsAddingRemote] = useState(false)
   const [remoteNestedScanId, setRemoteNestedScanId] = useState<string | null>(null)
+  const [groupRepositories, setGroupRepositories] = useState(false)
   const remoteGenRef = useRef(0)
   const mountedRef = useMountedRef()
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
@@ -61,6 +63,7 @@ export function useRemoteRepo(
       void cancelNestedRepoScan(remoteNestedScanId, { runtimeEnvironmentId: null })
     }
     setRemoteNestedScanId(null)
+    setGroupRepositories(false)
   }, [cancelNestedRepoScan, remoteNestedScanId])
 
   const stopRemoteNestedScan = useCallback(() => {
@@ -71,8 +74,9 @@ export function useRemoteRepo(
   }, [cancelNestedRepoScan, remoteNestedScanId])
 
   const handleOpenRemoteStep = useCallback(
-    async (preferredTargetId?: string | null) => {
+    async (preferredTargetId?: string | null, shouldGroupRepositories = false) => {
       const gen = ++remoteGenRef.current
+      setGroupRepositories(shouldGroupRepositories)
       setStep('remote')
       try {
         const targets = (await window.api.ssh.listTargets()) as SshTarget[]
@@ -110,6 +114,11 @@ export function useRemoteRepo(
       }
     },
     [setStep]
+  )
+
+  const handleOpenRemoteGroupStep = useCallback(
+    (preferredTargetId?: string | null) => handleOpenRemoteStep(preferredTargetId, true),
+    [handleOpenRemoteStep]
   )
 
   // Why: keep the target list's connection state in sync while the dialog is
@@ -153,6 +162,7 @@ export function useRemoteRepo(
       const scan = await scanNestedRepos?.(trimmedRemotePath, selectedTargetId, {
         scanId,
         runtimeEnvironmentId: null,
+        traverseGitRoot: groupRepositories,
         onProgress: (progressScan) => {
           if (
             gen !== remoteGenRef.current ||
@@ -176,7 +186,11 @@ export function useRemoteRepo(
         return
       }
       onNestedScanResult?.(scan ?? null, attemptId)
-      if (scan && scan.repos.length > 0) {
+      if (
+        scan &&
+        scan.repos.length > 0 &&
+        (scan.selectedPathKind === 'non_git_folder' || groupRepositories)
+      ) {
         showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId, false, scanId)
         setRemoteNestedScanId(null)
         return
@@ -243,7 +257,8 @@ export function useRemoteRepo(
     fetchWorktrees,
     mountedRef,
     closeModal,
-    onGitRepoReady
+    onGitRepoReady,
+    groupRepositories
   ])
 
   return {
@@ -253,11 +268,13 @@ export function useRemoteRepo(
     remoteError,
     isAddingRemote,
     isScanningNested: Boolean(remoteNestedScanId),
+    groupRepositories,
     setSelectedTargetId,
     setRemotePath,
     setRemoteError,
     resetRemoteState,
     handleOpenRemoteStep,
+    handleOpenRemoteGroupStep,
     handleAddRemoteRepo,
     handleConnectTarget,
     stopRemoteNestedScan

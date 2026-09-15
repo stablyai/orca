@@ -520,7 +520,8 @@ describe('selected Add Project owner routing', () => {
     await expect(
       store.getState().scanNestedRepos('/srv/platform', 'ssh-1', {
         scanId: 'scan-ssh',
-        runtimeEnvironmentId: null
+        runtimeEnvironmentId: null,
+        traverseGitRoot: true
       })
     ).resolves.toEqual(scan)
     await expect(
@@ -530,7 +531,8 @@ describe('selected Add Project owner routing', () => {
     expect(projectGroupsScanNested).toHaveBeenCalledWith({
       path: '/srv/platform',
       connectionId: 'ssh-1',
-      scanId: 'scan-ssh'
+      scanId: 'scan-ssh',
+      options: { traverseGitRoot: true }
     })
     expect(projectGroupsCancelNestedScan).toHaveBeenCalledWith({ scanId: 'scan-ssh' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()

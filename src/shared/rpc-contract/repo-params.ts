@@ -69,7 +69,8 @@ export const ProjectGroupMoveProject = z.object({
 })
 
 export const ProjectGroupScanNested = z.object({
-  path: requiredString('Missing folder path')
+  path: requiredString('Missing folder path'),
+  options: z.object({ traverseGitRoot: z.boolean().optional() }).optional()
 })
 
 export const ProjectGroupImportNested = z.discriminatedUnion('mode', [

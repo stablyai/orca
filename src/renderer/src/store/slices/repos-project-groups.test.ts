@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { NestedRepoScanResult, ProjectGroup } from '../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponse,
@@ -41,9 +41,6 @@ const projectGroupsCreate = vi.fn()
 const projectGroupsDelete = vi.fn()
 const projectGroupsMoveProject = vi.fn()
 const projectGroupsImportNested = vi.fn()
-const projectGroupsScanNested = vi.fn()
-const projectGroupsCancelNestedScan = vi.fn()
-const projectGroupsOnNestedScanProgress = vi.fn()
 const folderWorkspacesList = vi.fn()
 const folderWorkspacesGetPathStatus = vi.fn()
 const folderWorkspacesCreate = vi.fn()
@@ -72,10 +69,6 @@ beforeEach(() => {
   projectGroupsDelete.mockReset()
   projectGroupsMoveProject.mockReset()
   projectGroupsImportNested.mockReset()
-  projectGroupsScanNested.mockReset()
-  projectGroupsCancelNestedScan.mockReset()
-  projectGroupsOnNestedScanProgress.mockReset()
-  projectGroupsOnNestedScanProgress.mockReturnValue(vi.fn())
   folderWorkspacesList.mockReset()
   folderWorkspacesGetPathStatus.mockReset()
   folderWorkspacesGetPathStatus.mockResolvedValue({ path: '/workspace/platform', exists: true })
@@ -99,9 +92,6 @@ beforeEach(() => {
         create: projectGroupsCreate,
         delete: projectGroupsDelete,
         moveProject: projectGroupsMoveProject,
-        scanNested: projectGroupsScanNested,
-        cancelNestedScan: projectGroupsCancelNestedScan,
-        onNestedScanProgress: projectGroupsOnNestedScanProgress,
         importNested: projectGroupsImportNested
       },
       folderWorkspaces: {
@@ -707,126 +697,6 @@ describe('project group store routing', () => {
     // Why: the repos slice stamps fetched repos with their owning execution
     // host so multi-host routing never has to guess (multi-host design).
     expect(store.getState().repos).toEqual([{ ...importedRepo, executionHostId: 'local' }])
-  })
-
-  it('routes local nested scan progress by scanId and unsubscribes after completion', async () => {
-    const unsubscribe = vi.fn()
-    const progressCallback = vi.fn()
-    const matchingScan = {
-      selectedPath: '/platform',
-      selectedPathKind: 'non_git_folder' as const,
-      repos: [{ path: '/platform/api', displayName: 'api', depth: 1 }],
-      truncated: false,
-      timedOut: false,
-      stopped: false,
-      durationMs: 10,
-      maxDepth: 3,
-      maxRepos: 100,
-      timeoutMs: null
-    }
-    projectGroupsOnNestedScanProgress.mockImplementation(
-      (listener: (data: { scanId: string; scan: NestedRepoScanResult }) => void) => {
-        listener({ scanId: 'other-scan', scan: { ...matchingScan, repos: [] } })
-        listener({ scanId: 'scan-1', scan: matchingScan })
-        return unsubscribe
-      }
-    )
-    projectGroupsScanNested.mockResolvedValue(matchingScan)
-    const store = createTestStore()
-
-    await expect(
-      store.getState().scanNestedRepos('/platform', undefined, {
-        scanId: 'scan-1',
-        onProgress: progressCallback
-      })
-    ).resolves.toEqual(matchingScan)
-
-    expect(progressCallback).toHaveBeenCalledTimes(1)
-    expect(progressCallback).toHaveBeenCalledWith(matchingScan)
-    expect(projectGroupsScanNested).toHaveBeenCalledWith({
-      path: '/platform',
-      connectionId: undefined,
-      scanId: 'scan-1'
-    })
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('unsubscribes local nested scan progress when the scan rejects', async () => {
-    const unsubscribe = vi.fn()
-    projectGroupsOnNestedScanProgress.mockReturnValue(unsubscribe)
-    projectGroupsScanNested.mockRejectedValue(new Error('scan failed'))
-    const store = createTestStore()
-
-    await expect(
-      store.getState().scanNestedRepos('/platform', undefined, {
-        scanId: 'scan-1',
-        onProgress: vi.fn()
-      })
-    ).resolves.toBeNull()
-
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('cancels local nested scans through the preload API', async () => {
-    projectGroupsCancelNestedScan.mockResolvedValue(true)
-    const store = createTestStore()
-
-    await expect(store.getState().cancelNestedRepoScan('scan-1')).resolves.toBe(true)
-
-    expect(projectGroupsCancelNestedScan).toHaveBeenCalledWith({ scanId: 'scan-1' })
-  })
-
-  it('does not send cancelNestedRepoScan to a runtime environment transport', async () => {
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-    await expect(store.getState().cancelNestedRepoScan('scan-1')).resolves.toBe(false)
-
-    expect(projectGroupsCancelNestedScan).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('normalizes older runtime nested scan results and keeps the RPC bounded', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-scan',
-      ok: true,
-      result: {
-        selectedPath: '/platform',
-        selectedPathKind: 'non_git_folder',
-        repos: [{ path: '/platform/api', displayName: 'api', depth: 1 }],
-        truncated: true,
-        timedOut: false,
-        durationMs: 10,
-        maxDepth: 3
-      },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-ambient' } as never })
-
-    await expect(
-      store.getState().scanNestedRepos('/platform', undefined, {
-        runtimeEnvironmentId: 'env-selected'
-      })
-    ).resolves.toEqual({
-      selectedPath: '/platform',
-      selectedPathKind: 'non_git_folder',
-      repos: [{ path: '/platform/api', displayName: 'api', depth: 1 }],
-      truncated: true,
-      timedOut: false,
-      stopped: false,
-      durationMs: 10,
-      maxDepth: 3,
-      maxRepos: 100,
-      timeoutMs: null
-    })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-selected',
-      method: 'projectGroup.scanNested',
-      params: { path: '/platform' },
-      timeoutMs: 20_000
-    })
   })
 
   it('moves local repos to a group using the preload projectId contract', async () => {

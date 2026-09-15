@@ -22,6 +22,7 @@ type AddRepoDialogStepContentProps = {
   nestedScanId: string | null
   serverPath: string
   isAddingServerPath: boolean
+  groupServerRepositories?: boolean
   cloneUrl: string
   cloneDestination: string
   cloneError: string | null
@@ -36,6 +37,7 @@ type AddRepoDialogStepContentProps = {
   remoteError: string | null
   isAddingRemote: boolean
   isScanningRemoteNested: boolean
+  groupRemoteRepositories?: boolean
   nestedScan: NestedRepoScanResult | null
   nestedSelectedPaths: Set<string>
   nestedGroupName: string
@@ -54,12 +56,13 @@ type AddRepoDialogStepContentProps = {
   createRuntimeParentStatus: 'idle' | 'checking' | 'failed'
   createParentDefaultPending: boolean
   onBrowse: () => void
+  onGroupRepositories: () => void
   onOpenCloneStep: () => void
   onOpenCreateStep: () => void
   onOpenRemoteStep: (targetId?: string | null) => void
   onStopNestedScan: () => void
   onServerPathChange: (path: string) => void
-  onAddServerPath: (kind: 'git' | 'folder') => void
+  onAddServerPath: (kind: 'git' | 'folder' | 'group') => void
   onSelectTarget: (id: string) => void
   onRemotePathChange: (path: string) => void
   onAddRemoteRepo: () => void
@@ -92,6 +95,7 @@ export function AddRepoDialogStepContent({
   nestedScanId,
   serverPath,
   isAddingServerPath,
+  groupServerRepositories = false,
   cloneUrl,
   cloneDestination,
   cloneError,
@@ -106,6 +110,7 @@ export function AddRepoDialogStepContent({
   remoteError,
   isAddingRemote,
   isScanningRemoteNested,
+  groupRemoteRepositories = false,
   nestedScan,
   nestedSelectedPaths,
   nestedGroupName,
@@ -124,6 +129,7 @@ export function AddRepoDialogStepContent({
   createRuntimeParentStatus,
   createParentDefaultPending,
   onBrowse,
+  onGroupRepositories,
   onOpenCloneStep,
   onOpenCreateStep,
   onOpenRemoteStep,
@@ -164,6 +170,7 @@ export function AddRepoDialogStepContent({
         actionsDisabled={actionsDisabled}
         browseHostKind={browseHostKind}
         onBrowse={onBrowse}
+        onGroupRepositories={onGroupRepositories}
         onOpenCloneStep={onOpenCloneStep}
         onOpenRemoteStep={onOpenRemoteStep}
         onOpenCreateStep={onOpenCreateStep}
@@ -181,6 +188,7 @@ export function AddRepoDialogStepContent({
         addProjectBusyLabel={addProjectBusyLabel}
         hostSelector={hostSelector}
         initialBrowsing
+        groupRepositories={groupServerRepositories}
         onServerPathChange={onServerPathChange}
         onAddServerPath={onAddServerPath}
         onOpenCloneStep={onOpenCloneStep}
@@ -199,6 +207,7 @@ export function AddRepoDialogStepContent({
         remoteError={remoteError}
         isAddingRemote={isAddingRemote}
         isScanningNested={isScanningRemoteNested}
+        groupRepositories={groupRemoteRepositories}
         onSelectTarget={onSelectTarget}
         onRemotePathChange={onRemotePathChange}
         onAdd={onAddRemoteRepo}

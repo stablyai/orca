@@ -5031,7 +5031,8 @@
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
           "24eda6c8b2": "Scanning... {{value0}}",
           "6149d5203f": "No repositories are selected. Open the parent folder instead to use editor, terminal, and search without Git features.",
-          "e52454b7f6": "Open as Folder"
+          "e52454b7f6": "Open as Folder",
+          "gitRootPreserved": "The selected Git project is included without replacing its existing workspaces."
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Stop scan",
@@ -5048,7 +5049,8 @@
           "35831a7312": "Adding...",
           "lockedDescription": "Enter the path to a Git repository on {{value0}}.",
           "lockedDisconnected": "{{value0}} is disconnected.",
-          "93e0221434": "Connect"
+          "93e0221434": "Connect",
+          "groupRepositories": "Group repositories in folder"
         },
         "AddRepoServerStartStep": {
           "ae990c86a0": "Back to add options",
@@ -5069,7 +5071,8 @@
           "0adf083af7": "Browse host",
           "8efa930eb5": "Add another project from the selected host.",
           "39bd249b3a": "Add a project",
-          "0f8aba944c": "Navigate to a directory and click Select to choose it."
+          "0f8aba944c": "Navigate to a directory and click Select to choose it.",
+          "groupRepositories": "Group repositories"
         },
         "AddRepoStartSteps": {
           "87596c1446": "Other ways to add",
@@ -5771,7 +5774,9 @@
                   "2281fdc8c7": "Browse folder",
                   "sshBrowseTitle": "Open project on SSH host",
                   "sshBrowseDescription": "Existing Git repository or folder on this SSH host",
-                  "runtimeBrowseDescription": "Existing Git repository or folder on this host"
+                  "runtimeBrowseDescription": "Existing Git repository or folder on this host",
+                  "groupRepositoriesTitle": "Group repositories in folder",
+                  "groupRepositoriesDescription": "Review repositories beneath one folder"
                 }
               }
             }

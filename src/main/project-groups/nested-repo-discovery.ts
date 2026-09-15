@@ -1,4 +1,4 @@
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { lstat, readFile, readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { NestedRepoCandidate, NestedRepoScanResult } from '../../shared/project-group-types'
 import { isGitRepo } from '../git/repo'
@@ -55,6 +55,10 @@ export async function scanNestedRepos(args: {
   const filesystem = args.filesystem ?? {
     readDirectory: readLocalDirectory,
     readTextFile: (path: string) => readFile(path, 'utf8'),
+    lstat: async (path: string) => {
+      const pathStat = await lstat(path)
+      return { isDirectory: pathStat.isDirectory(), isSymlink: pathStat.isSymbolicLink() }
+    },
     joinPath: join,
     basename,
     hasGitMarker,
@@ -89,6 +93,9 @@ export async function scanNestedRepos(args: {
   if (noteAbort()) {
     return buildResult(selectedPathKind)
   }
+  if (selectedPathKind === 'git_repo' && !options.traverseGitRoot) {
+    return buildResult(selectedPathKind)
+  }
 
   const foldersToTraverse: TraversalFolder[] = [
     { path: args.path, depth: 0, segments: [], ignoreRules: [] }
@@ -110,6 +117,16 @@ export async function scanNestedRepos(args: {
     const currentFolder = foldersToTraverse[nextFolderIndex++]
     if (currentFolder.depth > options.maxDepth) {
       continue
+    }
+    if (currentFolder.depth > 0) {
+      try {
+        const currentStat = await filesystem.lstat(currentFolder.path)
+        if (!currentStat.isDirectory || currentStat.isSymlink) {
+          continue
+        }
+      } catch {
+        continue
+      }
     }
 
     let entries: NestedRepoDirectoryEntry[]
@@ -157,6 +174,14 @@ export async function scanNestedRepos(args: {
         continue
       }
       const childPath = filesystem.joinPath(currentFolder.path, name)
+      try {
+        const childStat = await filesystem.lstat(childPath)
+        if (!childStat.isDirectory || childStat.isSymlink) {
+          continue
+        }
+      } catch {
+        continue
+      }
       // Why: broad scans should use cheap filesystem markers instead of
       // spawning Git for every candidate directory, especially over SSH.
       const childHasGitMarker = await filesystem.hasGitMarker(childPath)

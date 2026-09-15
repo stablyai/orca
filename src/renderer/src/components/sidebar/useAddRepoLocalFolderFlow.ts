@@ -16,6 +16,7 @@ import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { addLocalPathBatch } from './add-repo-local-batch'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -32,7 +33,7 @@ type LocalPathAddResult =
   | { status: 'completed'; repo: Repo }
   | { status: 'cancelled' | 'paused' | 'skipped' }
 
-type LocalPathAddMode = 'single' | 'batch'
+type LocalPathAddMode = 'single' | 'batch' | 'group'
 
 export function useAddRepoLocalFolderFlow({
   isOpen,
@@ -68,6 +69,7 @@ export function useAddRepoLocalFolderFlow({
   setAddProjectBusyLabel: (label: string | null) => void
 }): {
   handleBrowse: () => Promise<void>
+  handleGroupRepositories: () => Promise<void>
   resetLocalFolderFlow: () => void
 } {
   const localAddGenRef = useRef(0)
@@ -109,11 +111,12 @@ export function useAddRepoLocalFolderFlow({
         const scan = await scanNestedRepos(path, undefined, {
           scanId,
           runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null,
+          traverseGitRoot: mode === 'group',
           onProgress: (progressScan) => {
             if (
               gen !== localAddGenRef.current ||
               mode === 'batch' ||
-              progressScan.selectedPathKind !== 'non_git_folder' ||
+              (progressScan.selectedPathKind !== 'non_git_folder' && mode !== 'group') ||
               progressScan.repos.length === 0
             ) {
               return
@@ -146,7 +149,12 @@ export function useAddRepoLocalFolderFlow({
         if (scan?.selectedPathKind === 'non_git_folder' && mode === 'batch') {
           return { status: 'skipped' }
         }
-        if (scan && scan.repos.length > 0) {
+        if (
+          scan &&
+          scan.repos.length > 0 &&
+          mode !== 'batch' &&
+          (scan.selectedPathKind === 'non_git_folder' || mode === 'group')
+        ) {
           // Why: a single-folder decision point cannot queue competing batch review states.
           showNestedRepoReview({
             scan,
@@ -231,51 +239,15 @@ export function useAddRepoLocalFolderFlow({
 
   const handleAddLocalPaths = useCallback(
     async (paths: string[], source: AddRepoExistingWorkspaceSource, gen: number): Promise<void> => {
-      const gitRepoIds: string[] = []
-      const shouldDeferGitRepoReady = paths.length > 1
-      let skippedCount = 0
-      for (const path of paths) {
-        const result = await addLocalPathForGeneration(
-          path,
-          source,
-          gen,
-          shouldDeferGitRepoReady ? 'batch' : 'single'
-        )
-        if (result.status === 'skipped') {
-          skippedCount++
-          continue
-        }
-        if (result.status !== 'completed') {
-          return
-        }
-        if (isGitRepoKind(result.repo)) {
-          gitRepoIds.push(result.repo.id)
-        }
-      }
-      if (gen !== localAddGenRef.current) {
-        return
-      }
-      if (skippedCount > 0) {
-        toast.info(
-          translate(
-            'auto.components.sidebar.useAddRepoLocalFolderFlow.skippedBatchFolders',
-            'Some folders were skipped'
-          ),
-          {
-            description: translate(
-              'auto.components.sidebar.useAddRepoLocalFolderFlow.skippedBatchFoldersDescription',
-              'Add skipped folders individually to review or confirm them.'
-            )
-          }
-        )
-      }
-      if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
-        await onGitRepoReady(
-          gitRepoIds[0],
-          source,
-          worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId
-        )
-      }
+      await addLocalPathBatch({
+        paths,
+        source,
+        generation: gen,
+        isCurrentGeneration: () => gen === localAddGenRef.current,
+        addPath: addLocalPathForGeneration,
+        onGitRepoReady,
+        executionHostId: worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId
+      })
     },
     [activeRuntimeEnvironmentId, addLocalPathForGeneration, onGitRepoReady]
   )
@@ -310,5 +282,12 @@ export function useAddRepoLocalFolderFlow({
     }
   }, [clearNestedScanState, handleAddLocalPaths, setAddProjectBusyLabel, setIsAdding])
 
-  return { handleBrowse, resetLocalFolderFlow }
+  const handleGroupRepositories = useCallback(async (): Promise<void> => {
+    const path = await window.api.repos.pickFolder()
+    if (path) {
+      await handleAddLocalPath(path, 'local_folder_picker', 'group')
+    }
+  }, [handleAddLocalPath])
+
+  return { handleBrowse, handleGroupRepositories, resetLocalFolderFlow }
 }

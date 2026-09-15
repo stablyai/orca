@@ -97,5 +97,9 @@ describe('RuntimeNestedRepoImport', () => {
     expect(moveProjectToGroup).toHaveBeenNthCalledWith(1, root.id, group.id, 0)
     expect(moveProjectToGroup).toHaveBeenNthCalledWith(2, child.id, group.id, 1)
     expect(addRepo).not.toHaveBeenCalled()
+    expect(scanNestedRepos).toHaveBeenCalledWith({
+      path: root.path,
+      options: { timeoutMs: 15_000, traverseGitRoot: true }
+    })
   })
 })

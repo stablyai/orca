@@ -40,6 +40,10 @@ function posixTestFilesystem(args: {
       }
       return content
     },
+    lstat: async (path: string) => ({
+      isDirectory: args.directories.has(path) || args.gitRepos.has(path),
+      isSymlink: false
+    }),
     joinPath: (parentPath: string, childName: string) => `${parentPath}/${childName}`,
     basename: (path: string) => path.split('/').at(-1) ?? path,
     hasGitMarker: (path: string) => args.gitRepos.has(path),
@@ -201,6 +205,7 @@ describe('scanNestedRepos', () => {
             : [],
         joinPath: (parentPath, childName) => `${parentPath}/${childName}`,
         basename: (path) => path.split('/').at(-1) ?? path,
+        lstat: async () => ({ isDirectory: true, isSymlink: false }),
         hasGitMarker: (path) => path === '/workspace/api',
         isSelectedPathGitRepo: () => false
       }
@@ -369,7 +374,31 @@ describe('scanNestedRepos', () => {
     expect(result.truncated).toBe(true)
   })
 
-  it('finds nested repos beneath a selected git root without applying its ignore-all rule', async () => {
+  it('returns early for a selected git root by default', async () => {
+    const directories = new Map([['/workspace', ['api']]])
+    const readDirectory = vi.fn(
+      posixTestFilesystem({
+        directories,
+        gitRepos: new Set(['/workspace', '/workspace/api'])
+      }).readDirectory
+    )
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      filesystem: {
+        ...posixTestFilesystem({
+          directories,
+          gitRepos: new Set(['/workspace', '/workspace/api'])
+        }),
+        readDirectory
+      }
+    })
+
+    expect(result).toMatchObject({ selectedPathKind: 'git_repo', repos: [] })
+    expect(readDirectory).not.toHaveBeenCalled()
+  })
+
+  it('explicitly finds nested repos beneath a selected git root without its ignore-all rule', async () => {
     const root = await tempRoot()
     await makeGitRepo(root)
     await mkdir(join(root, 'child'), { recursive: true })
@@ -379,10 +408,27 @@ describe('scanNestedRepos', () => {
     await writeFile(join(root, '.gitignore'), '/*\n')
     await writeFile(join(root, 'README.md'), '')
 
-    const result = await scanNestedRepos({ path: root })
+    const result = await scanNestedRepos({ path: root, options: { traverseGitRoot: true } })
 
     expect(result.selectedPathKind).toBe('git_repo')
     expect(result.repos).toEqual([{ path: join(root, 'child'), displayName: 'child', depth: 1 }])
+  })
+
+  it('skips a child replaced by a symlink after directory listing', async () => {
+    const filesystem = posixTestFilesystem({
+      directories: new Map([['/workspace', ['api']]]),
+      gitRepos: new Set(['/workspace/api'])
+    })
+    filesystem.lstat = async () => ({ isDirectory: false, isSymlink: true })
+    const hasGitMarker = vi.fn(filesystem.hasGitMarker)
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      filesystem: { ...filesystem, hasGitMarker }
+    })
+
+    expect(result.repos).toEqual([])
+    expect(hasGitMarker).toHaveBeenCalledTimes(0)
   })
 
   it.skipIf(process.platform === 'win32')(

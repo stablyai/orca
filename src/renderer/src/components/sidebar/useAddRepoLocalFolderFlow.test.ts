@@ -67,13 +67,15 @@ describe('useAddRepoLocalFolderFlow', () => {
   const setIsAdding = vi.fn()
   const setAddProjectBusyLabel = vi.fn()
   const pickFolders = vi.fn()
+  const pickFolder = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('window', {
       api: {
         repos: {
-          pickFolders
+          pickFolders,
+          pickFolder
         }
       }
     })
@@ -240,15 +242,15 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(onGitRepoReady).not.toHaveBeenCalled()
   })
 
-  it('offers grouped import for nested repos beneath a git root without re-adding it', async () => {
+  it('ordinary Browse adds a git root even if scan data contains nested repositories', async () => {
     pickFolders.mockResolvedValue(['/projects/umbrella'])
-    const scan = makeScan('/projects/umbrella', {
-      repos: [{ path: '/projects/umbrella/api', displayName: 'api', depth: 1 }]
-    })
-    scanNestedRepos.mockResolvedValueOnce(scan)
+    scanNestedRepos.mockResolvedValueOnce(
+      makeScan('/projects/umbrella', {
+        repos: [{ path: '/projects/umbrella/api', displayName: 'api', depth: 1 }]
+      })
+    )
     const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
-
-    const { handleBrowse } = useAddRepoLocalFolderFlow({
+    const flow = useAddRepoLocalFolderFlow({
       isOpen: true,
       droppedLocalPath: '',
       activeRuntimeEnvironmentId: null,
@@ -264,8 +266,78 @@ describe('useAddRepoLocalFolderFlow', () => {
       setAddProjectBusyLabel
     })
 
-    await handleBrowse()
+    await flow.handleBrowse()
 
+    expect(showNestedRepoReview).not.toHaveBeenCalled()
+    expect(addRepoPath).toHaveBeenCalledWith('/projects/umbrella', undefined, {
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it('a Git-root batch scan cannot pause later selections', async () => {
+    pickFolders.mockResolvedValue(['/projects/umbrella', '/projects/later'])
+    scanNestedRepos
+      .mockResolvedValueOnce(
+        makeScan('/projects/umbrella', {
+          repos: [{ path: '/projects/umbrella/api', displayName: 'api', depth: 1 }]
+        })
+      )
+      .mockResolvedValueOnce(makeScan('/projects/later'))
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+    const flow = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel
+    })
+
+    await flow.handleBrowse()
+
+    expect(addRepoPath).toHaveBeenCalledTimes(2)
+    expect(showNestedRepoReview).not.toHaveBeenCalled()
+  })
+
+  it('explicitly offers grouped import for nested repos beneath a git root', async () => {
+    pickFolder.mockResolvedValue('/projects/umbrella')
+    const scan = makeScan('/projects/umbrella', {
+      repos: [{ path: '/projects/umbrella/api', displayName: 'api', depth: 1 }]
+    })
+    scanNestedRepos.mockResolvedValueOnce(scan)
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+    const { handleGroupRepositories } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel
+    })
+
+    await handleGroupRepositories()
+
+    expect(pickFolder).toHaveBeenCalledTimes(1)
+    expect(scanNestedRepos).toHaveBeenCalledWith(
+      '/projects/umbrella',
+      undefined,
+      expect.objectContaining({ traverseGitRoot: true })
+    )
     expect(showNestedRepoReview).toHaveBeenCalledWith(
       expect.objectContaining({ scan, selectedPath: '/projects/umbrella', inProgress: false })
     )

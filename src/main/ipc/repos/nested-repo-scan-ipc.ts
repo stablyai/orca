@@ -128,6 +128,16 @@ export async function scanNestedReposForIpc(args: {
           isSymlink: entry.isSymlink
         })),
       readTextFile: async (filePath) => (await fsProvider.readFile(filePath)).content,
+      lstat: async (path) => {
+        if (!fsProvider.lstat) {
+          throw new Error('remote_lstat_unavailable')
+        }
+        const pathStat = await fsProvider.lstat(path)
+        return {
+          isDirectory: pathStat.type === 'directory',
+          isSymlink: pathStat.type === 'symlink'
+        }
+      },
       joinPath: (parentPath, childName) => posix.join(parentPath, childName),
       basename: (path) => posix.basename(path),
       hasGitMarker: async (path) => {

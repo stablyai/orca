@@ -138,4 +138,43 @@ describe('useAddRepoServerPathFlow', () => {
       executionHostId: 'runtime:box1-environment-id'
     })
   })
+
+  it('opens group review for explicit Git-root traversal on a runtime', async () => {
+    const scan = {
+      selectedPath: '/server/docs',
+      selectedPathKind: 'git_repo' as const,
+      repos: [{ path: '/server/docs/api', displayName: 'api', depth: 1 }]
+    }
+    mocks.getNestedRepoRuntimeKind.mockReturnValue('runtime')
+    mocks.scanNestedRepos.mockResolvedValue(scan)
+    const { useAddRepoServerPathFlow } = await import('./useAddRepoServerPathFlow')
+    const result = useAddRepoServerPathFlow({
+      addRepoPath: mocks.addRepoPath,
+      activeRuntimeEnvironmentId: 'box1-environment-id',
+      closeModal: mocks.closeModal,
+      fetchWorktrees: mocks.fetchWorktrees,
+      getNestedRepoRuntimeKind: mocks.getNestedRepoRuntimeKind,
+      scanNestedRepos: mocks.scanNestedRepos,
+      setActiveNestedScanId: mocks.setActiveNestedScanId,
+      setNestedScanInProgress: mocks.setNestedScanInProgress,
+      showNestedRepoReview: mocks.showNestedRepoReview,
+      onGitRepoReady: mocks.onGitRepoReady,
+      setAddProjectBusyLabel: mocks.setAddProjectBusyLabel
+    })
+
+    await result.handleAddServerPath('group')
+
+    expect(mocks.scanNestedRepos).toHaveBeenCalledWith(
+      '/server/docs',
+      undefined,
+      expect.objectContaining({
+        runtimeEnvironmentId: 'box1-environment-id',
+        traverseGitRoot: true
+      })
+    )
+    expect(mocks.showNestedRepoReview).toHaveBeenCalledWith(
+      expect.objectContaining({ scan, selectedPath: '/server/docs' })
+    )
+    expect(mocks.addRepoPath).not.toHaveBeenCalled()
+  })
 })

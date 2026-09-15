@@ -18,7 +18,7 @@ import {
   useAddRepoHostedController,
   type AddRepoDialogHostedController
 } from './use-add-repo-hosted-controller'
-import { routeAddRepoBrowse } from './add-repo-browse-authority'
+import { useAddRepoBrowseRouting } from './use-add-repo-browse-routing'
 
 export default React.memo(function AddRepoDialog({
   hosted
@@ -92,11 +92,13 @@ export default React.memo(function AddRepoDialog({
     remoteError,
     isAddingRemote,
     isScanningNested: isScanningRemoteNested,
+    groupRepositories: groupRemoteRepositories,
     setSelectedTargetId,
     setRemotePath,
     setRemoteError,
     resetRemoteState,
     handleOpenRemoteStep,
+    handleOpenRemoteGroupStep,
     handleAddRemoteRepo,
     handleConnectTarget,
     stopRemoteNestedScan
@@ -170,22 +172,24 @@ export default React.memo(function AddRepoDialog({
 
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
   const selectedHostKind = hostSelection.selectedParsedHost?.kind
-  const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
-    isOpen,
-    droppedLocalPath,
-    activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
-    addRepoPath,
-    // Why: this flow's closes are all folder/non-git outcomes that navigate.
-    closeModal: closeForFolderHandoff,
-    fetchWorktrees,
-    scanNestedRepos,
-    setActiveNestedScanId,
-    setNestedScanInProgress,
-    showNestedRepoReview,
-    onGitRepoReady: completeGitRepoAdd,
-    setIsAdding,
-    setAddProjectBusyLabel
-  })
+  const { handleBrowse, handleGroupRepositories, resetLocalFolderFlow } = useAddRepoLocalFolderFlow(
+    {
+      isOpen,
+      droppedLocalPath,
+      activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
+      addRepoPath,
+      // Why: this flow's closes are all folder/non-git outcomes that navigate.
+      closeModal: closeForFolderHandoff,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady: completeGitRepoAdd,
+      setIsAdding,
+      setAddProjectBusyLabel
+    }
+  )
   const {
     serverPath,
     isAddingServerPath,
@@ -206,6 +210,12 @@ export default React.memo(function AddRepoDialog({
     onGitRepoReady: completeGitRepoAdd,
     setAddProjectBusyLabel
   })
+  const browseRouting = useAddRepoBrowseRouting(
+    hostSelection.selectedParsedHost,
+    { browse: () => void handleBrowse(), group: () => void handleGroupRepositories() },
+    { browse: handleOpenRemoteStep, group: handleOpenRemoteGroupStep },
+    () => setStep('server-path')
+  )
 
   const resetState = useCallback(() => {
     // Why: kill the git clone process if one is running, so backing out
@@ -215,6 +225,7 @@ export default React.memo(function AddRepoDialog({
     setStep('add')
     setIsAdding(false)
     setAddProjectBusyLabel(null)
+    browseRouting.resetGroupBrowseRouting()
     resetServerPathFlow()
     resetCloneFlow()
     resetNestedImportFlow()
@@ -230,12 +241,14 @@ export default React.memo(function AddRepoDialog({
     resetServerPathFlow,
     resetNestedImportFlow,
     resetRemoteState,
-    resetCreateState
+    resetCreateState,
+    browseRouting
   ])
 
   const resetHostScopedState = useCallback(() => {
     setIsAdding(false)
     setAddProjectBusyLabel(null)
+    browseRouting.resetGroupBrowseRouting()
     resetLocalFolderFlow()
     resetServerPathFlow()
     resetCloneFlow()
@@ -248,7 +261,8 @@ export default React.memo(function AddRepoDialog({
     resetCreateState,
     resetRemoteState,
     resetLocalFolderFlow,
-    resetServerPathFlow
+    resetServerPathFlow,
+    browseRouting
   ])
 
   useAddRepoHostChangeReset({
@@ -299,6 +313,7 @@ export default React.memo(function AddRepoDialog({
         nestedScanId={nestedScanId}
         serverPath={serverPath}
         isAddingServerPath={isAddingServerPath}
+        groupServerRepositories={browseRouting.groupServerRepositories}
         cloneUrl={cloneUrl}
         cloneDestination={cloneDestination}
         cloneError={cloneError}
@@ -316,6 +331,7 @@ export default React.memo(function AddRepoDialog({
         remoteError={remoteError}
         isAddingRemote={isAddingRemote}
         isScanningRemoteNested={isScanningRemoteNested}
+        groupRemoteRepositories={groupRemoteRepositories}
         nestedScan={nestedScan}
         nestedSelectedPaths={nestedSelectedPaths}
         nestedGroupName={nestedGroupName}
@@ -332,13 +348,8 @@ export default React.memo(function AddRepoDialog({
         createRuntimeParentStatus={createRuntimeParentStatus}
         createParentDefaultPending={createParentDefaultPending}
         manualCreateParentEntry={isRuntimeEnvironmentActive || selectedHostKind === 'ssh'}
-        onBrowse={() =>
-          routeAddRepoBrowse(hostSelection.selectedParsedHost, {
-            browseLocal: () => void handleBrowse(),
-            browseRuntime: () => setStep('server-path'),
-            browseSsh: (targetId) => void handleOpenRemoteStep(targetId)
-          })
-        }
+        onBrowse={browseRouting.handleBrowse}
+        onGroupRepositories={browseRouting.handleGroupRepositories}
         onOpenCloneStep={() => {
           if (!hostSelection.selectedHostId) {
             return

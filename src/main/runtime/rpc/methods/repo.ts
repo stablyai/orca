@@ -76,7 +76,7 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'projectGroup.scanNested',
     params: ProjectGroupScanNested,
-    handler: async (params, { runtime }) => runtime.scanNestedRepos(params.path)
+    handler: async (params, { runtime }) => runtime.scanNestedRepos(params.path, params.options)
   }),
   defineMethod({
     name: 'projectGroup.importNested',

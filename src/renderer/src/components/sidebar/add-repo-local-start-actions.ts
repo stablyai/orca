@@ -1,9 +1,10 @@
 import type { ComponentType } from 'react'
-import { FolderOpen, Globe, Monitor, Plus } from 'lucide-react'
+import { FolderOpen, FolderTree, Globe, Monitor, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 
 export type AddRepoLocalStartActionHandlers = {
   onBrowse: () => void
+  onGroupRepositories: () => void
   onOpenCloneStep: () => void
   onOpenRemoteStep: () => void
   onOpenCreateStep: () => void
@@ -13,7 +14,7 @@ export type AddRepoLocalStartActionHandlers = {
 }
 
 export type AddRepoLocalStartAction = {
-  kind: 'browse' | 'clone' | 'remote' | 'create'
+  kind: 'browse' | 'group' | 'clone' | 'remote' | 'create'
   icon: ComponentType<{ className?: string }>
   title: string
   description: string
@@ -24,6 +25,7 @@ export type AddRepoLocalStartAction = {
 export function getAddRepoLocalStartActions({
   isSshLikely,
   onBrowse,
+  onGroupRepositories,
   onOpenCloneStep,
   onOpenRemoteStep,
   onOpenCreateStep,
@@ -78,6 +80,19 @@ export function getAddRepoLocalStartActions({
     ),
     onClick: onOpenRemoteStep
   }
+  const group = {
+    kind: 'group' as const,
+    icon: FolderTree,
+    title: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.groupRepositoriesTitle',
+      'Group repositories in folder'
+    ),
+    description: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.groupRepositoriesDescription',
+      'Review repositories beneath one folder'
+    ),
+    onClick: onGroupRepositories
+  }
   const clone = {
     kind: 'clone' as const,
     icon: Globe,
@@ -113,9 +128,9 @@ export function getAddRepoLocalStartActions({
 
   const secondaryActions = showRemoteAction
     ? isSshLikely
-      ? [remote, clone, create]
-      : [clone, remote, create]
-    : [clone, create]
+      ? [group, remote, clone, create]
+      : [group, clone, remote, create]
+    : [group, clone, create]
 
   return { primaryAction, secondaryActions }
 }

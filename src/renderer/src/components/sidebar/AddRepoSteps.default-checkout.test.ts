@@ -226,4 +226,33 @@ describe('useRemoteRepo default-checkout handoff', () => {
       runtimeEnvironmentId: null
     })
   })
+
+  it('routes explicit Git-root traversal through the selected SSH provider', async () => {
+    mocks.stateValues = [[], 'ssh-1', '/srv/repo', null, false, null, true]
+    const scanNestedRepos = vi.fn().mockResolvedValue({
+      selectedPath: '/srv/repo',
+      selectedPathKind: 'git_repo',
+      repos: [{ path: '/srv/repo/api', displayName: 'api', depth: 1 }]
+    })
+    const showNestedRepoReview = vi.fn()
+    const { useRemoteRepo } = await import('./AddRepoSteps')
+    const result = useRemoteRepo(
+      mocks.fetchWorktrees,
+      vi.fn(),
+      vi.fn(),
+      mocks.onGitRepoReady,
+      scanNestedRepos,
+      showNestedRepoReview
+    )
+
+    await result.handleAddRemoteRepo()
+
+    expect(scanNestedRepos).toHaveBeenCalledWith(
+      '/srv/repo',
+      'ssh-1',
+      expect.objectContaining({ runtimeEnvironmentId: null, traverseGitRoot: true })
+    )
+    expect(showNestedRepoReview).toHaveBeenCalled()
+    expect(mocks.addRemote).not.toHaveBeenCalled()
+  })
 })

@@ -60,6 +60,7 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     createRuntimeParentStatus: 'idle',
     createParentDefaultPending: false,
     onBrowse: vi.fn(),
+    onGroupRepositories: vi.fn(),
     onOpenCloneStep: vi.fn(),
     onOpenCreateStep: vi.fn(),
     onOpenRemoteStep: vi.fn(),

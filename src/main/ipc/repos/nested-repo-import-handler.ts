@@ -46,7 +46,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
         (await scanNestedReposForIpc({
           path: args.parentPath,
           connectionId: args.connectionId,
-          options: { timeoutMs: 15_000 }
+          options: { timeoutMs: 15_000, traverseGitRoot: true }
         }))
       const selection = resolveNestedRepoSelection({ scan, projectPaths: requestedPaths })
       const importPaths = includeSelectedGitRoot(scan, selection.selectedPaths)
