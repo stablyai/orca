@@ -3,6 +3,8 @@ import { existsSync, writeFileSync } from 'node:fs'
 import { getCmdExePath } from './windows-batch-spawn'
 import { buildWindowsHostInteractiveLoginSpawn } from './windows-interactive-login-spawn'
 
+const POWERSHELL_HOST = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 function withWindows<T>(fn: () => T): T {
   const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -37,11 +39,11 @@ function pidFilePathFromSpawnArgs(args: string[]): string {
 describe('buildWindowsHostInteractiveLoginSpawn', () => {
   it('relays a batch login through a visible, PID-addressable console', () => {
     const spawn = withWindows(() =>
-      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\claude.cmd', [
-        'auth',
-        'login',
-        '--claudeai'
-      ])
+      buildWindowsHostInteractiveLoginSpawn(
+        'C:\\Tools\\claude.cmd',
+        ['auth', 'login', '--claudeai'],
+        POWERSHELL_HOST
+      )
     )
     expect(spawn.command).toBe(getCmdExePath())
     expect(spawn.args.slice(0, 5)).toEqual(['/d', '/c', 'start', '', '/wait'])
@@ -72,7 +74,7 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
 
   it('routes executable logins through the same waiting console boundary', () => {
     const spawn = withWindows(() =>
-      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.exe', ['login'])
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.exe', ['login'], POWERSHELL_HOST)
     )
     const script = decodedScript(spawn.args)
     expect(script).toContain(encodedValue('C:\\Tools\\codex.exe'))
@@ -83,7 +85,11 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
   it('waits for the relay PID when cancellation races console startup', async () => {
     vi.useFakeTimers()
     const spawn = withWindows(() =>
-      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\claude.exe', ['auth', 'login'])
+      buildWindowsHostInteractiveLoginSpawn(
+        'C:\\Tools\\claude.exe',
+        ['auth', 'login'],
+        POWERSHELL_HOST
+      )
     )
     try {
       const pendingPid = spawn.waitForTerminationPid()
@@ -99,5 +105,47 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
       spawn.cleanup()
       vi.useRealTimers()
     }
+  })
+
+  it('drives the console through whichever PowerShell host was resolved', () => {
+    const pwsh = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.cmd', ['login'], pwsh)
+    )
+    expect(spawn.args[5]).toBe(pwsh)
+    spawn.cleanup()
+  })
+
+  it('reports a login that never relayed a PID, including after cleanup', () => {
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.cmd', ['login'], POWERSHELL_HOST)
+    )
+    expect(spawn.hasRelayedPid()).toBe(false)
+    spawn.cleanup()
+    expect(spawn.hasRelayedPid()).toBe(false)
+  })
+
+  it('remembers a relayed PID once the file is gone', () => {
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.cmd', ['login'], POWERSHELL_HOST)
+    )
+    writeFileSync(pidFilePathFromSpawnArgs(spawn.args), '1357')
+    spawn.cleanup()
+    expect(spawn.hasRelayedPid()).toBe(true)
+    expect(spawn.getTerminationPid()).toBe(1357)
+  })
+
+  it('resolves the relayed PID after cleanup removed the relay file', async () => {
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn(
+        'C:\\Tools\\claude.exe',
+        ['auth', 'login'],
+        POWERSHELL_HOST
+      )
+    )
+    writeFileSync(pidFilePathFromSpawnArgs(spawn.args), '5791')
+    spawn.cleanup()
+
+    await expect(spawn.waitForTerminationPid()).resolves.toBe(5791)
   })
 })

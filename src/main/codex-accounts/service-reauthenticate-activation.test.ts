@@ -11,6 +11,22 @@ import { EventEmitter } from 'node:events'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
+import type * as LoginSpawn from '../../shared/windows-interactive-login-spawn'
+
+vi.mock('../../shared/windows-interactive-login-spawn', async () => {
+  const actual = await vi.importActual<typeof LoginSpawn>(
+    '../../shared/windows-interactive-login-spawn'
+  )
+  return {
+    ...actual,
+    buildWindowsHostInteractiveLoginSpawn: (
+      ...args: Parameters<typeof actual.buildWindowsHostInteractiveLoginSpawn>
+    ) => ({
+      ...actual.buildWindowsHostInteractiveLoginSpawn(...args),
+      hasRelayedPid: () => true
+    })
+  }
+})
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   createCodexAuthJson,
@@ -77,6 +93,15 @@ function createLoginSpawn(onLogin?: () => void) {
     return child
   })
 }
+
+// Why: the login path now waits for a PowerShell host to be resolved, and that
+// resolution spawns real processes. Pin it so these tests keep testing the login.
+vi.mock('../../shared/windows-powershell-host', () => ({
+  warmWindowsPowerShellHostCache: () =>
+    Promise.resolve('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'),
+  getWindowsPowerShellHost: () => 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  setWindowsPowerShellHostResolutionObserver: () => {}
+}))
 
 describe('CodexAccountService reauthenticate activation intent', () => {
   registerCodexAccountsTestHomes()
