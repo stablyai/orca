@@ -6,6 +6,8 @@ import { vi } from 'vitest'
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
 
 export type HookContext = {
+  hasUI?: boolean
+  ui?: { setEditorText?: (text: string) => void }
   isIdle?: () => boolean
   sessionManager?: {
     getSessionId?: () => unknown

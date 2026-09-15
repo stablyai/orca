@@ -13,20 +13,23 @@ const PREFILL_ENV_VAR_BY_KIND: Record<PrefillAgentKind, string> = {
 }
 
 export function getPiPrefillExtensionSource(kind: PrefillAgentKind): string {
+  return ['export default function (pi) {', ...getPiPrefillHandlerSourceLines(kind), '}', ''].join(
+    '\n'
+  )
+}
+
+export function getPiPrefillHandlerSourceLines(kind: PrefillAgentKind): string[] {
   const envVar = PREFILL_ENV_VAR_BY_KIND[kind]
   return [
-    'export default function (pi) {',
     "  pi.on('session_start', async (event, ctx) => {",
-    '    if (!process.env.ORCA_PANE_KEY) return',
-    "    if (event.reason !== 'startup') return",
+    '    if (!process.env.ORCA_PANE_KEY || ctx?.hasUI === false) return',
+    ...(kind === 'pi' ? ["    if (event.reason !== 'startup') return"] : []),
     `    const prefill = process.env.${envVar}`,
-    '    if (!prefill) return',
+    "    if (!prefill || typeof ctx?.ui?.setEditorText !== 'function') return",
     `    delete process.env.${envVar}`,
     '    try {',
     '      ctx.ui.setEditorText(prefill)',
     '    } catch {}',
-    '  })',
-    '}',
-    ''
-  ].join('\n')
+    '  })'
+  ]
 }
