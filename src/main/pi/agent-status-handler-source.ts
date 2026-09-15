@@ -1,3 +1,4 @@
+import { getAgentStatusInputRedactionSourceLines } from './agent-status-input-redaction-source'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
 
@@ -61,6 +62,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
         ]
 
   return [
+    ...getAgentStatusInputRedactionSourceLines(),
     '// Why: pi assistant messages carry content as an array of parts',
     "// ({ type: 'text', text } / tool_use / tool_result / reasoning). We only",
     "// surface the concatenated text parts as the visible 'last assistant",
@@ -81,13 +83,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  return out',
     '}',
     '',
-    "// Why: pi's tool_call event input shape is tool-specific (event.input is",
-    '// the raw args object). The agent-hooks server already runs',
-    '// deriveToolInputPreview(toolName, input) to render a friendly preview',
-    "// for known tool names ('bash' → command, 'read'/'write'/'edit' → path,",
-    '// etc.), so we forward the raw object verbatim under the same field',
-    '// names Claude uses (tool_name / tool_input) and let the server pick the',
-    '// preview. Keeps tool-name knowledge centralized on the receiver side.',
+    '// Preserve ordinary preview data; credential references never leave the agent host.',
     '// Why: a restarted agent inherits the previous owner PID through env, so a',
     '// dead owner must be claimable or the pane goes silent for good. Only ESRCH',
     '// proves the owner is gone -- every other probe result keeps suppression, so',
@@ -134,7 +130,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...captureSessionMetadata,
     "    post('tool_execution_start', {",
     '      tool_name: event.toolName,',
-    '      tool_input: event.args,',
+    '      tool_input: sanitizeStatusToolInput(event.args),',
     '    })',
     '  })',
     '',
@@ -142,7 +138,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...captureSessionMetadata,
     "    post('tool_call', {",
     '      tool_name: event.toolName,',
-    '      tool_input: event.input,',
+    '      tool_input: sanitizeStatusToolInput(event.input),',
     '    })',
     '  })',
     '',
