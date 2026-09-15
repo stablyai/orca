@@ -316,7 +316,7 @@ describe('mobile relay pairing journal store', () => {
   it.each([
     ['winner', { winner: 'direct' as const }],
     ['authorization mode', { authorizationMode: 'authenticated-direct' as const }]
-  ])('refuses replacement once the durable %s exists', async (_name, authorization) => {
+  ])('refuses same-offer replacement once the durable %s exists', async (_name, authorization) => {
     const created = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-1',
@@ -337,6 +337,42 @@ describe('mobile relay pairing journal store', () => {
     })
     await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(/recovery pending/)
     await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
+  })
+
+  it('lets a new QR supersede a deferred recovery journal from a previous invite', async () => {
+    // Why: recovery deferred forever blocked every later scan with the same error (#12708).
+    const created = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(10)
+    })
+    const journal = {
+      ...created,
+      metadata: {
+        ...created.metadata,
+        winner: 'relay' as const,
+        authorizationMode: 'relay-basis' as const
+      }
+    }
+    await saveMobileRelayPairingJournal(journal)
+
+    const rescanOffer = {
+      ...offer,
+      relay: {
+        ...offer.relay,
+        inviteToken: 'zyxwvutsrqponmlkjihgfedcbaHGFEDCBA987654321'
+      }
+    } satisfies PairingOffer
+    const rescan = createMobileRelayPairingJournal({
+      offer: rescanOffer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-2',
+      hostName: 'Red Panda',
+      randomBytes: (length) => new Uint8Array(length).fill(14)
+    })
+
+    await expect(saveMobileRelayPairingJournal(rescan)).resolves.toBeUndefined()
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(rescan)
   })
 
   it('self-heals an undecryptable Android secret so the next QR scan can pair', async () => {
