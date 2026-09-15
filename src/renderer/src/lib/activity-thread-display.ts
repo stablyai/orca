@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { isGeneratedTabTitleOwnedByPane } from '../../../shared/agent-tab-title'
 import {
   getAgentRowPrimaryText,
   isOrcaDispatchPrompt,
@@ -95,8 +96,11 @@ export function getActivityThreadWorkspaceTitle(
 
 /** Stable task identity for Activity sidebar rows — not the latest follow-up turn. */
 export function getActivityThreadTaskTitle(args: {
-  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt' | 'stateHistory'>
-  tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title' | 'defaultTitle'>
+  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt' | 'stateHistory'> & { paneKey?: string }
+  tab: Pick<
+    TerminalTab,
+    'customTitle' | 'generatedTitle' | 'generatedTitlePaneKey' | 'title' | 'defaultTitle'
+  >
   generatedTitlesEnabled: boolean
 }): string {
   const customTitle = args.tab.customTitle?.trim()
@@ -111,7 +115,10 @@ export function getActivityThreadTaskTitle(args: {
 
   // Why: respect the user's tabAutoGenerateTitle setting — a disabled generated
   // title must not resurface here (mirrors resolveTerminalTabTitle's gate).
-  const generatedTitle = args.generatedTitlesEnabled ? args.tab.generatedTitle?.trim() : ''
+  const generatedTitle =
+    args.generatedTitlesEnabled && isGeneratedTabTitleOwnedByPane(args.tab, args.entry.paneKey)
+      ? args.tab.generatedTitle?.trim()
+      : ''
   if (generatedTitle) {
     return generatedTitle
   }
