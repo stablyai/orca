@@ -109,6 +109,34 @@ describe('cookie-import Google disclosure footer', () => {
     expect(label?.previousElementSibling?.tagName).toBe('HR')
   })
 
+  it('keeps clearing default cookies available after import metadata is removed', () => {
+    act(() =>
+      root.render(
+        <BrowserProfileRow
+          profile={
+            {
+              id: 'default',
+              label: 'Default',
+              partition: 'persist:default',
+              scope: 'default',
+              source: null
+            } as never
+          }
+          detectedBrowsers={DETECTED_BROWSERS}
+          importState={null}
+          isActive
+          isDefault
+          onSelect={vi.fn()}
+        />
+      )
+    )
+
+    const clearButton = container.querySelector('[data-testid="clear-default-cookies-button"]')
+    expect(clearButton).not.toBeNull()
+    expect((clearButton as HTMLButtonElement | null)?.disabled).toBe(false)
+    expect(clearButton?.getAttribute('aria-label')).toBe('Clear default cookies')
+  })
+
   it('reads the footer copy from the catalog', () => {
     expect(catalogEntry('auto.components.BrowserCookieImportDisclosure.title')).toBe(
       DISCLOSURE_TITLE
