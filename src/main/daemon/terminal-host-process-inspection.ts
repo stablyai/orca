@@ -6,6 +6,7 @@ import { getStrictProcessTableSnapshotWithAge } from '../../shared/process-table
 import { resolveRemoteForegroundEvidence } from '../providers/agent-foreground-process'
 import { buildPaneProcessFingerprint } from '../providers/posix-pane-foreground-fingerprint'
 import type { Session } from './session'
+import type { ExitedSession } from './terminal-host-session-record'
 import {
   clearSteadyStateAnchor,
   getSteadyStateAnchor,
@@ -18,8 +19,6 @@ export type TerminalHostProcessInspection = {
   hasChildProcesses: boolean
   foregroundProcessEvidence?: RemoteForegroundEvidence
 }
-
-type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
 /**
  * Tick tiers for a POSIX pane. `cheap` forks `ps` without `tty=`/`command=` (11-38x cheaper)
@@ -34,18 +33,14 @@ export async function inspectTerminalHostProcess(args: {
   expectedIncarnationId?: string
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
-  retiredIncarnation?: RetiredIncarnation
+  exitedSession?: ExitedSession
   authorityGeneration: string
   nextObservationEpoch: () => number
   onTier?: (tier: TerminalHostInspectionTier) => void
 }): Promise<TerminalHostProcessInspection> {
-  const { sessionId, session, expectedIncarnationId, retiredIncarnation } = args
+  const { sessionId, session, expectedIncarnationId, exitedSession } = args
   if (!session || !session.isAlive) {
-    if (
-      retiredIncarnation &&
-      retiredIncarnation.expiresAt > Date.now() &&
-      expectedIncarnationId === retiredIncarnation.incarnationId
-    ) {
+    if (exitedSession) {
       return {
         foregroundProcess: null,
         hasChildProcesses: false,
@@ -54,9 +49,9 @@ export async function inspectTerminalHostProcess(args: {
           observationEpoch: args.nextObservationEpoch(),
           capturedAgeMs: 0,
           ptyId: sessionId,
-          ptyIncarnationId: retiredIncarnation.incarnationId,
+          ptyIncarnationId: exitedSession.incarnationId,
           verdict: 'exited',
-          reason: `pty_exit_${retiredIncarnation.code}`
+          reason: `pty_exit_${exitedSession.code}`
         }
       }
     }

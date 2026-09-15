@@ -114,10 +114,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(id).setPtyBackgrounded(id, background)
   }
 
-  async shutdown(
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
+  async shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
     const adapter = this.adapterFor(id)
     const migrateHistory = shouldHandoffDaemonHistory(opts.keepHistory, adapter, this.current)
     await adapter.shutdown(id, opts)
@@ -129,6 +126,10 @@ export class DaemonPtyRouter implements IPtyProvider {
         this.ownerResolver.forgetRoute(id, adapter)
       }
     }
+  }
+
+  async consumeExitReceipt(id: string, incarnationId: string): Promise<void> {
+    await this.adapterForInspection(id, incarnationId).consumeExitReceipt(id, incarnationId)
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -182,7 +183,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     id: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ): Promise<PtyProcessInspection> {
-    return this.adapterForInspection(id).inspectProcess(id, options)
+    return this.adapterForInspection(id, options?.expectedIncarnationId).inspectProcess(id, options)
   }
 
   async confirmForegroundProcess(id: string): Promise<string | null> {
@@ -325,15 +326,25 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.sessionAdapters.get(sessionId) ?? this.current
   }
 
-  private adapterForInspection(sessionId: string): DaemonPtyAdapter {
+  private adapterForInspection(
+    sessionId: string,
+    expectedIncarnationId?: string
+  ): DaemonPtyAdapter {
     const adapter =
       this.sessionAdapters.get(sessionId) ??
       this.allAdapters().find((candidate) => candidate.hasPty(sessionId))
-    if (!adapter) {
+    if (adapter) {
+      this.sessionAdapters.set(sessionId, adapter)
+      return adapter
+    }
+    // An unclaimed id is exactly what a caller naming a remembered incarnation asks about: the
+    // session that died while this client was away, so no route survived. A daemon that never held
+    // it answers not-found, so routing the question cannot manufacture an exit. A caller that names
+    // no incarnation is an ordinary poll and must not borrow a route it never owned.
+    if (expectedIncarnationId === undefined) {
       throw new Error('terminal_gone')
     }
-    this.sessionAdapters.set(sessionId, adapter)
-    return adapter
+    return this.current
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

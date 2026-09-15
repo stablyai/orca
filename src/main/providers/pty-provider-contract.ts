@@ -200,6 +200,9 @@ export type IPtyProvider = {
   /** Optional host capability used to suppress expensive legacy remote inventory polls. */
   supportsForegroundProcessEvidence?(options?: { signal?: AbortSignal }): Promise<boolean>
 
+  /** Best-effort evidence acknowledgement; must never stop a process or retire its resources. */
+  consumeExitReceipt?(id: string, incarnationId: PtyIncarnationId): Promise<void>
+
   // Why: deadlineMs (absolute epoch ms) bounds the underlying RPCs so destructive
   // teardown fails fast inside its sweep budget instead of tripping the outer sweep
   // deadline; each RPC leaf converts to a relative timeout when it actually issues.

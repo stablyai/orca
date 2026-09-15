@@ -388,7 +388,7 @@ describe('TerminalHost', () => {
   })
 
   describe('kill', () => {
-    it('kills the session and tombstones it', async () => {
+    it('kills the session', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -398,10 +398,9 @@ describe('TerminalHost', () => {
 
       host.kill('session-1')
       expect(lastSubprocess.kill).toHaveBeenCalled()
-      expect(host.isKilled('session-1')).toBe(true)
     })
 
-    it('does not tombstone a session when graceful kill admission fails', async () => {
+    it('keeps the session attachable when graceful kill admission fails', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -413,7 +412,6 @@ describe('TerminalHost', () => {
       })
 
       expect(() => host.kill('session-1')).toThrow('signal rejected')
-      expect(host.isKilled('session-1')).toBe(false)
       await expect(
         host.createOrAttach({
           sessionId: 'session-1',
@@ -516,7 +514,6 @@ describe('TerminalHost', () => {
         expect.objectContaining({ ownsRoot: expect.any(Function) })
       )
       expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
-      expect(host.isKilled('agent-1')).toBe(true)
 
       const finish = killWithDescendantSweepMock.mock.calls[0][1] as () => void
       finish()
@@ -721,7 +718,6 @@ describe('TerminalHost', () => {
 
       host.signal('session-1', 'SIGINT')
       expect(lastSubprocess.signal).toHaveBeenCalledWith('SIGINT')
-      expect(host.isKilled('session-1')).toBe(false)
     })
   })
 
@@ -784,27 +780,6 @@ describe('TerminalHost', () => {
       // Data after detach should not be received
       lastSubprocess._onDataCb?.('after detach')
       expect(onData).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('tombstones', () => {
-    it('caps tombstones at limit', async () => {
-      await host.dispose()
-      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn, maxTombstones: 3 })
-
-      for (let i = 0; i < 5; i++) {
-        await host.createOrAttach({
-          sessionId: `session-${i}`,
-          cols: 80,
-          rows: 24,
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
-        host.kill(`session-${i}`)
-      }
-
-      // Oldest tombstones should be evicted
-      expect(host.isKilled('session-0')).toBe(false)
-      expect(host.isKilled('session-4')).toBe(true)
     })
   })
 

@@ -83,7 +83,6 @@ import type {
   RemoteForegroundEvidence
 } from '../shared/foreground-process-evidence'
 import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
-import { pruneRetiredPtyIncarnations } from '../shared/retired-pty-incarnations'
 import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
@@ -504,6 +503,9 @@ export type PtyEnvAugmenter = (ctx: {
   launchAgent?: TuiAgent
 }) => Record<string, string>
 
+/** An observed exit held until the PTY's owner has received it. */
+type PendingPtyExit = { id: string; code: number; incarnationId: string }
+
 export type RelayPtyWorktreeRemovalCoordinator = {
   beginWorktreePtySpawn(operationPath: string): () => void
 }
@@ -519,11 +521,7 @@ export class PtyHandler {
   private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
   private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
   private pendingProducerBytesByPty = new Map<string, number>()
-  private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
-  private retiredIncarnations = new Map<
-    string,
-    { id: string; code: number; incarnationId: string; expiresAt: number }
-  >()
+  private pendingExitByPty = new Map<string, PendingPtyExit>()
   private pausedOutputPtys = new Set<string>()
   private consumerPausedOutputPtys = new Set<string>()
   private removeLegacyCapacityListener: (() => void) | null = null
@@ -1029,13 +1027,6 @@ export class PtyHandler {
         code: exitCode,
         incarnationId: managed.incarnationId
       })
-      this.retiredIncarnations.set(managed.id, {
-        id: managed.id,
-        code: exitCode,
-        incarnationId: managed.incarnationId,
-        expiresAt: Date.now() + 5_000
-      })
-      pruneRetiredPtyIncarnations(this.retiredIncarnations)
       this.publishPendingExit(managed.id)
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
@@ -1390,9 +1381,10 @@ export class PtyHandler {
     this.outputFlushTimer = null
   }
 
+  // Output flow only: an observed exit is evidence its owner has not received yet, and retiring
+  // the record it belonged to is not delivery. `publishPendingExit` owns that delete.
   private clearPtyFlowState(id: string): void {
     this.deletePendingOutput(id)
-    this.pendingExitByPty.delete(id)
     this.pausedOutputPtys.delete(id)
     this.consumerPausedOutputPtys.delete(id)
     this.clearPtyInputState(id)
@@ -2025,7 +2017,6 @@ export class PtyHandler {
           }
         : {})
     }
-    this.retiredIncarnations.delete(id)
     this.sourcePublication?.activate(id, managed.incarnationId, context)
     const sourceActivation =
       context && this.sourcePublication?.receivingActivation?.(id, context.clientId)
@@ -2067,6 +2058,9 @@ export class PtyHandler {
     const managed = this.ptys.get(id)
     // Why: after dispose, pty.kill is a POSIX no-op; treat disposed as not-found so failures aren't silent.
     if (!managed || managed.disposed) {
+      if (this.undeliveredExitFor(id, params.expectedIncarnationId)) {
+        throw new Error(`PTY "${id}" not found (${PTY_ATTACH_PROVEN_EXITED_MARKER})`)
+      }
       throw new Error(`PTY "${id}" not found`)
     }
 
@@ -2392,30 +2386,32 @@ export class PtyHandler {
   }
 
   /**
-   * Retire every record for a PTY whose process is proven gone. Shared by the attach probe, the
-   * listing probe and the post-shutdown sweep so the three cannot drift on what "gone" retires.
-   *
-   * `evidence` is not decoration: `exited` publishes a verdict to the client, and only ESRCH from
-   * the host that owns the pid earns it. The disposed-record sweep retires off our own
-   * bookkeeping, which says we tore the record down — not that the shell died — so it stays
-   * silent (docs/reference/ssh-execution-boundary.md).
+   * The exit this id's owner has not received yet, for the incarnation the caller named. Deleted
+   * the moment publication settles, so an empty answer after delivery is correct: that client
+   * already has the exit. The entry carries the id it was written for, so that is checked too.
    */
-  private reapExitedPty(managed: ManagedPty, evidence: 'exited' | 'record-torn-down'): void {
-    managed.physicalExit?.markExited()
+  private undeliveredExitFor(id: string, expected: unknown): PendingPtyExit | undefined {
+    const exit = this.pendingExitByPty.get(id)
+    return typeof expected === 'string' && exit?.id === id && exit.incarnationId === expected
+      ? exit
+      : undefined
+  }
+
+  /**
+   * Drop a record we tore down ourselves. `managed.disposed` says our bookkeeping is gone, not that
+   * the shell died, so this path publishes nothing, marks no physical exit, and never writes
+   * `pendingExitByPty` — only something that watched a process end may
+   * (docs/reference/ssh-execution-boundary.md).
+   */
+  private dropTornDownPtyRecord(managed: ManagedPty): void {
     this.releaseRelayIngress(managed)
     this.flushPtyOutput(managed.id)
-    if (evidence === 'exited') {
-      this.publishReapedExit(managed)
-    }
+    this.retirePtyRecord(managed)
+  }
+
+  private retirePtyRecord(managed: ManagedPty): void {
     this.notifyExitListener(managed)
     this.agentSessionOwners.release(managed.id)
-    this.retiredIncarnations.set(managed.id, {
-      id: managed.id,
-      code: 0,
-      incarnationId: managed.incarnationId,
-      expiresAt: Date.now() + 5_000
-    })
-    pruneRetiredPtyIncarnations(this.retiredIncarnations)
     disposeManagedPty(managed)
     this.removePty(managed.id)
     this.clearPtyFlowState(managed.id)
@@ -2464,7 +2460,12 @@ export class PtyHandler {
     if (!managed.pty.pid || isProcessAlive(managed.pty.pid)) {
       return false
     }
-    this.reapExitedPty(managed, 'exited')
+    // The death write lives here and nowhere else: this is the only retirement backed by ESRCH.
+    managed.physicalExit?.markExited()
+    this.releaseRelayIngress(managed)
+    this.flushPtyOutput(managed.id)
+    this.publishReapedExit(managed)
+    this.retirePtyRecord(managed)
     return true
   }
 
@@ -2629,17 +2630,11 @@ export class PtyHandler {
     childProcessEvidence?: PtyChildProcessVerdict
     foregroundProcessEvidence?: RemoteForegroundEvidence
   }> {
-    pruneRetiredPtyIncarnations(this.retiredIncarnations)
     const id = params.id as string
     const managed = this.ptys.get(id)
     if (!managed || managed.disposed) {
-      const tombstone = this.retiredIncarnations.get(id)
-      if (
-        tombstone &&
-        tombstone.expiresAt > Date.now() &&
-        typeof params.expectedIncarnationId === 'string' &&
-        params.expectedIncarnationId === tombstone.incarnationId
-      ) {
+      const exit = this.undeliveredExitFor(id, params.expectedIncarnationId)
+      if (exit) {
         return {
           foregroundProcess: null,
           hasChildProcesses: false,
@@ -2648,9 +2643,11 @@ export class PtyHandler {
             observationEpoch: ++this.foregroundEvidenceEpoch,
             capturedAgeMs: 0,
             ptyId: id,
-            ptyIncarnationId: tombstone.incarnationId,
+            ptyIncarnationId: exit.incarnationId,
             verdict: 'exited',
-            reason: `pty_exit_${tombstone.code}`
+            // -1 is this wire's "gone, status unrecoverable": the pid was proven absent but nothing
+            // waited on the shell, so no status exists. Never spelled as a real code.
+            reason: exit.code === -1 ? 'pty_exit_status_unknown' : `pty_exit_${exit.code}`
           }
         }
       }
@@ -2817,7 +2814,7 @@ export class PtyHandler {
     }
     for (const [entryIndex, [id, managed]] of managedEntries.entries()) {
       if (managed.disposed) {
-        this.reapExitedPty(managed, 'record-torn-down')
+        this.dropTornDownPtyRecord(managed)
         continue
       }
       if (this.reapPtyProvenExited(managed)) {

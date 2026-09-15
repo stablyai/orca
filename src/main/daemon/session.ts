@@ -4,10 +4,7 @@ import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import {
-  SessionTerminationController,
-  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-} from './session-termination-controller'
+import { SessionTerminationController } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
@@ -124,6 +121,10 @@ export class Session {
     return this.termination.isTerminating
   }
 
+  get killRequested(): boolean {
+    return this.termination.killRequested
+  }
+
   /** Claims termination synchronously so attach/re-entry cannot race async
    * teardown preparation. Returns false when another owner already claimed it. */
   beginTermination(): boolean {
@@ -194,9 +195,7 @@ export class Session {
     this.termination.scheduleForceDisposeFallback()
   }
 
-  async forceKillAndWaitForExit(
-    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-  ): Promise<void> {
+  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
     await this.termination.forceKillAndWaitForExit(timeoutMs)
   }
 
@@ -385,7 +384,7 @@ export class Session {
 
     this.output.broadcastExit(code, this.incarnationId, cause)
 
-    // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.
+    // Why: hand off to the owner's reaper (disposes the emulator and the subprocess handle); else dead sessions pin their scrollback.
     this.onSessionExit?.(code)
   }
 

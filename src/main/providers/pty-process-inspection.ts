@@ -47,6 +47,30 @@ export async function inspectPtyProviderProcess(
   return { foregroundProcess, hasChildProcesses }
 }
 
+/**
+ * Whether the execution host reports that THIS remembered incarnation exited.
+ *
+ * Deliberately skips the `hasPty` precheck above: that is this process's cache of what it last
+ * saw, so it answers `terminal_gone` for exactly the ids a caller asks about here — the ones whose
+ * death it was disconnected for. Only the host that watched the process end may say `exited`, and
+ * only for the incarnation the caller stored (docs/reference/ssh-execution-boundary.md).
+ */
+export async function providerObservedIncarnationExit(
+  provider: IPtyProvider,
+  ptyId: string,
+  incarnationId: PtyIncarnationId
+): Promise<boolean> {
+  const inspectProcess = (provider as CompletionSensitivePtyProvider).inspectProcess
+  if (!inspectProcess) {
+    return false
+  }
+  const inspection = await inspectProcess.call(provider, ptyId, {
+    expectedIncarnationId: incarnationId
+  })
+  const evidence = inspection.foregroundProcessEvidence
+  return evidence?.verdict === 'exited' && evidence.ptyIncarnationId === incarnationId
+}
+
 export async function inspectPtyProviderProcessForRenderer(
   provider: IPtyProvider,
   ptyId: string,

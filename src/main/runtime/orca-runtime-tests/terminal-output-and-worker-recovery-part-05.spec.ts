@@ -141,22 +141,25 @@ describe('OrcaRuntimeService', () => {
       listProcesses
     })
 
+    // Wrong handle and wrong incarnation are LIVE ids now held by a different terminal identity.
+    // That is a recycled id, not an observation of this worker's death, and this controller offers
+    // no host answer for the stored incarnation, so all four defer rather than settle.
     await expect(runtime.reconcileLegacyWorkerTerminals()).resolves.toMatchObject({
       adoptedDispatchIds: [],
-      exitedDispatchIds: ['dispatch-wrong-handle', 'dispatch-wrong-incarnation'],
-      deferredDispatchIds: ['dispatch-missing', 'dispatch-ambiguous']
+      exitedDispatchIds: [],
+      deferredDispatchIds: [
+        'dispatch-missing',
+        'dispatch-ambiguous',
+        'dispatch-wrong-handle',
+        'dispatch-wrong-incarnation'
+      ]
     })
     expect(listProcesses).toHaveBeenCalledOnce()
     expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
-    for (const { name, leafId } of cases.slice(0, 2)) {
+    for (const { name, leafId } of cases) {
       expect(
         getSession().sleepingAgentSessionsByPaneKey?.[`legacy-${name}:${leafId}`]
       ).toBeDefined()
-    }
-    for (const { name, leafId } of cases.slice(2)) {
-      expect(
-        getSession().sleepingAgentSessionsByPaneKey?.[`legacy-${name}:${leafId}`]
-      ).toBeUndefined()
     }
   })
 

@@ -175,7 +175,9 @@ function makePostRevealWorkerRecoveryHarness(
       worktreeId: string
       wslDistro: null
     }[]
-  >
+  >,
+  /** The execution host's exit answer. Omitted means the host said nothing, which never settles. */
+  inspectExitedIncarnation?: (ptyId: string, incarnationId: string) => Promise<boolean>
 ): {
   runtime: RuntimeService
   getSession: () => WorkspaceSessionState
@@ -238,6 +240,7 @@ function makePostRevealWorkerRecoveryHarness(
     kill,
     getForegroundProcess: async () => null,
     hasPty,
+    ...(inspectExitedIncarnation ? { inspectExitedIncarnation } : {}),
     listProcesses:
       listProcesses ??
       (async () => [
