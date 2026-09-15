@@ -218,8 +218,8 @@ export function WorktreeCardHeader({
           <Tooltip>
             <TooltipTrigger asChild>
               <Badge
-                variant="outline"
-                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
+                variant="secondary"
+                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 bg-foreground/[0.06]"
               >
                 {translate('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary')}
               </Badge>
