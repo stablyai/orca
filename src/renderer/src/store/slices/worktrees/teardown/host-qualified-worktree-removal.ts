@@ -8,7 +8,9 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { WORKTREE_INSTANCE_REPLACED_ERROR } from '../../worktree-removal-options'
 import {
   getWorktreeOperationOwnerHostIds,
   resolveWorktreeOperationRoute,
@@ -72,10 +74,18 @@ export function beginHostQualifiedRemoval(
   worktreeId: string,
   requiredExecutionHostId: ExecutionHostId | null,
   forgetLocalOnly: boolean,
-  ignoreWorkspaceCleanupScanSurvivors = false
+  ignoreWorkspaceCleanupScanSurvivors = false,
+  expectedInstanceId?: string
 ): HostQualifiedRemovalStart {
   const resolveRemovalRoute = (): WorktreeOperationRoute | null =>
     resolveHostQualifiedRemovalRoute(get, worktreeId, requiredExecutionHostId)
+  const replacedInstance = refuseReplacedWorktreeInstance(
+    findWorktreeOnConfirmedHost(get, worktreeId, requiredExecutionHostId),
+    expectedInstanceId
+  )
+  if (replacedInstance) {
+    return { ok: false, error: replacedInstance }
+  }
   const removalRoute = resolveRemovalRoute()
   if (!removalRoute && (!forgetLocalOnly || !requiredExecutionHostId)) {
     // Why: callers mark rows deleting up front for immediate sidebar feedback
@@ -158,12 +168,30 @@ export function refuseUnprovableRemoteHostRouting(
   )
 }
 
+/**
+ * Refuse a delayed cancellation rollback whose path was reused by another
+ * instance. Returns a reason instead of throwing so the caller can bail out
+ * before marking a row deleting — the id now belongs to a live workspace whose
+ * delete state must not carry this refusal.
+ */
+export function refuseReplacedWorktreeInstance(
+  worktree: Worktree | undefined,
+  expectedInstanceId?: string
+): string | null {
+  // An absent row is not proof of a replacement — the checkout may simply not be
+  // in local state yet — so leave that to the ordinary host-routing refusals.
+  if (!expectedInstanceId || !worktree) {
+    return null
+  }
+  return worktree.instanceId === expectedInstanceId ? null : WORKTREE_INSTANCE_REPLACED_ERROR
+}
+
 /** The row on the confirmed host only — a same-id row elsewhere must not stand in for it. */
 export function findWorktreeOnConfirmedHost(
   get: WorktreeSliceGet,
   worktreeId: string,
   requiredExecutionHostId: ExecutionHostId | null
-): PreservedBranchWorktree {
+): Worktree | undefined {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   return get()
     .allWorktrees()
