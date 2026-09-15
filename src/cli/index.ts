@@ -35,7 +35,8 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     // answer (paired servers) is read from this machine's own pairing store and cannot be routed,
     // so routing the other half produced one listing describing two machines at once.
     commandPath[0] === 'host' ||
-    commandPath[0] === 'serve' ||
+    // Only bare serve launches locally; subcommands query the selected runtime.
+    (commandPath[0] === 'serve' && commandPath.length === 1) ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context'

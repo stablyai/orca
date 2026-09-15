@@ -15,6 +15,7 @@ import type { StatsCollector } from '../stats/collector'
 import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
 import { RuntimeWorktreeBaseReconciliation } from './runtime-worktree-base-reconciliation'
 import { RuntimeWorktreeRemovalInFlight } from './runtime-worktree-removal-in-flight'
+import type { RuntimeServeStatsLongPolls } from '../../shared/runtime-types'
 
 export class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideListeners {
   // Why: per-PTY driver state. The "driver" is whoever currently owns the
@@ -202,6 +203,17 @@ export class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideLi
   protected freshSubscribeGuard = new Set<string>()
 
   protected stats: StatsCollector | null = null
+
+  // Why: the WS port is owned by OrcaRuntimeRpcServer, not the runtime. It sets
+  // this after the transport binds so `serve stats` can report the bound port
+  // without the runtime reaching back into the transport layer.
+  protected servePort: number | null = null
+
+  // Why: the long-poll counters and caps are owned by OrcaRuntimeRpcServer, not the runtime, the
+  // same boundary `servePort` crosses. This holds the reader the server registers at start and
+  // clears at stop, so `serve stats` reads live admission state without the runtime reaching into
+  // the transport layer (see setLongPollStatsProvider).
+  protected longPollStatsProvider: (() => RuntimeServeStatsLongPolls) | null = null
 
   // Why: create and drift probes must share one fetch/freshness owner.
   protected readonly remoteFetches = new RuntimeRemoteFetchController()

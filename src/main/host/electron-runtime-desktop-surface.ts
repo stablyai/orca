@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
+import { BrowserWindow, ipcMain, Notification, powerMonitor, webContents } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { RuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 
@@ -18,5 +18,13 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   },
   removeIpcListener: (channel, listener) => {
     ipcMain.removeListener(channel, listener as Parameters<typeof ipcMain.removeListener>[1])
+  },
+  getWebContentsOSProcessId: (webContentsId: number): number | null => {
+    const wc = webContents.fromId(webContentsId)
+    if (!wc || wc.isDestroyed()) {
+      return null
+    }
+    const pid = wc.getOSProcessId()
+    return typeof pid === 'number' && pid > 0 ? pid : null
   }
 }

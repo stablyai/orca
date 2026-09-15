@@ -1,5 +1,6 @@
 import type Database from '../../../../sqlite/sync-database'
 import type { TaskStatus, TaskRow } from '../../types'
+import { ORCHESTRATION_TASK_STATUSES } from '../../../../../shared/orchestration-task-status'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration-task-display'
 import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
@@ -159,6 +160,34 @@ export function listTasks(
     .all() as TaskRow[]
 }
 
+// Why: `orca serve stats` publishes live current-state counts, and task rows persist after they
+// settle (only an explicit reset deletes them), so terminal statuses are excluded. `blocked` stays
+// counted — it is resumable work (gate resolution / retry), not a settled outcome.
+export function countTasks(this: OrchestrationDb): number {
+  return Number(
+    this.db
+      .prepare("SELECT COUNT(*) AS count FROM tasks WHERE status NOT IN ('completed', 'failed')")
+      .get()?.count ?? 0
+  )
+}
+
+// Why: `orca serve stats` publishes the whole histogram, including the terminal statuses
+// `countTasks` excludes — a settled-but-retained pile is the thing operators were counting by
+// hand (#13047). One grouped scan, and every status is seeded so a status with no rows reads as
+// 0 instead of vanishing from the contract.
+export function countTasksByStatus(this: OrchestrationDb): Record<TaskStatus, number> {
+  const counts = Object.fromEntries(
+    ORCHESTRATION_TASK_STATUSES.map((status) => [status, 0])
+  ) as Record<TaskStatus, number>
+  const rows = this.db.prepare('SELECT status, COUNT(*) AS count FROM tasks GROUP BY status').all()
+  for (const row of rows as { status: TaskStatus; count: number }[]) {
+    if (row.status in counts) {
+      counts[row.status] = Number(row.count)
+    }
+  }
+  return counts
+}
+
 // Why: the correlated indexed lookup avoids materializing every retained Dispatch before filtering Tasks.
 export function listTasksWithDispatch(
   this: OrchestrationDb,
@@ -238,6 +267,8 @@ export type TaskStoreMethods = {
   createTask: typeof createTask
   getTask: typeof getTask
   listTasks: typeof listTasks
+  countTasks: typeof countTasks
+  countTasksByStatus: typeof countTasksByStatus
   listTasksWithDispatch: typeof listTasksWithDispatch
   promoteReadyTasks: typeof promoteReadyTasks
 }
@@ -247,6 +278,8 @@ export function attachTaskStore(ctor: { prototype: object }): void {
     createTask,
     getTask,
     listTasks,
+    countTasks,
+    countTasksByStatus,
     listTasksWithDispatch,
     promoteReadyTasks
   })

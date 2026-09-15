@@ -6,16 +6,13 @@ import {
   type OrchestrationFleetAttentionCategory
 } from './orchestration-fleet-attention'
 import { projectOrchestrationFleetWorker } from './orchestration-fleet-worker-projection'
+import type { WorkerTerminalListState } from './worker-terminal-list-state'
 
 export const ORCHESTRATION_FLEET_PAGE_MAX = 100
 
-export type FleetTerminalState =
-  | 'active'
-  | 'reclaimable'
-  | 'retained'
-  | 'release_pending'
-  | 'release_unknown'
-  | 'released'
+// The same six process-accounting states the DB derives (worker-terminal-list-state.ts); named
+// for the fleet surface that renders them.
+export type FleetTerminalState = WorkerTerminalListState
 
 export type FleetDurableWorker = {
   dispatchId: string
