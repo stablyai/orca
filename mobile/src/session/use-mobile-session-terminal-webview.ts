@@ -18,7 +18,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     pendingActiveTerminalHandleRef,
     activeSessionTab,
     unsubscribeTerminal,
-    measureViewportOnce,
     subscribeToTerminal,
     nativeChatStream,
     readMarkdownTab,
@@ -60,20 +59,16 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         }
         return
       }
-      // Why: first subscribe may skip (no WebView ref); await measure so it carries the viewport, else it races measureViewportOnce and skips.
       // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
       const isIntendedActive = () =>
         handle === activeHandleRef.current || handle === pendingActiveTerminalHandleRef.current
       if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-        void (async () => {
-          await measureViewportOnce(handle)
-          if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-            subscribeToTerminal(handle)
-          }
-        })()
+        // The first subscribe creates xterm from scrollback; its bounded fit pass
+        // measures after init and resubscribes with the real viewport.
+        subscribeToTerminal(handle)
       }
     },
-    [measureViewportOnce, nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+    [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
   )
 
   useEffect(() => {

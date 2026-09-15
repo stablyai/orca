@@ -44,6 +44,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 ) {
   const webViewRef = useRef<WebView>(null)
   const isWebReadyRef = useRef(false)
+  const webReadyNotifiedRef = useRef(false)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
   const pendingPingIdRef = useRef<number | null>(null)
@@ -99,29 +100,37 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     }
   }, [writeCoalescer])
 
-  const confirmWebReady = useCallback(
-    (notifyParent: boolean) => {
-      pendingPingIdRef.current = null
-      isWebReadyRef.current = true
-      clearWebReadyWatchdog()
-      clearEngineError()
-      if (notifyParent) {
-        onWebReady?.()
-      }
-      // Why: reload clears queued commands, so readiness must always restore the
-      // native-selected theme even when its value did not change in React.
-      sendToWebView({ type: 'set-theme', terminalTheme })
-      flushPendingMessages()
-    },
-    [
-      clearEngineError,
-      clearWebReadyWatchdog,
-      flushPendingMessages,
-      onWebReady,
-      sendToWebView,
-      terminalTheme
-    ]
-  )
+  const confirmWebReady = useCallback(() => {
+    pendingPingIdRef.current = null
+    isWebReadyRef.current = true
+    clearWebReadyWatchdog()
+    clearEngineError()
+    // The document normally announces web-ready once, but onLoadEnd can recover
+    // a bridge event that arrived before the native callback was attached.
+    if (!webReadyNotifiedRef.current) {
+      webReadyNotifiedRef.current = true
+      onWebReady?.()
+    }
+    // Why: reload clears queued commands, so readiness must always restore the
+    // native-selected theme even when its value did not change in React.
+    sendToWebView({ type: 'set-theme', terminalTheme })
+    flushPendingMessages()
+  }, [
+    clearEngineError,
+    clearWebReadyWatchdog,
+    flushPendingMessages,
+    onWebReady,
+    sendToWebView,
+    terminalTheme,
+    webReadyNotifiedRef
+  ])
+
+  const probeWebReady = useCallback(() => {
+    if (isWebReadyRef.current || pendingPingIdRef.current !== null) {
+      return
+    }
+    pendingPingIdRef.current = sendToWebView({ type: 'ping' })
+  }, [sendToWebView])
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -134,13 +143,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       routeTerminalQueryReply(msg, onTerminalQueryReply)
 
       if (msg.type === 'web-ready') {
-        confirmWebReady(true)
+        confirmWebReady()
       } else if (
         msg.type === 'pong' &&
         typeof msg.pingId === 'number' &&
+        msg.terminalAvailable === true &&
         msg.pingId === pendingPingIdRef.current
       ) {
-        confirmWebReady(false)
+        confirmWebReady()
       } else if (msg.type === 'ready') {
         // Why: the WebView's init() rAF chain has run — term is open,
         // renderService is populated, first paint has happened. Resolve
@@ -195,30 +205,48 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 
   const handleLoadStart = useCallback(() => {
     isWebReadyRef.current = false
+    webReadyNotifiedRef.current = false
     pendingPingIdRef.current = null
     armWebReadyWatchdog()
     // Why: messages queued for a previous WebView generation are stale after a reload;
     // dropping them avoids replaying terminal chunks before the next init snapshot.
     pendingMessages.clear()
     writeCoalescer.clear()
-  }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
+  }, [armWebReadyWatchdog, pendingMessages, webReadyNotifiedRef, writeCoalescer])
+
+  const handleLoadEnd = useCallback(() => {
+    // web-ready is document-scoped and can be lost when native event delivery
+    // races the first message; a post-load ping makes readiness recoverable.
+    probeWebReady()
+  }, [probeWebReady])
 
   const handleReload = useCallback(() => {
+    // Why: web-ready is deduped per document, so a reload that skips onLoadStart
+    // must still reset the readiness refs and re-arm the watchdog or the pane
+    // stays blank with no overlay. Stale queued commands belong to the dead
+    // document, so clear them here too — handleLoadStart may never run.
+    isWebReadyRef.current = false
+    webReadyNotifiedRef.current = false
+    pendingPingIdRef.current = null
+    armWebReadyWatchdog()
+    pendingMessages.clear()
+    writeCoalescer.clear()
     clearEngineError()
     webViewRef.current?.reload()
-  }, [clearEngineError])
+  }, [armWebReadyWatchdog, clearEngineError, pendingMessages, webReadyNotifiedRef, writeCoalescer])
 
   const handleContentProcessDidTerminate = useCallback(() => {
     // Why: WKWebView content-process loss is recoverable; stale commands belong
     // to the dead document and the replacement must prove readiness before replay.
     isWebReadyRef.current = false
+    webReadyNotifiedRef.current = false
     pendingPingIdRef.current = null
     pendingMessages.clear()
     writeCoalescer.clear()
     clearEngineError()
     armWebReadyWatchdog()
     webViewRef.current?.reload()
-  }, [armWebReadyWatchdog, clearEngineError, pendingMessages, writeCoalescer])
+  }, [armWebReadyWatchdog, clearEngineError, pendingMessages, webReadyNotifiedRef, writeCoalescer])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })
@@ -241,7 +269,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         // invalid; init/write commands queue until this exact document answers.
         isWebReadyRef.current = false
         armWebReadyWatchdog()
-        pendingPingIdRef.current = sendToWebView({ type: 'ping' })
+        pendingPingIdRef.current = null
+        probeWebReady()
       },
       write(data: string) {
         writeCoalescer.write(data)
@@ -360,7 +389,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         })
       }
     }),
-    [armWebReadyWatchdog, postMessage, sendToWebView, terminalTheme, textScale, writeCoalescer]
+    [armWebReadyWatchdog, postMessage, probeWebReady, terminalTheme, textScale, writeCoalescer]
   )
 
   return (
@@ -380,6 +409,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.
         textZoom={100}
         onLoadStart={handleLoadStart}
+        onLoadEnd={handleLoadEnd}
         onMessage={handleMessage}
         onError={(event) => reportNativeEngineError('Terminal WebView load failed', event)}
         onHttpError={(event) => reportNativeEngineError('Terminal WebView HTTP error', event)}

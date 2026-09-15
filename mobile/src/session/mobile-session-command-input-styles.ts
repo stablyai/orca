@@ -65,7 +65,8 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     fontWeight: '600'
   },
   commandDock: {
-    zIndex: 20
+    zIndex: 20,
+    backgroundColor: colors.bgPanel
   },
   accessoryBar: {
     flexDirection: 'row',

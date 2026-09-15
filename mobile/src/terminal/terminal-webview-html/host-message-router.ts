@@ -119,7 +119,11 @@ export const TERMINAL_HTML_HOST_MESSAGE_ROUTER = `  ${TERMINAL_REFLOW_JS}
       if (handledMessageIds.length > 256) handledMessageIds.shift();
     }
     if (msg.type === 'ping') {
-      notify({ type: 'pong', pingId: msg.id });
+      notify({
+        type: 'pong',
+        pingId: msg.id,
+        terminalAvailable: typeof window.Terminal === 'function'
+      });
     } else if (msg.type === 'init') {
       init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale, msg.preserveScroll, msg.oscLinks);
     } else if (msg.type === 'set-font-scale') {
