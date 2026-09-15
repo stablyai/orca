@@ -133,6 +133,31 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     expect(metaById[parentId].instanceId).toBe(edge.parentWorktreeInstanceId)
   })
 
+  it('keeps a folder workspace whose backing directory git still lists', () => {
+    // Why: `<repoId>::<path>::workspace:<uuid>` is one directory with several workspace identities.
+    // Reading the suffix as part of the path makes each one look like a checkout git dropped.
+    const rootId = 'repo-1::/repo'
+    const instanceId = 'repo-1::/repo::workspace:11111111-1111-1111-1111-111111111111'
+    const edge = lineage(instanceId, rootId)
+    const worktreeLineageById = { [instanceId]: edge }
+    const workspaceLineageByChildKey = {
+      [worktreeWorkspaceKey(instanceId)]: workspaceLineage(instanceId, rootId)
+    }
+    const metaById = {
+      [rootId]: { instanceId: edge.parentWorktreeInstanceId } as WorktreeMeta,
+      [instanceId]: { instanceId: edge.worktreeInstanceId } as WorktreeMeta
+    }
+    const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
+
+    pruneLineageForMissingRepoWorktrees(store as never, repo, [
+      { path: '/repo', head: 'a', branch: 'main', isBare: false, isMainWorktree: true }
+    ])
+
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(store.removeWorkspaceLineage).not.toHaveBeenCalled()
+    expect(worktreeLineageById[instanceId]).toBeDefined()
+  })
+
   it('refuses an empty scan when the repo still has registered lineage', () => {
     const parentId = 'repo-1::/repo/parent'
     const childId = 'repo-1::/repo/child'
