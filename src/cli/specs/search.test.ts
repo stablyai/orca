@@ -89,17 +89,15 @@ describe('orca search command spec', () => {
 })
 
 describe('orca search discovery surfaces', () => {
-  it('is hidden until the settings toggle ships', () => {
-    expect(searchSpec.hidden).toBe(true)
+  it('is listed in the root help', () => {
+    expect(ROOT_HELP_TEXT_PRIMARY).toContain('Agent Sessions:')
+    expect(ROOT_HELP_TEXT_PRIMARY).toContain(
+      '  search                    Search the full text of agent sessions on one Orca host'
+    )
+    expect(ROOT_HELP_TEXT_SECONDARY).toContain('  orca search --index-status [--json]')
   })
 
-  it('is absent from the root help', () => {
-    expect(ROOT_HELP_TEXT_PRIMARY).not.toContain('Agent Sessions:')
-    expect(ROOT_HELP_TEXT_PRIMARY).not.toContain('  search  ')
-    expect(ROOT_HELP_TEXT_SECONDARY).not.toContain('orca search')
-  })
-
-  it('still prints its own help for `orca search --help`', () => {
+  it('prints its own help for `orca search --help`', () => {
     const lines: string[] = []
     const restore = console.log
     console.log = (value: unknown) => void lines.push(String(value))
@@ -111,18 +109,20 @@ describe('orca search discovery surfaces', () => {
     expect(lines.join('\n')).toContain('Usage: orca search <query>')
   })
 
-  it('still resolves for dispatch even though it is hidden', () => {
+  it('resolves for dispatch', () => {
     expect(findCommandSpec(COMMAND_SPECS, ['search'])).toBe(searchSpec)
   })
 
-  it('is withheld from agent discovery', () => {
+  it('exposes the command to agent discovery with its positional and flags', () => {
     const command = buildAgentContext(COMMAND_SPECS).commands.find(
       (entry) => entry.command === 'search'
     )
-    expect(command).toBeUndefined()
+    expect(command?.positionalArgs).toEqual(['query'])
+    expect(command?.flags).toContain('index-status')
+    expect(command?.flags).not.toContain('page')
   })
 
-  it('is not offered as a suggestion for an unknown command', () => {
-    expect(suggestCommands(COMMAND_SPECS, ['serch'])).not.toContain('search')
+  it('is offered as a suggestion for a near-miss command', () => {
+    expect(suggestCommands(COMMAND_SPECS, ['serch'])).toContain('search')
   })
 })
