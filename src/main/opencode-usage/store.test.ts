@@ -36,7 +36,7 @@ function createEmptyScanResult() {
 
 function getDefaultState(): OpenCodeUsagePersistedState {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     worktreeFingerprint: null,
     processedDatabases: [],
     sessions: [],

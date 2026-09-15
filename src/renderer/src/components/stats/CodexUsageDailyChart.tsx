@@ -48,7 +48,9 @@ export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): Reac
             {
               key: 'input',
               label: translate('auto.components.stats.CodexUsageDailyChart.99a91d3143', 'Input'),
-              value: entry.inputTokens,
+              // Why: inputTokens already includes cachedInputTokens for Codex and
+              // OpenCode; the segments must partition the day, not overlap.
+              value: Math.max(entry.inputTokens - entry.cachedInputTokens, 0),
               className: 'bg-sky-500/80'
             },
             {

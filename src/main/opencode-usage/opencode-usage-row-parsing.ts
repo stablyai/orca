@@ -66,6 +66,15 @@ function extractTimestamp(data: Record<string, unknown>, row: OpenCodeUsageRow):
   return millis ? new Date(millis).toISOString() : null
 }
 
+/**
+ * Parse one OpenCode usage row into a provider-neutral event.
+ *
+ * OpenCode's `tokens.input` excludes cache hits and `tokens.total` includes
+ * them; the event folds cache read + write into `inputTokens` so
+ * `newInput = inputTokens - cachedInputTokens` holds like the other providers.
+ * @param row - A row from `selectUsageRows`.
+ * @returns The parsed event, or `null` when the row carries no token data or timestamp.
+ */
 export function parseOpenCodeUsageRow(row: OpenCodeUsageRow): OpenCodeUsageParsedEvent | null {
   const data = parseJsonObject(row.data)
   if (!data) {
@@ -77,16 +86,18 @@ export function parseOpenCodeUsageRow(row: OpenCodeUsageRow): OpenCodeUsageParse
     return null
   }
   const cache = parseJsonObject(tokens.cache)
-  const inputTokens = ensureNumber(tokens.input)
+  // Why: OpenCode's `input` excludes cache hits and its `total` includes them;
+  // Orca counts cached tokens inside inputTokens so newInput = input - cached.
+  const cachedInputTokens = ensureNumber(cache?.read) + ensureNumber(cache?.write)
+  const inputTokens = ensureNumber(tokens.input) + cachedInputTokens
   const outputTokens = ensureNumber(tokens.output)
   const reasoningOutputTokens = ensureNumber(tokens.reasoning)
-  const cachedInputTokens = Math.min(ensureNumber(cache?.read), inputTokens)
   const totalTokens =
     ensureNumber(tokens.total) > 0
       ? ensureNumber(tokens.total)
       : inputTokens + outputTokens + reasoningOutputTokens
 
-  if (inputTokens + outputTokens + reasoningOutputTokens + cachedInputTokens + totalTokens <= 0) {
+  if (inputTokens + outputTokens + reasoningOutputTokens + totalTokens <= 0) {
     return null
   }
 
