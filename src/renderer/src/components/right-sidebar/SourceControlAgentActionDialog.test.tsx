@@ -56,6 +56,7 @@ vi.mock('@/lib/source-control-agent-action-plan', () => ({
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError }
 }))
+import { getTuiAgentDefaultArgs } from '../../../../shared/tui-agent-launch-defaults'
 import { useAppStore, type AppState } from '@/store'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
 let container: HTMLDivElement
@@ -192,10 +193,13 @@ describe('SourceControlAgentActionDialog', () => {
     await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(mocks.onOpenChange).toHaveBeenCalledWith(false))
     expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1)
+    // Why: the saved recipe stores the blank field verbatim, so the launch resolves the agent's
+    // own default instead of stripping it (#19379). The recipe itself is unchanged, which is what
+    // the onSaveAgentDefault assertion below pins.
     expect(mocks.onStart).toHaveBeenCalledWith({
       agent: 'codex',
       commandInput: 'Resolve conflicts.',
-      agentArgs: ''
+      agentArgs: getTuiAgentDefaultArgs('codex')
     })
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
     expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()

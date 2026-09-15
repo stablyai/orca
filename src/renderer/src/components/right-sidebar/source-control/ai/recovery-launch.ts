@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import type { AppState } from '@/store'
+import { resolveSourceControlActionLaunchArgs } from '@/lib/source-control-action-launch-args'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { getConnectionId } from '@/lib/connection-context'
@@ -160,7 +161,11 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     worktreeId: activeWorktreeId,
     groupId: activeGroupId ?? activeWorktreeId,
     prompt,
-    agentArgs: savedRecipe.agentArgs,
+    agentArgs: resolveSourceControlActionLaunchArgs(
+      agent,
+      savedRecipe.agentArgs,
+      store.settings?.agentDefaultArgs
+    ),
     promptDelivery: 'submit-after-ready',
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'
