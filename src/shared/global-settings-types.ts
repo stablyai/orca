@@ -15,6 +15,7 @@ import type { PersistedNativeChatSessionOptions } from './native-chat-session-op
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
+import type { WorkspaceTrustEntry } from './workspace-trust-types'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection,
@@ -96,6 +97,11 @@ export type GlobalSettings = {
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
+  /** Privacy gate for the package.json dependency hover: disables the npm CLI
+   *  and registry HTTP lookups (installed version still reads from disk).
+   *  Optional so a required field never breaks exhaustive GlobalSettings
+   *  fixtures; effective value is read as `?? true`. */
+  npmPackageInfoOnlineLookupsEnabled?: boolean
   /** Why: mirrors terminal selection-paste muscle memory without mutating the
    *  normal system clipboard; Linux and macOS enable it by default, Windows
    *  leaves middle-click semantics unchanged unless the user opts in. */
@@ -491,6 +497,10 @@ export type GlobalSettings = {
   voice?: VoiceSettings
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
+  /** Path-based trust decisions (grants and remembered declines). Main-owned; renderer writes only through the dedicated id-only channels, never generic settings:set. */
+  workspaceTrustEntries?: WorkspaceTrustEntry[]
+  /** One-shot marker: existing local repos/folder workspaces are grandfathered as trusted once. */
+  workspaceTrustMigratedExistingWorkspaces?: boolean
 }
 
 export type OrcaWorkspaceLayout = {

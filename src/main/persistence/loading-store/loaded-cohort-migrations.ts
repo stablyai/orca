@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { WorkspaceTrustEntry } from '../../../shared/workspace-trust-types'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 
@@ -60,6 +61,61 @@ export class LoadedCohortMigrationOperations {
               ? existing.installId
               : randomUUID()
         }
+      }
+    }
+  }
+
+  /**
+   * One-shot: every local (connectionId == null) Repo/FolderWorkspace present at migration
+   * time is grandfathered trusted, so nobody loses capability nor gets a prompt avalanche.
+   * Entries added after this fires go through the normal intake trust flow instead.
+   */
+  migrateWorkspaceTrust(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    if (state.settings?.workspaceTrustMigratedExistingWorkspaces === true) {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    const existingEntries = state.settings?.workspaceTrustEntries ?? []
+    const grandfathered: WorkspaceTrustEntry[] = []
+    if (fileExistedOnLoad) {
+      const grandfatheredPaths = new Set(existingEntries.map((entry) => entry.path))
+      const decidedAt = Date.now()
+      for (const repo of state.repos ?? []) {
+        if (repo.connectionId != null || grandfatheredPaths.has(repo.path)) {
+          continue
+        }
+        grandfatheredPaths.add(repo.path)
+        grandfathered.push({
+          id: randomUUID(),
+          path: repo.path,
+          trusted: true,
+          decidedAt,
+          origin: 'migration'
+        })
+      }
+      for (const folderWorkspace of state.folderWorkspaces ?? []) {
+        if (
+          folderWorkspace.connectionId != null ||
+          grandfatheredPaths.has(folderWorkspace.folderPath)
+        ) {
+          continue
+        }
+        grandfatheredPaths.add(folderWorkspace.folderPath)
+        grandfathered.push({
+          id: randomUUID(),
+          path: folderWorkspace.folderPath,
+          trusted: true,
+          decidedAt,
+          origin: 'migration'
+        })
+      }
+    }
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        workspaceTrustEntries: [...existingEntries, ...grandfathered],
+        workspaceTrustMigratedExistingWorkspaces: true
       }
     }
   }

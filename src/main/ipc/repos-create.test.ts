@@ -34,7 +34,9 @@ const {
     removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn(),
-    getSettings: vi.fn()
+    getSettings: vi.fn(),
+    // Why: `repos:create` records a workspace-trust decision in-process, which writes through the store.
+    updateSettings: vi.fn()
   },
   mkdirMock: vi.fn(),
   accessMock: vi.fn(),

@@ -9,6 +9,7 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
+import { ensureWorkspaceTrustConfirmed } from '../../lib/ensure-workspace-trust-confirmed'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
@@ -95,6 +96,15 @@ export function createFolderWorkspaceMutationActions(
           folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
           folderWorkspacePathStatuses: {}
         }))
+        // Why: local-only — a runtime-hosted folder workspace has no local filesystem root
+        // to gate (Req: Both Intake Choke Points Share the Predicate).
+        if (target.kind === 'local') {
+          await ensureWorkspaceTrustConfirmed(
+            get(),
+            { kind: 'folderWorkspace', folderWorkspaceId: ownedWorkspace.id },
+            ownedWorkspace.folderPath
+          )
+        }
         return ownedWorkspace
       } catch (err) {
         console.error('Failed to create folder workspace:', err)
