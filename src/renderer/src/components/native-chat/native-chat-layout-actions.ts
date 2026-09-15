@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import {
-  canMoveTabToNewPaneColumnFromState,
+  resolveTabPaneColumnMoveTarget,
   moveTabToNewPaneColumn
 } from '@/components/tab-bar/tab-move-to-pane-column'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
@@ -41,7 +41,7 @@ export function canRunNativeChatSplitTarget(
   }
   return (
     target.kind === 'terminal-pane' ||
-    canMoveTabToNewPaneColumnFromState(state, target.unifiedTabId, target.groupId)
+    resolveTabPaneColumnMoveTarget(state, target.unifiedTabId, target.groupId) !== null
   )
 }
 
@@ -56,11 +56,12 @@ export function runNativeChatSplitTarget(
     })
     return true
   }
-  return moveTabToNewPaneColumn({
-    unifiedTabId: target.unifiedTabId,
-    groupId: target.groupId,
-    direction
-  })
+  const moveTarget = resolveTabPaneColumnMoveTarget(
+    useAppStore.getState(),
+    target.unifiedTabId,
+    target.groupId
+  )
+  return moveTarget ? moveTabToNewPaneColumn({ target: moveTarget, direction }) : false
 }
 
 export function runActiveNativeChatSplit(
