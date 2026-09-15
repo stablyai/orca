@@ -110,12 +110,21 @@ function usageScalars(config: GrokBillingConfig): (GrokMoneyVal | undefined)[] {
 }
 
 // Why: proto3 JSON drops default zeros, so an omitted percent can mean zero —
-// but only an explicitly-emitted zero proves this encoder keeps them. #15740
-// ships `onDemandUsed: {val: 0}`, so there the omission means "not reported"
-// and must never render as 0%. Non-zero money fields prove nothing either way,
-// so #9214/#9219 accounts that carry only those keep their genuine 0%.
+// but only an explicitly-emitted zero proves this encoder keeps them.
+//
+// The on-demand block only proves it when that budget EXISTS. #15740 has one
+// (`onDemandCap: 100`), so its `onDemandUsed: {val: 0}` is a reading and the
+// omitted percent there means "not reported". #20524's SuperGrok plan has
+// none: `onDemandCap/onDemandUsed/prepaidBalance` are structurally `{val: 0}`
+// in the very payload that later carries `creditUsagePercent: 1.0`, so they
+// coexist with a reported percent and cannot stand in for its absence.
+// `monthlyLimit`/`used` are their own meter and speak either way, and non-zero
+// money fields prove nothing, so #9214/#9219 keep their genuine 0%.
 function emitsExplicitZeroScalar(config: GrokBillingConfig): boolean {
-  return usageScalars(config).some((value) => parseMoneyVal(value) === 0)
+  const cap = parseMoneyVal(config.onDemandCap)
+  const speaking =
+    cap !== null && cap > 0 ? usageScalars(config) : [config.monthlyLimit, config.used]
+  return speaking.some((value) => parseMoneyVal(value) === 0)
 }
 
 function reportsAnyUsageScalar(config: GrokBillingConfig): boolean {
