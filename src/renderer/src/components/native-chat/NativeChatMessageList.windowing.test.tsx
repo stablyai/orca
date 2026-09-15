@@ -35,6 +35,45 @@ import {
 
 afterEach(cleanup)
 
+function scrollRoot(container: HTMLElement): HTMLElement {
+  const scroller = container.querySelector<HTMLElement>('[data-native-chat-scroll]')
+  if (!scroller) {
+    throw new Error('no transcript scroll root')
+  }
+  return scroller
+}
+
+/** Deliver resize and scroll events to a fixed point, as a painted frame would. */
+function paint(container: HTMLElement): void {
+  const scroller = scrollRoot(container)
+  let lastScrollTop = scroller.scrollTop
+  for (let pass = 0; pass < 12; pass += 1) {
+    let changed = false
+    act(() => {
+      changed = deliverResizes()
+    })
+    if (scroller.scrollTop !== lastScrollTop) {
+      lastScrollTop = scroller.scrollTop
+      fireEvent.scroll(scroller)
+      changed = true
+    }
+    if (!changed) {
+      return
+    }
+  }
+  throw new Error('the transcript never settled: resize and scroll kept moving it')
+}
+
+async function settleVirtualizer(container: HTMLElement): Promise<void> {
+  for (let frame = 0; frame < 2; frame += 1) {
+    paint(container)
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    })
+  }
+  paint(container)
+}
+
 describe('windowed transcript', () => {
   let restoreLayout = (): void => {}
   beforeEach(() => {
@@ -350,6 +389,128 @@ describe('transcript with a hidden scroll root', () => {
       restoreLayout()
     }
   })
+
+  it('preserves a detached viewport when messages append while hidden', async () => {
+    let isVisible = true
+    const restoreLayout = stubLayout({
+      scrollGeometry: true,
+      isVisible: () => isVisible
+    })
+    const restoreResizeObserver = stubResizeObserver()
+    const initialMessages = Array.from({ length: 120 }, (_, index) => marker(index))
+    const appendedMessages = [
+      ...initialMessages,
+      ...Array.from({ length: 20 }, (_, index) => marker(120 + index))
+    ]
+    try {
+      const { container, rerender } = render(list(initialMessages, isVisible))
+      await settleVirtualizer(container)
+
+      const scroller = scrollRoot(container)
+      const readingAt = 2_000
+      scrollTranscript(container, readingAt)
+      await settleVirtualizer(container)
+      expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+
+      isVisible = false
+      rerender(list(initialMessages, isVisible))
+      await settleVirtualizer(container)
+      const scrollTo = vi.spyOn(scroller, 'scrollTo')
+      try {
+        rerender(list(appendedMessages, isVisible))
+        await settleVirtualizer(container)
+        expect(scrollTo).not.toHaveBeenCalled()
+      } finally {
+        scrollTo.mockRestore()
+      }
+
+      isVisible = true
+      rerender(list(appendedMessages, isVisible))
+      await settleVirtualizer(container)
+
+      expect(scroller.scrollTop).toBe(readingAt)
+      expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+    } finally {
+      restoreResizeObserver()
+      restoreLayout()
+    }
+  })
+
+  it('preserves a detached viewport when a structured session catches up after reveal', async () => {
+    let isVisible = true
+    const restoreLayout = stubLayout({
+      scrollGeometry: true,
+      isVisible: () => isVisible
+    })
+    const restoreResizeObserver = stubResizeObserver()
+    const initialMessages = Array.from({ length: 120 }, (_, index) => marker(index))
+    const appendedMessages = [
+      ...initialMessages,
+      ...Array.from({ length: 20 }, (_, index) => marker(120 + index))
+    ]
+    try {
+      const { container, rerender } = render(list(initialMessages, isVisible))
+      await settleVirtualizer(container)
+
+      const scroller = scrollRoot(container)
+      const readingAt = 2_000
+      scrollTranscript(container, readingAt)
+      await settleVirtualizer(container)
+      expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+
+      isVisible = false
+      rerender(list(initialMessages, isVisible))
+      await settleVirtualizer(container)
+      isVisible = true
+      rerender(list(initialMessages, isVisible))
+      // The resumed transport can publish catch-up before the reveal write emits a scroll event.
+      rerender(list(appendedMessages, isVisible))
+      await settleVirtualizer(container)
+
+      expect(scroller.scrollTop).toBe(readingAt)
+      expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+    } finally {
+      restoreResizeObserver()
+      restoreLayout()
+    }
+  })
+
+  it('catches a following viewport up after messages append while hidden', async () => {
+    let isVisible = true
+    const restoreLayout = stubLayout({
+      scrollGeometry: true,
+      isVisible: () => isVisible
+    })
+    const restoreResizeObserver = stubResizeObserver()
+    const initialMessages = Array.from({ length: 120 }, (_, index) => marker(index))
+    const appendedMessages = [
+      ...initialMessages,
+      ...Array.from({ length: 20 }, (_, index) => marker(120 + index))
+    ]
+    try {
+      const { container, rerender } = render(list(initialMessages, isVisible))
+      await settleVirtualizer(container)
+
+      isVisible = false
+      rerender(list(initialMessages, isVisible))
+      await settleVirtualizer(container)
+      rerender(list(appendedMessages, isVisible))
+      await settleVirtualizer(container)
+
+      isVisible = true
+      rerender(list(appendedMessages, isVisible))
+      await settleVirtualizer(container)
+
+      const scroller = scrollRoot(container)
+      expect(
+        scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop
+      ).toBeLessThanOrEqual(NATIVE_CHAT_BOTTOM_THRESHOLD_PX)
+      expect(screen.queryByRole('button', { name: /jump to latest/i })).toBeNull()
+    } finally {
+      restoreResizeObserver()
+      restoreLayout()
+    }
+  })
 })
 
 // A row that grows in place: the same message id, more content, a taller measured
@@ -409,38 +570,6 @@ describe('transcript follow ownership across growth and appends', () => {
         workingStartedAt={TURN_STARTED_AT}
       />
     )
-  }
-
-  function scrollRoot(container: HTMLElement): HTMLElement {
-    const scroller = container.querySelector<HTMLElement>('[data-native-chat-scroll]')
-    if (!scroller) {
-      throw new Error('no transcript scroll root')
-    }
-    return scroller
-  }
-
-  /** One painted frame, repeated to a fixed point: deliver the resize callbacks
-   *  the growth caused, then fire the scroll event a browser fires for any
-   *  `scrollTop` the code wrote itself. Refusing to settle is a failure in its
-   *  own right — that is the view oscillating. */
-  function paint(container: HTMLElement): void {
-    const scroller = scrollRoot(container)
-    let lastScrollTop = scroller.scrollTop
-    for (let pass = 0; pass < 12; pass += 1) {
-      let changed = false
-      act(() => {
-        changed = deliverResizes()
-      })
-      if (scroller.scrollTop !== lastScrollTop) {
-        lastScrollTop = scroller.scrollTop
-        fireEvent.scroll(scroller)
-        changed = true
-      }
-      if (!changed) {
-        return
-      }
-    }
-    throw new Error('the transcript never settled: resize and scroll kept moving it')
   }
 
   function distanceFromBottom(container: HTMLElement): number {
