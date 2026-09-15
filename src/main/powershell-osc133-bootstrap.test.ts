@@ -6,6 +6,7 @@ import {
 import { getShellLaunchConfig } from './daemon/shell-ready'
 import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
 import { STARTUP_COMMAND_FEATURES } from './shell-startup-launch-intent-fixtures'
+import { ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV } from './pty/codex-default-home-shell-startup'
 
 describe('PowerShell OSC 133 bootstrap', () => {
   it('wraps prompt/readline without bypassing profiles or execution policy', () => {
@@ -20,6 +21,15 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(script).toContain('function Global:omp')
     expect(script).toContain('--extension $env:ORCA_OMP_STATUS_EXTENSION')
     expect(script).toContain('ORCA_CODEX_HOME')
+    const defaultHomeReset = script.indexOf(
+      `if ($env:${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV})`
+    )
+    expect(defaultHomeReset).toBeGreaterThan(-1)
+    expect(script).toContain('Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue')
+    expect(script).toContain('Remove-Item Env:ORCA_CODEX_HOME -ErrorAction SilentlyContinue')
+    expect(script).toContain(
+      `Remove-Item Env:${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV} -ErrorAction SilentlyContinue`
+    )
     expect(script).toContain('ORCA_CODEX_LAUNCH_PREFLIGHT')
     expect(script).toContain('function Global:codex')
     expect(script).not.toContain('$Global:__OrcaCodexExecutable')
@@ -38,6 +48,7 @@ describe('PowerShell OSC 133 bootstrap', () => {
 
     const codexHomeRestore = script.indexOf('if ($env:ORCA_CODEX_HOME)')
     expect(codexHomeRestore).toBeGreaterThan(-1)
+    expect(defaultHomeReset).toBeLessThan(codexHomeRestore)
     expect(codexHomeRestore).toBeLessThan(script.indexOf('Test-Path variable:global:'))
     expect(codexHomeRestore).toBeLessThan(script.indexOf('LanguageMode -eq "FullLanguage"'))
   })

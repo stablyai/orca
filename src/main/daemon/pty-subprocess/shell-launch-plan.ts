@@ -34,6 +34,10 @@ import {
   type RecognizedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
+import {
+  ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV,
+  scrubCodexDefaultHomeMarkerForWindowsShell
+} from '../../pty/codex-default-home-shell-startup'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
 import { resolveWslSessionContext } from '../wsl-session-context'
@@ -68,6 +72,10 @@ export function createPtyShellLaunchPlan(
   let validationCwd = spawnCwd
 
   if (process.platform === 'win32') {
+    // Why: execution-host reconciliation may preserve a daemon-only custom home
+    // by dropping the reset, but that must not also disable shell integration.
+    const useGitBashShellReadyWrapper =
+      opts.env?.[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV] !== undefined
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
     const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellPath)
     const resolvedShellFamily: WindowsPowerShellShellFamily =
@@ -123,7 +131,8 @@ export function createPtyShellLaunchPlan(
         resolveSafePtyDefaultCwd(),
         resolvedWslContext,
         opts.command,
-        env.ORCA_CODEX_LAUNCH_PREFLIGHT
+        env.ORCA_CODEX_LAUNCH_PREFLIGHT,
+        useGitBashShellReadyWrapper
       )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
@@ -151,7 +160,8 @@ export function createPtyShellLaunchPlan(
               resolveSafePtyDefaultCwd(),
               { distro: codexHomeWslInfo.distro },
               opts.command,
-              env.ORCA_CODEX_LAUNCH_PREFLIGHT
+              env.ORCA_CODEX_LAUNCH_PREFLIGHT,
+              useGitBashShellReadyWrapper
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd
@@ -179,6 +189,7 @@ export function createPtyShellLaunchPlan(
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       addOrcaWslInteropEnv(env)
     }
+    scrubCodexDefaultHomeMarkerForWindowsShell(env, shellPath)
   } else {
     rescrubDaemonPtyEnvironment(env, opts)
     const preferredShellPath = shellPath

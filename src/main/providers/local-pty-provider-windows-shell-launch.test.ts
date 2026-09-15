@@ -123,6 +123,7 @@ import {
   type LocalPtyMockProcess
 } from './local-pty-provider-test-harness'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
+import { ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV } from '../pty/codex-default-home-shell-startup'
 
 describe('LocalPtyProvider', () => {
   let provider: LocalPtyProvider
@@ -626,6 +627,48 @@ describe('LocalPtyProvider', () => {
             CHERE_INVOKING: '1',
             PYTHONUTF8: '1',
             ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
+          })
+        })
+      )
+    })
+
+    it('keeps the Git Bash wrapper without a managed Codex preflight', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      const originalProgramFiles = process.env.ProgramFiles
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      process.env.ProgramFiles = 'C:\\Program Files'
+      provider.configure({
+        getWindowsShell: () => 'git-bash',
+        buildSpawnEnv: (_id, env) => ({
+          ...env,
+          [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1'
+        })
+      })
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24, cwd: 'C:\\Users\\jin\\repo' })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+        if (originalProgramFiles === undefined) {
+          delete process.env.ProgramFiles
+        } else {
+          process.env.ProgramFiles = originalProgramFiles
+        }
+      }
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'C:\\Program Files\\Git\\bin\\bash.exe',
+        [
+          '-c',
+          expect.stringMatching(
+            /^chcp\.com 65001 >\/dev\/null 2>&1; exec "\$BASH" --rcfile '.*shell-ready\/bash\/rcfile' -i$/
+          )
+        ],
+        expect.objectContaining({
+          env: expect.objectContaining({
+            [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1'
           })
         })
       )

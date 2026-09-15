@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as pty from 'node-pty'
 import { spawnShellWithFallback, type WindowsShellSpawnAttempt } from './local-pty-utils'
+import { ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV } from '../pty/codex-default-home-shell-startup'
 
 function setPlatform(platform: NodeJS.Platform): () => void {
   const original = process.platform
@@ -106,19 +107,21 @@ describe('spawnShellWithFallback on Windows', () => {
       throw new Error(ACCESS_DENIED_5)
     }) as unknown as typeof pty.spawn
 
+    const env = { [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1' }
     const result = spawnShellWithFallback({
       shellPath: PWSH7,
       shellArgs: attempts[0].shellArgs,
       cols: 80,
       rows: 24,
       cwd: 'C:\\repo',
-      env: {},
+      env,
       ptySpawn,
       windowsFallbackAttempts: attempts
     })
 
     expect(result.shellPath).toBe(CMD)
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+    expect(env[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBeUndefined()
   })
 
   it('throws a descriptive error when every Windows fallback fails', () => {

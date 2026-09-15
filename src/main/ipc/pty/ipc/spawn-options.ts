@@ -2,6 +2,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
 import { CODEX_HOME_ENV_KEYS } from '../host-env/codex-home'
+import { ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV } from '../../../pty/codex-default-home-shell-startup'
 import {
   mergePtyEnvDeletions,
   removeCodexHomeDeletionRequests,
@@ -42,8 +43,18 @@ export async function buildPtyIpcSpawnOptions(
     ctx.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
     // Why: the persistent daemon compares its own merged CODEX_HOME pair;
     // main cannot safely decide ownership for a process it may not parent.
-    ctx.stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
+    ctx.stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : [],
+    // Why: a persistent daemon may inherit a stale one-shot marker from its
+    // own parent; only the explicit real-home lane may retain a fresh marker.
+    ctx.isDaemonHostSpawn && ctx.spawnEnv?.[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV] === undefined
+      ? [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]
+      : []
   )
+  if (ctx.spawnEnv?.[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV] !== undefined) {
+    ctx.combinedEnvToDelete = ctx.combinedEnvToDelete?.filter(
+      (key) => key !== ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV
+    )
+  }
   if (ctx.codexResumeHomeSelected) {
     ctx.combinedEnvToDelete = removeCodexHomeDeletionRequests(ctx.combinedEnvToDelete)
   }

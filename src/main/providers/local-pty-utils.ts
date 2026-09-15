@@ -7,6 +7,7 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from './macos-tcc-login-shell'
 import { formatLocalPtyEnvironmentDiag } from './working-directory-validation'
+import { scrubCodexDefaultHomeMarkerForWindowsShell } from '../pty/codex-default-home-shell-startup'
 
 export {
   formatLocalPtyEnvironmentDiag,
@@ -184,6 +185,7 @@ function spawnWindowsFallbackChain(
   // Skip the first entry: it is the primary that already failed above.
   for (const attempt of attempts.slice(1)) {
     try {
+      scrubCodexDefaultHomeMarkerForWindowsShell(env, attempt.shellPath)
       const proc = ptySpawn(attempt.shellPath, attempt.shellArgs, {
         name: termName,
         cols,

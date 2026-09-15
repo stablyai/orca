@@ -338,8 +338,9 @@ describe('CodexRuntimeHomeService', () => {
   })
 
   it('surfaces per-account rollouts for session discovery on the mirror lane', async () => {
-    // A Windows host keeps the shared system-default mirror, but its managed
-    // accounts still launch from their own homes and accumulate rollouts there.
+    // A host ACCOUNT SELECTION keeps the shared system-default mirror (not the
+    // platform -- the win32 lane block is gone), while its managed accounts
+    // still launch from their own homes and accumulate rollouts there.
     const home1 = createManagedAuth(
       testState.userDataDir,
       'account-1',
