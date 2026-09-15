@@ -15,6 +15,7 @@ import { TerminalAttachCanceledError } from './daemon-errors'
 import { rejectOnAbort } from './terminal-attach-cancellation'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
+import { shouldDeferStartupCommand } from './startup-command-load-gate'
 
 type TerminalHostSessionCreateDependencies = {
   sessions: Map<string, Session>
@@ -175,21 +176,45 @@ async function spawnAndPublishSession(
 
   const startupCommandWritten =
     Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs
+  // Why (#19828): recovery re-delivers the saved startup command right after a
+  // daemon restart; when the machine is still under heavy load (often because
+  // that same command is what died), re-running it immediately reproduces the
+  // crash and can loop. Opt-in gate defers delivery instead of executing it.
+  const loadGate = shouldDeferStartupCommand()
+  const commandWrittenAfterGate = startupCommandWritten && !loadGate.deferred
   // Why: without this, a missing command and a lost one log identically.
   // Length, never the text -- launches can carry credentials.
   try {
     deps.reportReadinessEvent?.('startup-command-delivery', {
       sessionId: opts.sessionId,
-      written: startupCommandWritten,
+      written: commandWrittenAfterGate,
       hasCommand: Boolean(opts.command),
       commandLength: opts.command?.length ?? 0,
       viaShellArgs: subprocess.startupCommandDeliveredInShellArgs === true,
-      queuedByShellReadyBarrier: shellReadySupported
+      queuedByShellReadyBarrier: shellReadySupported,
+      // Only meaningful when there was a command the gate actually held back;
+      // a no-command session must not read as "deferred by load".
+      ...(loadGate.deferred && startupCommandWritten ? { deferredByLoad: true } : {})
     })
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
-  if (startupCommandWritten && opts.command) {
+  if (startupCommandWritten && opts.command && loadGate.deferred) {
+    // Why event-only: Session.write forwards to the child's stdin, so writing
+    // a notice there would submit it to the shell as a command. The deferral
+    // is surfaced through the readiness stream (renderer-visible) instead.
+    try {
+      deps.reportReadinessEvent?.('startup-command-deferred-load', {
+        sessionId: opts.sessionId,
+        commandLength: opts.command.length,
+        load1: loadGate.load1,
+        limit: loadGate.limit,
+        cpuCount: loadGate.cpuCount
+      })
+    } catch {
+      // Diagnostics must never turn a live PTY into a failed create.
+    }
+  } else if (startupCommandWritten && opts.command) {
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.write(
