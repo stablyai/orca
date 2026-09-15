@@ -145,42 +145,18 @@ export function effectiveAllowedFlags(spec: CommandSpec): string[] {
   ]
 }
 
-export function isCommandGroup(commandPath: string[]): boolean {
-  return (
-    (commandPath.length === 1 &&
-      [
-        'account',
-        'artifacts',
-        'automations',
-        'project',
-        'host',
-        'repo',
-        'worktree',
-        'terminal',
-        'file',
-        'tab',
-        'cookie',
-        'intercept',
-        'capture',
-        'mouse',
-        'set',
-        'clipboard',
-        'dialog',
-        'storage',
-        'orchestration',
-        'computer',
-        'emulator',
-        'agent',
-        'environment',
-        'diagnostics',
-        'linear',
-        'skills',
-        'vm'
-      ].includes(commandPath[0])) ||
-    (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
-    (commandPath.length === 2 &&
-      commandPath[0] === 'storage' &&
-      ['local', 'session'].includes(commandPath[1]))
+export function isCommandGroup(specs: CommandSpec[], commandPath: string[]): boolean {
+  if (commandPath.length === 0) {
+    return false
+  }
+  return specs.some(
+    (spec) =>
+      spec.hidden !== true &&
+      specPaths(spec).some(
+        (candidate) =>
+          candidate.length > commandPath.length &&
+          matches(candidate.slice(0, commandPath.length), commandPath)
+      )
   )
 }
 

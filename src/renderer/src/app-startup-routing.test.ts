@@ -17,6 +17,8 @@ const ROOT_SURFACES_PATH = 'src/renderer/src/app-shell/AppRootSurfaces.tsx'
 const LAZY_MODAL_MOUNTS_PATH = 'src/renderer/src/app-shell/use-lazy-modal-mounts.ts'
 const SESSION_PERSISTENCE_PATH = 'src/renderer/src/app-shell/use-app-session-persistence.ts'
 const PERSISTED_UI_WRITER_PATH = 'src/renderer/src/app-shell/use-persisted-ui-writer.ts'
+const BROWSER_GUEST_SESSION_PATH =
+  'src/renderer/src/components/browser-pane/host-guest/browser-page-webview-guest-session.ts'
 
 describe('renderer startup runtime routing', () => {
   it('routes packaged terminal restore through the daemon adoption gate', () => {
@@ -583,6 +585,13 @@ describe('renderer startup runtime routing', () => {
     expect(appSource).toContain("import { Toaster } from '@/components/ui/sonner'")
     expect(appSource).not.toContain("import('@/components/ui/sonner')")
     expect(appSource).toContain('<Toaster closeButton')
+  })
+
+  it('mounts the browser identity migration notice from the app shell, not guest registration', () => {
+    expect(readSource(SHELL_SERVICES_PATH)).toContain('useBrowserIdentityMigrationNotice()')
+    expect(readSource(BROWSER_GUEST_SESSION_PATH)).not.toContain(
+      'showPendingBrowserUserAgentMigrationNotice'
+    )
   })
 
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {

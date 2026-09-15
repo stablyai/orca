@@ -1,6 +1,7 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
 import {
   getBrowserLinkRoutingDescription,
   getTerminalLinkActionsDescription,
@@ -287,6 +288,7 @@ export function getBrowserPaneSearchEntries(
           'network'
         )
       ]
-    }
+    },
+    getBrowserUserAgentSearchEntry()
   ]
 }

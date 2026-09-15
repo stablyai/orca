@@ -1,5 +1,5 @@
 import type { CommandSpec } from './args'
-import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
+import { findCommandSpec, isCommandGroup, matches, supportsBrowserPageFlag } from './args'
 import { unknownCommandData } from './command-suggestion'
 import { formatSkillsCommandFlagHelp } from './skills-command-flag-help'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
@@ -14,8 +14,8 @@ export function printHelp(specs: CommandSpec[], commandPath: string[] = []): voi
     return
   }
 
-  if (isCommandGroup(commandPath)) {
-    console.log(formatGroupHelp(specs, commandPath[0]))
+  if (isCommandGroup(specs, commandPath)) {
+    console.log(formatGroupHelp(specs, commandPath))
     return
   }
 
@@ -61,11 +61,18 @@ export function formatCommandHelp(spec: CommandSpec): string {
   return lines.join('\n')
 }
 
-export function formatGroupHelp(specs: CommandSpec[], group: string): string {
-  const groupSpecs = specs.filter((spec) => spec.path[0] === group && spec.hidden !== true)
+export function formatGroupHelp(specs: CommandSpec[], groupPath: string[]): string {
+  const group = groupPath.join(' ')
   const lines = [`orca ${group}`, '', `Usage: orca ${group} <command> [options]`, '', 'Commands:']
-  for (const spec of groupSpecs) {
-    lines.push(`  ${spec.path.slice(1).join(' ').padEnd(18)} ${spec.summary}`)
+  for (const spec of specs) {
+    if (
+      spec.hidden === true ||
+      spec.path.length <= groupPath.length ||
+      !matches(spec.path.slice(0, groupPath.length), groupPath)
+    ) {
+      continue
+    }
+    lines.push(`  ${spec.path.slice(groupPath.length).join(' ').padEnd(18)} ${spec.summary}`)
   }
   lines.push('', `Run \`orca ${group} <command> --help\` for command-specific usage.`)
   return lines.join('\n')
@@ -266,6 +273,14 @@ export function formatFlagHelp(flag: string): string {
     timezone: '--timezone <tz>       IANA timezone for the automation',
     enabled: '--enabled              Enable the automation',
     disabled: '--disabled             Disable the automation',
+    current: '--current              Use the current Orca worktree linked Linear issue',
+    comments: '--comments             Include threaded Linear comments',
+    children: '--children             Include recursive child issues',
+    depth: '--depth <n>            Child issue depth for --children/--full',
+    attachments: '--attachments          Include attachment metadata and URLs',
+    relations: '--relations            Include blocking, related, and duplicate links',
+    activity: '--activity             Include issue field-change history',
+    full: '--full                 Include all supported V1 issue context within caps',
     'reuse-session':
       '--reuse-session        Reuse the previous live session for existing-workspace runs',
     'fresh-session': '--fresh-session        Disable session reuse for future runs',
@@ -285,33 +300,7 @@ export function formatFlagHelp(flag: string): string {
     page: '--page <id>            Stable browser page id from `orca tab list --json`',
     profile: '--profile <id>        Browser profile id',
     'show-profile': '--show-profile        Include tab profile in text output',
-    'no-ua-spoof': "--no-ua-spoof         Keep Electron's native user agent",
     format: '--format <png|jpeg>    Screenshot image format'
-  }
-
-  if (flag === 'current') {
-    return '--current              Use the current Orca worktree linked Linear issue'
-  }
-  if (flag === 'comments') {
-    return '--comments             Include threaded Linear comments'
-  }
-  if (flag === 'children') {
-    return '--children             Include recursive child issues'
-  }
-  if (flag === 'depth') {
-    return '--depth <n>            Child issue depth for --children/--full'
-  }
-  if (flag === 'attachments') {
-    return '--attachments          Include attachment metadata and URLs'
-  }
-  if (flag === 'relations') {
-    return '--relations            Include blocking, related, and duplicate links'
-  }
-  if (flag === 'activity') {
-    return '--activity             Include issue field-change history'
-  }
-  if (flag === 'full') {
-    return '--full                 Include all supported V1 issue context within caps'
   }
 
   return helpByFlag[flag] ?? `--${flag}`

@@ -106,6 +106,12 @@
     },
     "remote": {
       "findUnavailable": "Find in page is not available while this page streams from the remote host."
+    },
+    "userAgentMigration": {
+      "degradedDescription": "An old browser identity choice could not be inspected. Choose Cleaned or Native in Browser settings; changes take effect after a restart.",
+      "description": "Per-profile user-agent settings were removed. Choose Cleaned or Native in Browser settings; changes take effect after a restart.",
+      "title": "Browser identity is now app-wide",
+      "openSettings": "Open Settings"
     }
   },
   "editor": {
@@ -182,6 +188,20 @@
       "remoteBrowsing": {
         "heading": "Remote browsing",
         "headingDescription": "Where remote workspace pages render, and where their network traffic leaves from."
+      },
+      "userAgent": {
+        "title": "Browser identity",
+        "description": "Choose the user agent for every browser profile and page. Native mode disables Google sign-in. Changes take effect after a restart.",
+        "remoteUnsupported": "Manage browser identity on the remote host with the Orca CLI.",
+        "loading": "Loading…",
+        "resetRequired": "Identity data must be reset explicitly before it can be changed.",
+        "resetRequiredCommand": "Reset it from the command line: orca browser identity set --mode <mode> --reset",
+        "optionClean": "Cleaned",
+        "optionCleanTooltip": "Removes Orca and Electron tokens to match imported Chrome sessions.",
+        "optionNative": "Native",
+        "optionNativeTooltip": "Keeps Electron's built-in identity for sites that reject the cleaned identity. Google sign-in is unavailable in Native mode.",
+        "restartRequired": "Restart required",
+        "unavailable": "Browser identity is unavailable."
       }
     }
   },
@@ -9255,6 +9275,13 @@
               "tunnel": "tunnel",
               "routing": "routing",
               "network": "network"
+            },
+            "userAgent": {
+              "identity": "identity",
+              "userAgent": "user agent",
+              "native": "native",
+              "cleaned": "cleaned",
+              "restart": "restart"
             }
           },
           "use": {

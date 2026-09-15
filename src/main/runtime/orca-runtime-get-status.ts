@@ -4,10 +4,12 @@ import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
+import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
 import type { RuntimeCapability } from '../../shared/protocol-version'
 import {
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
+  BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
@@ -74,6 +76,12 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     )
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
+    }
+    // Why not a static capability: the identity is this host's own process-wide choice, fixed
+    // before ready. A host that never initialized the store has no identity to report or change,
+    // so advertising it would point clients at a method that can only throw.
+    if (isBrowserIdentityModeStoreInitialized()) {
+      capabilities.push(BROWSER_IDENTITY_RUNTIME_CAPABILITY)
     }
     // Why: certificate proceed is owned by the browser-hosting process for both
     // desktop webviews and offscreen pages. Advertise whenever either backend

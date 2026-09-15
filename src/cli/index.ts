@@ -90,7 +90,7 @@ export async function main(
     if (
       helpPath.length > 0 &&
       !findCommandSpec(COMMAND_SPECS, helpPath) &&
-      !isCommandGroup(helpPath)
+      !isCommandGroup(COMMAND_SPECS, helpPath)
     ) {
       process.exitCode = 1
     }

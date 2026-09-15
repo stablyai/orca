@@ -7,6 +7,7 @@ import {
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
+import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 
 export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifecycle {
   // Why: guests are isolated from Orca's preload bridge, so main owns the devtools escape hatch after a tab→guest lookup.
@@ -163,13 +164,9 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
           enabled: override.mobile,
           maxTouchPoints: override.mobile ? 5 : 0
         })
-        // Why: viewport sizing must not override a profile's explicit native-UA identity.
-        if (this.userAgentModeByPageId.get(browserTabId) !== 'native') {
-          // Navigation must see the preset intent while the final CDP command is in flight.
-          this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
-          // Why: same sender as the navigation path, so both resolve the tab's host identically.
-          await this.sendViewportUserAgentOverride(guest, override.mobile)
-        }
+        // Navigation must see the preset while the final CDP write is in flight.
+        this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
+        await this.sendViewportUserAgentOverride(guest, override.mobile)
       } else {
         await dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
         if (this.webContentsIdByTabId.get(browserTabId) === webContentsId) {
@@ -188,11 +185,16 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         try {
           if (this.authUserAgentOverrideStateByGuestId.has(guest.id)) {
             const url = this.resolveTabNavigationUrl(guest)
+            const identity = getBrowserProcessUserAgentIdentity()
+            // Firefox is delivered per-target and cannot reach workers; keep it clean-only to preserve
+            // one coherent identity per mode instead of pairing a Firefox document with native workers.
             const restored = await this.applyAuthUserAgentOverrideOverCdp(
               guest,
               false,
               url,
-              isGoogleAuthUrl(url) ? googleAuthUserAgent() : guest.session.getUserAgent()
+              identity.mode === 'clean' && isGoogleAuthUrl(url)
+                ? googleAuthUserAgent()
+                : identity.userAgent
             )
             if (!restored) {
               throw new Error('Failed to preserve auth user agent')

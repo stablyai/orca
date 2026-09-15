@@ -17,7 +17,6 @@ import type { PageInitiatedTabBudget } from './browser-page-initiated-tab-budget
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,
-  BrowserSessionUserAgentMode,
   BrowserViewportOverride
 } from '../../shared/browser-workspace-types'
 import type { BrowserAnnotationViewportBridgeOptions } from '../../shared/browser-annotation-viewport-bridge'
@@ -102,7 +101,6 @@ export type BrowserGuestRegistration = {
   workspaceId?: string
   worktreeId?: string
   sessionProfileId?: string | null
-  userAgentMode?: BrowserSessionUserAgentMode
   webContentsId: number
   rendererWebContentsId: number
 }
@@ -221,7 +219,6 @@ export type {
   BrowserAnnotationViewportBridgeOptions,
   BrowserCertificateFailure,
   BrowserLoadError,
-  BrowserSessionUserAgentMode,
   BrowserViewportOverride,
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,

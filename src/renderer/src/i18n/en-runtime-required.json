@@ -324,6 +324,16 @@
           "BrowserToolbarMenu": {
             "6aa42813e4": "Imported {{value0}} cookies from {{value1}}{{value2}}."
           }
+        },
+        "profile": {
+          "user": {
+            "agent": {
+              "option": {
+                "04af3dc12b": "Use unmodified user agent",
+                "5bf47a3c91": "May improve Google sign-in, but can reduce compatibility with bot-protected sites."
+              }
+            }
+          }
         }
       },
       "contextual": {
@@ -1129,6 +1139,7 @@
         },
         "BrowserProfileRow": {
           "7df818977e": "From",
+          "b5c0479e21": "Unmodified user agent",
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}."
         },
         "BrowserUsePane": {
