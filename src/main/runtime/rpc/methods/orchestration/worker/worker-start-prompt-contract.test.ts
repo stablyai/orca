@@ -85,6 +85,7 @@ async function createPromptContractHarness(
     }
   }, 'codex')
   const { runtime, handle } = fixture
+  runtime.onPtyData('pty-prompt', '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m', Date.now())
   runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
 
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'orca-worker-prompt-contract-'))
@@ -379,6 +380,7 @@ describe('orchestration worker-start prompt contract', () => {
   it('does not attribute output from the old busy turn to a queued prompt', async () => {
     vi.useFakeTimers()
     const { runtime, handle } = await createAgentPromptSubmissionRuntime(() => undefined, 'codex')
+    runtime.onPtyData('pty-prompt', '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m', Date.now())
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
     const pending = runtime.sendTerminalAgentPrompt(handle, 'queued prompt', {
       acceptQueued: true,

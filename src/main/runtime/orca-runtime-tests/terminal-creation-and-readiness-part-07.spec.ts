@@ -557,6 +557,9 @@ describe('OrcaRuntimeService', () => {
         const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
           launchAgent: agent
         })
+        if (agent === 'codex') {
+          runtime.onPtyData('pty-bg', '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m', Date.now())
+        }
         const assertAuthority = vi.fn()
 
         const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
