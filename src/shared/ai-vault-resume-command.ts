@@ -207,6 +207,7 @@ function buildAgentResumeInvocation(
     // required — resuming from another directory is rejected by the CLI.
     // falls through
     case 'kimi':
+    case 'zeroclaw':
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
