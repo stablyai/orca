@@ -84,7 +84,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  --worktree <selector>     Worktree selector such as identity:<identity>, id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   '  --terminal <handle>       Runtime-issued terminal handle returned by `orca terminal list --json`',
   '  --parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
-  '  --no-parent               Force no parent lineage for unrelated worktree creation/update',
+  '  --no-parent               Make the worktree its own root instead of a child of the inferred parent',
   '',
   'Terminal Send Options:',
   '  --text <text>             Text to send to the terminal',

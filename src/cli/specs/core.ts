@@ -116,9 +116,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
       'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
       '--host runtime:<environment-id> creates on that paired Orca server; use the id from `orca environment list`, not the environment name.',
-      'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
-      'Use --no-parent when the new worktree should be independent of the current context.',
-      '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
+      'Pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to group the new worktree under an existing one, or --no-parent to make it its own root. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
+      'Lineage is the sidebar grouping: a child travels with its parent through review, sleep, and status moves, and a top-level worktree is its own row. Deleting a parent in the Orca UI deletes its children with it; `orca worktree rm` removes only the worktree you name.',
+      'With neither flag, Orca infers a parent from the calling context and files the new worktree as its child; that follows from where the command ran, not from what the new work is about.',
+      'Lineage and Git base are independent: --no-parent never changes the base, and --base-branch never changes lineage. Omit --base-branch to use the repo default base, or pass the default base ref explicitly.',
       'By default this creates the worktree and its first terminal without switching the active Orca view.',
       'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
       'With --agent --json, read the new agent handle from result.agentTerminalHandle; older runtimes return only result.startupTerminal.handle, and may return neither for folder-based repos.',
@@ -131,10 +132,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca worktree create --repo id:<repoId> --name related-task --json',
       'orca worktree create --project github:stablyai/orca --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --name benchmark --json',
       'orca worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',
-      'orca worktree create --repo id:<repoId> --name agent-task --agent codex --prompt "hi" --json',
+      'orca worktree create --repo id:<repoId> --name agent-task --parent-worktree active --agent codex --prompt "hi" --json',
       'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
       'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
-      'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
+      'orca worktree create --repo id:<repoId> --name top-level-task --no-parent --json'
     ]
   },
   {
