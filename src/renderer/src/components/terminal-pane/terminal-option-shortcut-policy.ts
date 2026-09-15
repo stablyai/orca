@@ -66,6 +66,33 @@ function isLayoutComposedAsciiCharacter(
   )
 }
 
+// Non-ASCII twin of the ASCII split: composed Latin letters pass through as
+// text. In-range but TUI-bound (µ × ÷ ƒ) stay encoded.
+function isLayoutComposedLatinLetter(
+  key: string,
+  characterWithoutOption: string | undefined
+): boolean {
+  if (key.length !== 1) {
+    return false
+  }
+  if (
+    characterWithoutOption === undefined ||
+    key.toLowerCase() === characterWithoutOption.toLowerCase()
+  ) {
+    return false
+  }
+  const codePoint = key.codePointAt(0) as number
+  if (codePoint === 0xb5 || codePoint === 0xd7 || codePoint === 0xf7 || codePoint === 0x192) {
+    return false
+  }
+  return (
+    (codePoint >= 0xc0 && codePoint <= 0xff) ||
+    (codePoint >= 0x100 && codePoint <= 0x17f) ||
+    (codePoint >= 0x180 && codePoint <= 0x24f) ||
+    (codePoint >= 0x1e00 && codePoint <= 0x1eff)
+  )
+}
+
 function isImeOwnedKey(event: TerminalOptionShortcutEvent): boolean {
   return (
     event.isComposing === true ||
@@ -131,7 +158,8 @@ export function resolveTerminalOptionShortcutAction(
       !kittyReportsAllKeysAsEscapeCodes(flags) &&
       canSendComposedText &&
       !isNumpad &&
-      isLayoutComposedAsciiCharacter(event.key, characterWithoutOption)
+      (isLayoutComposedAsciiCharacter(event.key, characterWithoutOption) ||
+        isLayoutComposedLatinLetter(event.key, characterWithoutOption))
     ) {
       return { type: 'sendInput', data: event.key, optionKittyRelease: createRelease(flags) }
     }

@@ -137,8 +137,8 @@ describe('Option-composed characters in kitty keyboard panes', () => {
   })
 
   it('still reports non-ASCII Option chords as kitty CSI-u hotkeys', () => {
-    // #8031: compose layouts must keep reaching TUI Option hotkeys, and every
-    // glyph those layouts compose on a bound key is non-ASCII.
+    // #8031: compose layouts must keep reaching TUI Option hotkeys for glyphs
+    // that are not everyday typing text. Latin letters pass through instead (#20495).
     expect(resolveKitty(event({ key: 'ƒ', code: 'KeyF', altKey: true }))).toEqual({
       type: 'sendInput',
       data: '\x1b[102;3u'
@@ -149,7 +149,7 @@ describe('Option-composed characters in kitty keyboard panes', () => {
     })
     expect(resolveKitty(event({ key: 'å', code: 'KeyA', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[97;3u'
+      data: 'å'
     })
   })
 
