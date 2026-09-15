@@ -11,7 +11,7 @@ type StructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSession
  *
  * The preamble itself is identical for both: a worker is taught the same verbs whichever mode it
  * runs in, and only the delivery differs — a PTY write returns a queued/accepted receipt, while a
- * structured turn either is acknowledged or throws.
+ * structured turn either is admitted or throws.
  */
 export async function deliverWorkerDispatchPreamble(args: {
   runtime: OrcaRuntimeService

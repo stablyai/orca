@@ -92,7 +92,8 @@ function freezeRecursively(value: unknown, seen: WeakSet<object>): void {
   }
   seen.add(value)
   for (const key of Reflect.ownKeys(value)) {
-    freezeRecursively(Reflect.get(value, key), seen)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `value` is an object, so indexed access preserves prototype lookup and getter receiver semantics.
+    freezeRecursively((value as Record<PropertyKey, unknown>)[key], seen)
   }
   Object.freeze(value)
 }

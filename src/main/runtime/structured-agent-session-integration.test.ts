@@ -37,6 +37,7 @@ import { createTrackedJournalOpener } from '../native-chat/agent-session-journal
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
+import { expectStructuredWorkerAdmission } from './structured-worker-admission.test-support'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
@@ -431,6 +432,12 @@ describe('a structured codex session over agentSession.*', () => {
         current: { model: 'gpt-live' }
       }
     })
+  })
+
+  it('admits a fresh worker preamble before the provider echo without resending', async () => {
+    await ok('agentSession.create', createIntentParams())
+    await expectStructuredWorkerAdmission(SESSION)
+    expect(codex.live().calls.filter((call) => call.method === 'turn/start')).toHaveLength(1)
   })
 
   it('dispatches and streams a plain first send from a fresh session', async () => {

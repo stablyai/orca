@@ -23,6 +23,7 @@ export type StructuredPointerRetainReason =
   | 'session-not-attached'
   | 'turn-unsettled'
   | 'awaiting-human'
+  | 'dispatch-pending'
   | 'dispatch-rejected'
   | 'dispatch-unknown'
 
@@ -31,7 +32,7 @@ export type StructuredPointerDecision =
   | { deliver: false; retain: StructuredPointerRetainReason }
 
 /** The dispatch states both provider adapters converge on. */
-export type StructuredDispatchState = 'accepted' | 'rejected' | 'unknown'
+export type StructuredDispatchState = 'pending' | 'accepted' | 'rejected' | 'unknown'
 
 /**
  * A refusal names an owner this pointer may be redirected to only when that
@@ -128,9 +129,8 @@ export function decideStructuredSessionPointerDelivery(input: {
 /**
  * Only an accepted dispatch may mark mail delivered.
  *
- * `unknown` covers a dead provider child and a slow acknowledgement alike — the
- * adapters cannot tell them apart — so it must retain. Treating it as delivered
- * would drop mail whenever a child died mid-send.
+ * Pending admission awaits provider acceptance; unknown delivery may never settle.
+ * Both retain the mail and its operation ID for journal-driven reconciliation.
  */
 export function structuredDispatchDelivered(state: StructuredDispatchState): boolean {
   return state === 'accepted'
@@ -139,7 +139,11 @@ export function structuredDispatchDelivered(state: StructuredDispatchState): boo
 export function retainReasonForDispatch(
   state: Exclude<StructuredDispatchState, 'accepted'>
 ): StructuredPointerRetainReason {
-  return state === 'rejected' ? 'dispatch-rejected' : 'dispatch-unknown'
+  return state === 'pending'
+    ? 'dispatch-pending'
+    : state === 'rejected'
+      ? 'dispatch-rejected'
+      : 'dispatch-unknown'
 }
 
 /**

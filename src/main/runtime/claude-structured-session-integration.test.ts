@@ -27,6 +27,7 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { RpcDispatcher } from './rpc/dispatcher'
+import { expectStructuredWorkerAdmission } from './structured-worker-admission.test-support'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
@@ -530,6 +531,15 @@ describe('a structured Claude session over agentSession.*', () => {
     // so the recovery barrier — not a wall-clock poll — is what says it landed.
     await waitForStructuredAgentSessionRecovery()
     expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
+  })
+
+  it('admits a fresh worker preamble before the provider echo without resending', async () => {
+    await ok('agentSession.create', createIntentParams())
+    claude.live().send = async (message) => {
+      claude.live().sent.push(message)
+    }
+    await expectStructuredWorkerAdmission(SESSION)
+    expect(claude.live().sent.filter((message) => message.type === 'user')).toHaveLength(1)
   })
 
   it('creates, sends, streams, approves, interrupts, and resumes from the chain head', async () => {

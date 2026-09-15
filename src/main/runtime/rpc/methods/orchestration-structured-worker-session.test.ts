@@ -234,10 +234,8 @@ describe('structured worker dispatch preamble', () => {
   const send = (host: never) =>
     sendStructuredWorkerPreamble({ host, sessionId: 's1', dispatchId: 'd1', preamble: 'spec' })
 
-  it('reports the preamble delivered only on an accepted submission', async () => {
-    await expect(
-      send(hostWithSubmission({ dispatchState: 'accepted', reason: null }))
-    ).resolves.toBeUndefined()
+  it.each(['pending', 'accepted'])('admits a %s preamble', async (dispatchState) => {
+    await expect(send(hostWithSubmission({ dispatchState, reason: null }))).resolves.toBeUndefined()
   })
 
   it('never claims delivery for a submission the provider never acknowledged', async () => {
@@ -245,7 +243,7 @@ describe('structured worker dispatch preamble', () => {
     // into `unknown`, and `performSend` still returns ok. Reporting that as `dispatch_input:
     // accepted` marks the worker ready with no task, and the coordinator blocks in
     // `check --wait --types worker_done` until it times out.
-    for (const dispatchState of ['unknown', 'pending'] as const) {
+    for (const dispatchState of ['unknown', 'future-state'] as const) {
       const error = await send(
         hostWithSubmission({ dispatchState, reason: 'provider child exited' })
       ).catch((thrown: unknown) => thrown)

@@ -80,9 +80,7 @@ describe('structured mailbox pointer host', () => {
   it.each([
     ['accepted', 'accepted'],
     ['rejected', 'rejected'],
-    // Neither is an acknowledgement, and only `accepted` may consume mail: both have to reach the
-    // caller as `unknown` so the pointer is retained for the next journal edge.
-    ['pending', 'unknown'],
+    ['pending', 'pending'],
     ['unknown', 'unknown']
   ])('maps a %s submission to %s', async (dispatchState, expected) => {
     const send = vi.fn(

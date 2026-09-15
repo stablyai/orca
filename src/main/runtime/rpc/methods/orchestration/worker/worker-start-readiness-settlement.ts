@@ -71,10 +71,9 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   // The write above was accepted without waiting on provider hooks; now demand the positive
   // evidence the receipt claims is observable. A worker whose turn never starts must not be
   // reported ready — a wedged agent and a working one looked identical before this gate.
-  // A structured preamble send is acknowledged by the provider or throws, so it is already
-  // positive evidence.
+  // Structured sends prove transport admission; this path has no correlated turn-start observer.
   const turnStart: WorkerTurnStartObservation = structuredSession
-    ? { verdict: 'observed' }
+    ? { verdict: 'unsupported' }
     : await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery })
   const deliveredPrompt = turnStart.prompt ?? promptDelivery
   monitorWorkerSetup({

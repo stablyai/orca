@@ -161,6 +161,7 @@ describe('dispatch outcome classification', () => {
   it('marks mail delivered only on an accepted dispatch', () => {
     expect(structuredDispatchDelivered('accepted')).toBe(true)
     expect(structuredDispatchDelivered('rejected')).toBe(false)
+    expect(structuredDispatchDelivered('pending')).toBe(false)
   })
 
   it('does not treat unknown as delivered, because a dead child settles unknown', () => {
@@ -168,6 +169,7 @@ describe('dispatch outcome classification', () => {
   })
 
   it('names the retain reason for each non-accepted dispatch', () => {
+    expect(retainReasonForDispatch('pending')).toBe('dispatch-pending')
     expect(retainReasonForDispatch('rejected')).toBe('dispatch-rejected')
     expect(retainReasonForDispatch('unknown')).toBe('dispatch-unknown')
   })

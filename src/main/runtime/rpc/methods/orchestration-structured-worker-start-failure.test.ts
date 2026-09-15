@@ -10,6 +10,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
+import { isUnknownWorkerStartOutcome } from './orchestration/worker/worker-topology'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { structuredWorkerIdentities } from '../../structured-worker-identity'
 
@@ -19,16 +21,9 @@ vi.mock('./structured-agent-session-create', () => ({
     value: { sessionId: args.envelope.sessionId }
   })
 }))
-vi.mock('./orchestration-structured-worker-session', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  // The realistic post-create failure: the session is live, the preamble turn is not acknowledged.
-  sendStructuredWorkerPreamble: async () => {
-    throw new Error('The dispatch preamble was rejected: no capacity')
-  }
-}))
 vi.mock('./orchestration/worker/worker-start-validation', () => ({
-  prepareLocalWorkerStart: () => ({
-    agent: 'claude',
+  prepareLocalWorkerStart: (args: { params: { agent: string } }) => ({
+    agent: args.params.agent,
     launch: { receipt: { requested: null, effective: null }, preferences: undefined }
   })
 }))
@@ -37,9 +32,10 @@ vi.mock('./orchestration/worker/worker-setup-gate', () => ({
   persistWorkerReadinessStage: () => {},
   persistWorkerSetupWaitOutcome: () => {}
 }))
-vi.mock('./orchestration/worker/worker-start-receipt', () => ({
-  failWorkerStartWithReceipt: (args: { failedStage: string }) => ({
-    state: 'failed',
+vi.mock('./orchestration/worker/worker-start-receipt', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  failWorkerStartWithReceipt: (args: { failedStage: string; error: unknown }) => ({
+    state: isUnknownWorkerStartOutcome(args.error, args.failedStage) ? 'outcome_unknown' : 'failed',
     stage: args.failedStage
   })
 }))
@@ -52,10 +48,17 @@ const { startLocalWorker } = await import('./orchestration/worker/local-worker-s
 
 const WORKTREE = 'wt_1'
 
-function installHost() {
+function installHost(dispatchState = 'rejected') {
   const closed: string[] = []
   const visibility: [string, boolean][] = []
-  setStructuredAgentSessionHost({
+  const send = vi.fn(async () => ({
+    ok: true,
+    value: { submission: { dispatchState, reason: 'provider outcome' } }
+  }))
+  const release = vi.fn()
+  const unsubscribe = vi.fn()
+  const host = {
+    send,
     setSessionTabVisibility: async (sessionId: string, visible: boolean) => {
       visibility.push([sessionId, visible])
     },
@@ -64,8 +67,8 @@ function installHost() {
     },
     hasSession: () => true,
     hold: async () => {},
-    release: () => {},
-    subscribe: () => () => {},
+    release,
+    subscribe: () => unsubscribe,
     deps: {
       store: {
         getRecord: () => ({
@@ -79,8 +82,10 @@ function installHost() {
         })
       }
     }
-  } as never)
-  return { closed, visibility }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture implements every host member used by structured worker creation, dispatch and cleanup.
+  setStructuredAgentSessionHost(host as never)
+  return { closed, visibility, send, release, unsubscribe }
 }
 
 function fakes() {
@@ -104,14 +109,18 @@ function fakes() {
     getTerminalPaneKey: vi.fn(() => 'pane_1'),
     retireStructuredAgentSessionTabFromSnapshot
   } as unknown as OrcaRuntimeService
-  const db = {
+  const dbFixture = {
     createStartingWorkerDispatch: () => ({
       dispatch: { id: 'd_fail', depth: 0 },
       task: { id: 't1', spec: 'do the thing' }
     }),
     recordWorkerStage: () => {},
-    prepareStartingWorkerAuthority: () => 'capability'
-  } as unknown as OrchestrationDb
+    prepareStartingWorkerAuthority: () => 'capability',
+    getWorkerDispatch: () => ({ state: 'starting' }),
+    markWorkerDispatchReady: () => ({ state: 'ready', stage: 'ready' })
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture implements the database calls reached by local worker start; receipt persistence is mocked.
+  const db = dbFixture as unknown as OrchestrationDb
   return { runtime, db, retireStructuredAgentSessionTabFromSnapshot }
 }
 
@@ -148,4 +157,54 @@ describe('a structured worker-start that fails after the session exists', () => 
     expect(host.visibility).toContainEqual([sessionId, false])
     expect(retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledWith(sessionId)
   })
+})
+
+describe.each(['codex', 'claude'] as const)('%s structured worker admission', (agent) => {
+  it.each(['pending', 'accepted', 'rejected', 'unknown'])(
+    'preserves readiness and cleanup for %s',
+    async (dispatchState) => {
+      const host = installHost(dispatchState)
+      const { runtime, db, retireStructuredAgentSessionTabFromSnapshot } = fakes()
+      try {
+        const receipt = await startLocalWorker({
+          params: { from: 'term_c', timeoutMs: 1_000, agent },
+          mode: {
+            mode: 'structured',
+            preferred: 'structured',
+            reason: 'user_default',
+            detail: 'structured by default'
+          },
+          runtime,
+          db,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only id is read by this start fixture.
+          run: { id: 'run_1' } as never,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only id and spec are read by this start fixture.
+          existingTask: { id: 't1', spec: 'do the thing' } as never,
+          coordinatorPane: null,
+          orchestrationMutation: undefined
+        })
+        expect(host.send).toHaveBeenCalledTimes(1)
+        if (dispatchState === 'pending' || dispatchState === 'accepted') {
+          expect(receipt).toMatchObject({ state: 'ready', turnStart: 'unsupported' })
+          expect(host.closed).toHaveLength(0)
+          expect(host.release).not.toHaveBeenCalled()
+          expect(host.unsubscribe).not.toHaveBeenCalled()
+          expect(retireStructuredAgentSessionTabFromSnapshot).not.toHaveBeenCalled()
+        } else {
+          expect(receipt).toMatchObject({
+            state: dispatchState === 'unknown' ? 'outcome_unknown' : 'failed',
+            stage: 'dispatch_input'
+          })
+          expect(host.closed).toHaveLength(1)
+          expect(host.release).toHaveBeenCalledTimes(1)
+          expect(host.unsubscribe).toHaveBeenCalledTimes(1)
+          expect(retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledTimes(1)
+        }
+      } finally {
+        releaseStructuredWorkerSession('d_fail', runtime)
+      }
+      expect(host.release).toHaveBeenCalledTimes(1)
+      expect(host.unsubscribe).toHaveBeenCalledTimes(1)
+    }
+  )
 })

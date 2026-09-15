@@ -74,7 +74,7 @@ function attentionJournal(): AgentJournalRenderItem[] {
 
 function harness(options: {
   journal: AgentJournalRenderItem[] | null
-  dispatchState?: 'accepted' | 'rejected' | 'unknown'
+  dispatchState?: 'pending' | 'accepted' | 'rejected' | 'unknown'
   refusal?: AgentSessionPtyWriteRefusal
   /** The coordinator of this worker's Run is mid-batch: it checked and has not acked yet. */
   outstandingRunDelivery?: boolean
@@ -267,6 +267,27 @@ describe('structured mailbox pointer delivery', () => {
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).not.toHaveBeenCalled()
+  })
+
+  it('retains admitted mail and replays its operation until provider acceptance', async () => {
+    const { delivery, send, markAsDelivered, stored } = harness({
+      journal: idleJournal(),
+      dispatchState: 'pending'
+    })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(markAsDelivered).not.toHaveBeenCalled()
+    const first = send.mock.calls[0]![0].operationId
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send.mock.calls[1]![0].operationId).toBe(first)
+    expect(markAsDelivered).not.toHaveBeenCalled()
+    send.mockResolvedValueOnce({ kind: 'sent', state: 'accepted' })
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send.mock.calls[2]![0].operationId).toBe(first)
+    expect(markAsDelivered).toHaveBeenCalledExactlyOnceWith(['m1'])
+    expect(stored.size).toBe(0)
   })
 
   it('retries a rejected nudge on the next journal edge', async () => {

@@ -94,11 +94,12 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           ? { kind: 'unattached' }
           : { kind: 'sent', state: 'rejected' }
       }
-      // `pending` is not yet an acknowledgement; only `accepted` may consume mail.
+      // Mail consumption still requires provider acceptance, beyond transport admission.
       const state = result.value.submission.dispatchState
       return {
         kind: 'sent',
-        state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'
+        state:
+          state === 'pending' || state === 'accepted' || state === 'rejected' ? state : 'unknown'
       }
     }
   }

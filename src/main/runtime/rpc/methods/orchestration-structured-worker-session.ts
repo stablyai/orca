@@ -245,7 +245,8 @@ export async function sendStructuredWorkerPreamble(args: {
     throw new Error(`The dispatch preamble was refused: ${result.refusal.message}`)
   }
   const submission = result.value.submission
-  if (submission.dispatchState === 'accepted') {
+  // The host returns pending after transport admission; provider identity arrives through the journal.
+  if (submission.dispatchState === 'pending' || submission.dispatchState === 'accepted') {
     return
   }
   if (submission.dispatchState === 'rejected') {
@@ -259,10 +260,7 @@ export async function sendStructuredWorkerPreamble(args: {
       `The dispatch preamble was not delivered: ${submission.reason ?? 'no reason given'}.`
     )
   }
-  // Only `accepted` is an acknowledgement — the same rule the mail lane already applies. A thrown
-  // adapter call settles as `unknown`, which is indistinguishable from a lost reply, so the start
-  // may claim neither delivery nor failure: `operation_unknown` is what turns this into the
-  // `outcome_unknown` receipt whose nextCommands send the coordinator to look.
+  // A lost reply cannot prove admission or non-delivery; never retry the preamble here.
   throw new OrchestrationError(
     'operation_unknown',
     `The dispatch preamble was submitted but not acknowledged (${submission.dispatchState}): ${submission.reason ?? 'no reason given'}.`
