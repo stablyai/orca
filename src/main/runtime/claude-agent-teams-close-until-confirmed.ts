@@ -27,7 +27,11 @@ export async function closeUntilConfirmed(
       lastClose = close
     } catch (error) {
       if (error instanceof Error && error.message === 'terminal_handle_stale') {
-        return { confirmed: true }
+        if (lastClose) {
+          return { confirmed: false, close: lastClose }
+        }
+        throw error
+      }
       }
       throw error
     }
