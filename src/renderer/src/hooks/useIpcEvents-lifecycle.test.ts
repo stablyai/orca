@@ -463,7 +463,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     expect(
       [...listeners.values()].every((records) => records.filter((item) => item.active).length === 1)
     ).toBe(true)
-    expect(storeSubscriptions.filter((item) => item.active)).toHaveLength(2)
+    expect(storeSubscriptions.filter((item) => item.active)).toHaveLength(3)
 
     firstCleanup()
     const ipcCleanupOrder = cleanupOrder
@@ -475,7 +475,9 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
       'mobile.disposeHydration',
       'store.unsubscribe.0',
       'runtimeStore.unsubscribe',
-      'store.unsubscribe.1',
+      // Index 1 is the usage-owner subscription, disposed later with the rest
+      // of the IPC unsubscribers; the agent-status store is now index 2.
+      'store.unsubscribe.2',
       'agentStore.unsubscribe'
     ])
     expect(cleanupOrder.indexOf('runtimeEnvironment.unsubscribe')).toBeGreaterThan(
@@ -510,7 +512,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     expect(
       [...listeners.values()].every((records) => records.filter((item) => item.active).length === 1)
     ).toBe(true)
-    expect(storeSubscriptions.filter((item) => item.active)).toHaveLength(2)
+    expect(storeSubscriptions.filter((item) => item.active)).toHaveLength(3)
 
     secondCleanup()
     expect([...listeners.values()].every((records) => records.every((item) => !item.active))).toBe(

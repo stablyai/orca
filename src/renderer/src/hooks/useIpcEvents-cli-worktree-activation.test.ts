@@ -69,6 +69,10 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          setRateLimitUsageOwner: vi.fn(),
+          applyOwnedRateLimits: vi.fn(),
+          rateLimitUsageByHost: {},
+          runtimeEnvironments: [],
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
@@ -287,8 +291,12 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     }
     let localWorktreesOnChanged: ((data: { repoId: string }) => void) | undefined
     let runtimeOnResponse: ((response: unknown) => void) | undefined
-    const runtimeSubscribe = vi.fn(async (_args, callbacks) => {
-      runtimeOnResponse = (callbacks as { onResponse: (response: unknown) => void }).onResponse
+    const runtimeSubscribe = vi.fn(async (args, callbacks) => {
+      // The usage-owner stream subscribes here too; keep this capture on the
+      // worktree stream this test drives.
+      if ((args as { method?: string })?.method !== 'accounts.subscribe') {
+        runtimeOnResponse = (callbacks as { onResponse: (response: unknown) => void }).onResponse
+      }
       return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     })
 
@@ -340,6 +348,10 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          setRateLimitUsageOwner: vi.fn(),
+          applyOwnedRateLimits: vi.fn(),
+          rateLimitUsageByHost: {},
+          runtimeEnvironments: [],
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),

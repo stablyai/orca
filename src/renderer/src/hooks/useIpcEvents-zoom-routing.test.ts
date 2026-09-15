@@ -153,7 +153,11 @@ describe('useIpcEvents zoom routing', () => {
           setActiveWorktree: vi.fn(),
           revealWorktreeInSidebar: vi.fn(),
           setIsFullScreen: vi.fn(),
-          setRateLimitsFromPush: vi.fn()
+          setRateLimitsFromPush: vi.fn(),
+          setRateLimitUsageOwner: vi.fn(),
+          applyOwnedRateLimits: vi.fn(),
+          rateLimitUsageByHost: {},
+          runtimeEnvironments: []
         })
       }
     }))
@@ -299,7 +303,11 @@ describe('useIpcEvents zoom routing', () => {
           setActiveWorktree: vi.fn(),
           revealWorktreeInSidebar: vi.fn(),
           setIsFullScreen: vi.fn(),
-          setRateLimitsFromPush: vi.fn()
+          setRateLimitsFromPush: vi.fn(),
+          setRateLimitUsageOwner: vi.fn(),
+          applyOwnedRateLimits: vi.fn(),
+          rateLimitUsageByHost: {},
+          runtimeEnvironments: []
         })
       }
     }))

@@ -36,6 +36,9 @@ async function mountIpcEvents(): Promise<Mounted> {
       subscribe: vi.fn(() => () => {}),
       getState: () => ({
         settings: { activeRuntimeEnvironmentId: null },
+        setRateLimitUsageOwner: vi.fn(),
+        applyOwnedRateLimits: vi.fn(),
+        rateLimitUsageByHost: {},
         repos: [],
         worktreesByRepo: {},
         folderWorkspaces: [],
