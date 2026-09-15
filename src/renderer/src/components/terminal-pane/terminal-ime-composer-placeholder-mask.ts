@@ -8,6 +8,7 @@ import {
 
 export const TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS = 'orca-ime-composer-placeholder'
 
+/** Reject malformed lifecycle events so they cannot acquire or clear composition ownership. */
 function compositionSessionId(event: Event): number | null {
   if (!(event instanceof CustomEvent)) {
     return null
@@ -16,6 +17,7 @@ function compositionSessionId(event: Event): number | null {
   return Number.isSafeInteger(id) && Number(id) > 0 ? Number(id) : null
 }
 
+/** Claim placeholder masking before xterm paints each remainder; disposal releases composition ownership. */
 export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): IDisposable {
   const element = terminal.element
   if (!element) {
@@ -53,24 +55,27 @@ export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): I
     activeSessionId = null
     syncPlaceholderOwnership()
   }
+  /** xterm requests the remainder during repaint, before deciding whether to draw its mask. */
+  const handleRemainder = (event: Event): void => {
+    syncPlaceholderOwnership()
+    if (element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)) {
+      event.preventDefault()
+    }
+  }
 
+  element.addEventListener('xterm-composition-remainder', handleRemainder)
   element.addEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, handleSessionStart)
   element.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, handleSessionEnd)
   element.addEventListener('blur', handleBlur, true)
-  const renderDisposable = terminal.onRender(() => {
-    if (activeSessionId !== null) {
-      syncPlaceholderOwnership()
-    }
-  })
 
   return {
     dispose: () => {
       activeSessionId = null
       element.classList.remove(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)
+      element.removeEventListener('xterm-composition-remainder', handleRemainder)
       element.removeEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, handleSessionStart)
       element.removeEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, handleSessionEnd)
       element.removeEventListener('blur', handleBlur, true)
-      renderDisposable.dispose()
     }
   }
 }
