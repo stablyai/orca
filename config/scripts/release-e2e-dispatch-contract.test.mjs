@@ -82,7 +82,11 @@ describe('release E2E dispatch contract', () => {
       (step) => step.name === 'Upload E2E build output'
     )
 
-    expect(uploadStep.with.name).toBe('e2e-build-out')
+    // Compared against the upload rather than a literal: the name carries a per-caller suffix so
+    // two calls of this workflow in one run cannot collide, and what has to hold is that every
+    // download still asks for the artifact this job produced.
+    const buildArtifactName = uploadStep.with.name
+    expect(buildArtifactName).toContain('e2e-build-out')
     expect(uploadStep.with.path).toBe('out/')
 
     for (const [jobName, runStepName] of [
@@ -94,7 +98,7 @@ describe('release E2E dispatch contract', () => {
       const runStep = job.steps.find((step) => step.name === runStepName)
 
       expect(job.needs).toEqual(['build', 'prepare-native-cache'])
-      expect(downloadStep.with.name).toBe('e2e-build-out')
+      expect(downloadStep.with.name).toBe(buildArtifactName)
       expect(downloadStep.with.path).toBe('out/')
       expect(runStep.run).toContain('ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay"')
     }

@@ -21,6 +21,14 @@ on:
         description: '"true" when the PR touches SSH execution source; gates the Docker-SSH lane'
         required: false
         type: string
+      artifact_suffix:
+        description: >-
+          Appended to every artifact name this workflow uploads or downloads. A caller that
+          invokes this workflow twice in one run must give the second call a distinct value:
+          upload-artifact fails outright when two jobs in the same run upload one name.
+        required: false
+        default: ''
+        type: string
   workflow_dispatch:
     inputs:
       ref:
@@ -70,7 +78,7 @@ jobs:
       - name: Upload E2E build output
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
           # Why: build-relay.mjs writes each relay's marker as `out/relay/<platform>/.version`,
           # and upload-artifact drops dotfiles by default — consumers then fail SSH specs with
@@ -159,7 +167,7 @@ jobs:
       - name: Download E2E build output
         uses: actions/download-artifact@v8
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
 
       # Why: the Electron suite is wall-clock constrained on OSS runners, but
@@ -211,7 +219,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-traces-${{ matrix.shard_name }}
+          name: playwright-traces-${{ matrix.shard_name }}${{ inputs.artifact_suffix }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
@@ -245,7 +253,7 @@ jobs:
       - name: Download E2E build output
         uses: actions/download-artifact@v8
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
 
       - name: Run changed E2E specs
@@ -289,7 +297,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-traces-changed
+          name: playwright-traces-changed${{ inputs.artifact_suffix }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
@@ -332,7 +340,7 @@ jobs:
       - name: Download E2E build output
         uses: actions/download-artifact@v8
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
 
       # Why: this is the release-path proof that the deployed Linux relay keeps
@@ -385,7 +393,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-traces-ssh-docker-watcher-isolation
+          name: playwright-traces-ssh-docker-watcher-isolation${{ inputs.artifact_suffix }}
           path: e2e-traces/
           retention-days: 7
           if-no-files-found: ignore
@@ -427,7 +435,7 @@ jobs:
           native-runtime: electron
       - uses: actions/download-artifact@v8
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
       - name: Start isolated localhost SSH server
         shell: bash
@@ -469,7 +477,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: localhost-ssh-traces
+          name: localhost-ssh-traces${{ inputs.artifact_suffix }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
