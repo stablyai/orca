@@ -45,4 +45,37 @@ describe('SPEECH_MODEL_CATALOG', () => {
     expect(model?.downloadFiles).toHaveLength(2)
     expect(model?.downloadFiles?.map(({ name }) => name)).toEqual(['model.int8.onnx', 'tokens.txt'])
   })
+
+  it('includes offline Korean zipformer for accurate non-streaming dictation (#10103)', () => {
+    const korean = getCatalogModel('zipformer-korean-2024-06-24')
+    expect(korean).toMatchObject({
+      language: 'ko',
+      type: 'transducer',
+      streaming: false,
+      sizeBytes: 329_740_690,
+      archiveSha256: '24bd409318f389cd2de0e295eb1acf91f4e8dfcc0d650490dd2a01f5b50d2c77'
+    })
+    expect(korean?.downloadUrl).toContain('sherpa-onnx-zipformer-korean-2024-06-24.tar.bz2')
+    expect(korean?.files).toEqual([
+      'encoder-epoch-99-avg-1.int8.onnx',
+      'decoder-epoch-99-avg-1.int8.onnx',
+      'joiner-epoch-99-avg-1.int8.onnx',
+      'tokens.txt'
+    ])
+  })
+
+  it('includes streaming Korean zipformer with a complete local file manifest', () => {
+    const streaming = getCatalogModel('zipformer-streaming-korean')
+    expect(streaming).toBeDefined()
+    expect(streaming?.language).toBe('ko')
+    expect(streaming?.type).toBe('transducer')
+    expect(streaming?.streaming).toBe(true)
+    expect(streaming?.files).toEqual([
+      'encoder-epoch-99-avg-1.int8.onnx',
+      'decoder-epoch-99-avg-1.int8.onnx',
+      'joiner-epoch-99-avg-1.int8.onnx',
+      'tokens.txt'
+    ])
+  })
+
 })
