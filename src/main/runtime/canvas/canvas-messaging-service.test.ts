@@ -193,3 +193,30 @@ describe('canvas peer messages', () => {
     expect(() => f.service.send(f.input())).toThrow('rate limit')
   })
 })
+
+it('advances past 1,000 paused messages without skipping equal timestamps', async () => {
+  const f = await fixture()
+  const original = f.service.send(f.input())
+  await f.settle()
+  const bindings = f.membership
+    .members('canvas')
+    .map((member) => ({ ...member, collaborationPaused: true }))
+  const identities = new Map(bindings.map((member) => [member.nodeId, member.identity!]))
+  for (const canvasId of ['paused-a', 'paused-b']) {
+    await f.contexts.replace({ canvasId, revision: 1, bindings }, identities)
+    for (let index = 0; index < 500; index++) {
+      f.journal.insert({
+        ...original,
+        canvasId,
+        id: `${canvasId}-${index}`,
+        createdAt: original.createdAt - 1
+      })
+    }
+  }
+  f.runtime.getTerminalAgentStatus.mockResolvedValue({ isRunningAgent: true, status: 'idle' })
+  await f.service.flush()
+  expect(f.journal.get(original.id)?.state).toBe('delivered')
+  expect(f.runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+  expect(f.journal.history('paused-a').every((message) => message.state === 'queued')).toBe(true)
+  expect(f.journal.history('paused-b').every((message) => message.state === 'queued')).toBe(true)
+})

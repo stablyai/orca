@@ -54,6 +54,12 @@ complete JSON result, retaining permission-safe fallbacks on timeout or errors.
 Replay and background/subagent events cannot consume root-session notes.
 
 Paired desktop runtimes use the existing host routing and owning runtime's registry.
+`canvas.history` is a runtime-owner read used by the conversation UI, including after
+agents disconnect. The RPC transport requires the local runtime token or a paired
+device with runtime scope; mobile-scoped devices cannot call it. Agent launch tokens
+fence `canvas.send`, `canvas.inbox`, and `canvas.peers` to their live sessions; they are
+not credentials for the human owner's history view. Requiring them for history would
+break that view and would not isolate agents that already hold full runtime access.
 Older runtimes report unsupported. Direct SSH relay context is **not implemented**;
 it reports unsupported and never writes remote notes to a local execution registry.
 Loss of contact reports unverifiable, not process death. Folder workspaces do not

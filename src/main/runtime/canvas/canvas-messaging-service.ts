@@ -175,7 +175,7 @@ export class CanvasMessagingService {
     this.flushing = true
     try {
       this.replies.flush()
-      for (const message of this.journal.pending()) {
+      for (const message of this.journal.queued()) {
         await this.deliver(message)
       }
     } catch {

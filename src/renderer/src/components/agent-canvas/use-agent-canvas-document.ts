@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { translate } from '@/i18n/i18n'
 import type { CanvasDocument } from './agent-canvas-document'
 import { removeCanvasNodes } from './agent-canvas-document'
 import { canvasNodeUsesTab } from './canvas-resource-tabs'
@@ -30,7 +31,12 @@ export function useAgentCanvasDocument(scope: string) {
       dirty.current = false
       setError(null)
     } catch {
-      setError('Canvas changes could not be saved on this device. Keep this view open and retry.')
+      setError(
+        translate(
+          'agentCanvas.persistenceFailed',
+          'Canvas changes could not be saved on this device. Keep this view open and retry.'
+        )
+      )
     }
   }, [blocked, key])
 

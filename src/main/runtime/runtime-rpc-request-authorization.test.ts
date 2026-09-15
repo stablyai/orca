@@ -317,30 +317,34 @@ describe('OrcaRuntimeRpcServer', () => {
     })
   })
 
-  it('rejects requests with the wrong auth token', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+  it.each(['status.get', 'canvas.history'])(
+    'rejects %s with the wrong auth token',
+    async (method) => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
 
-    await server.start()
+      await server.start()
 
-    const metadata = readRuntimeMetadata(userDataPath)
-    const response = await sendRequest(metadata!.transports[0]!.endpoint, {
-      id: 'req_1',
-      authToken: 'wrong',
-      method: 'status.get'
-    })
+      const metadata = readRuntimeMetadata(userDataPath)
+      const response = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_1',
+        authToken: 'wrong',
+        method,
+        params: { canvasId: 'another-canvas' }
+      })
 
-    expect(response).toMatchObject({
-      id: 'req_1',
-      ok: false,
-      error: {
-        code: 'unauthorized'
-      }
-    })
+      expect(response).toMatchObject({
+        id: 'req_1',
+        ok: false,
+        error: {
+          code: 'unauthorized'
+        }
+      })
 
-    await server.stop()
-  })
+      await server.stop()
+    }
+  )
 
   it('rejects malformed requests before dispatch', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))

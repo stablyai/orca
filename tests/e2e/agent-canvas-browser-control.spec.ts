@@ -125,9 +125,9 @@ test('agent browser commands create and control the native canvas card without s
     await expect(orcaPage.locator('.react-flow__edge')).toHaveCount(1)
     await expect(orcaPage.locator('[data-workspace-canvas]')).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Fit canvas', exact: true }).click()
-    const browserId = await card
-      .locator('[data-canvas-browser]')
-      .getAttribute('data-canvas-browser')
+    const viewport = card.locator('[data-canvas-browser]')
+    await expect(viewport).toHaveAttribute('data-canvas-browser', /.+/)
+    const browserId = await viewport.getAttribute('data-canvas-browser')
     const guest = orcaPage.locator(`[data-browser-overlay-tab-id="${browserId}"] webview`)
     await expect(guest).toBeVisible()
     const heading = () =>

@@ -34,6 +34,7 @@ export const CANVAS_MESSAGING_METHODS = [
   defineMethod({
     name: 'canvas.history',
     params: canvasHistorySchema,
+    // The authenticated runtime owner reads history even after every agent has disconnected.
     handler: (params, { runtime }) => ({
       messages: getCanvasMessaging(runtime).journal.history(params.canvasId)
     })

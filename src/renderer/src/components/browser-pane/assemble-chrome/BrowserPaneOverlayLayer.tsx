@@ -117,7 +117,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
           browserTab={browserTab}
           isWorktreeActive={isWorktreeActive}
           isActive={isActive}
-          chromeShortcutScope={embedded ? 'owned-target' : chromeShortcutScope}
+          chromeShortcutScope={embedded && isWorktreeActive ? 'owned-target' : chromeShortcutScope}
         />
       </DeferredBrowserContent>
     </div>

@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -62,7 +63,10 @@ export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolea
   if (item.type === 'browser') {
     return getBrowserTabLabel(item.data)
   }
-  if (item.type === 'canvas' || item.type === 'simulator' || item.type === 'agent-session') {
+  if (item.type === 'canvas') {
+    return item.data.label || translate('agentCanvas.canvas', 'Canvas')
+  }
+  if (item.type === 'simulator' || item.type === 'agent-session') {
     return item.data.label || 'Mobile Emulator'
   }
   return getEditorDisplayLabel(item.data)

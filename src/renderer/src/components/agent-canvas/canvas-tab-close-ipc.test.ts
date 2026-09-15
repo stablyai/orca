@@ -21,6 +21,7 @@ it.each([false, true])(
     const closeActiveTabListenerRef: { current: CloseActiveTabListener | null } = { current: null }
     const closeUnifiedTab = vi.fn()
     const closeTab = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
     const tab = {
       id: 'canvas',
       contentType: 'canvas',
@@ -36,6 +37,7 @@ it.each([false, true])(
         getActiveTab: () => tab,
         unifiedTabsByWorktree: { workspace: [tab] },
         closeUnifiedTab,
+        requestPinnedTabCloseConfirm,
         closeTab
       })
     })
@@ -48,6 +50,12 @@ it.each([false, true])(
     expect(closeUnifiedTab).toHaveBeenCalledTimes(isPinned ? 0 : 1)
     if (!isPinned) {
       expect(closeUnifiedTab).toHaveBeenCalledWith('canvas')
+    }
+    if (isPinned) {
+      expect(requestPinnedTabCloseConfirm).toHaveBeenCalledOnce()
+      requestPinnedTabCloseConfirm.mock.calls[0][0].onConfirm()
+      await vi.waitFor(() => expect(closeUnifiedTab).toHaveBeenCalledExactlyOnceWith('canvas'))
+      expect(clearContext).toHaveBeenCalledExactlyOnceWith(tab)
     }
     expect(closeTab).not.toHaveBeenCalled()
   }

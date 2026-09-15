@@ -113,6 +113,8 @@ export function AgentCanvasBrowser({
     }
     if (browser) {
       setUrl(browser.url)
+    } else {
+      setUrl(node.content)
     }
   }, [browser, node.id, node.content, node.title, onEdit])
 

@@ -155,3 +155,24 @@ it('does not prune a canvas on another host with colliding resource ids', () => 
   store.getState().closeUnifiedTab(tab.id)
   expect(readCanvasDocument(CANVAS_STORAGE_PREFIX + scope).document).toEqual(document)
 })
+
+it.each(['browser', 'terminal'] as const)(
+  'cleans a legacy canvas at its original storage key after closing %s',
+  (type) => {
+    const { store, tab, canvas, document } = fixture(type)
+    const legacyScope = JSON.stringify(['workspace-tab', undefined, tab.worktreeId, canvas.id])
+    store.setState((state) => ({
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        [tab.worktreeId]: state.unifiedTabsByWorktree[tab.worktreeId].map((item) =>
+          item.id === canvas.id ? { ...item, executionHostId: undefined } : item
+        )
+      }
+    }))
+    localStorage.setItem(CANVAS_STORAGE_PREFIX + legacyScope, JSON.stringify(document))
+    store.getState().closeUnifiedTab(tab.id)
+    expect(
+      readCanvasDocument(CANVAS_STORAGE_PREFIX + legacyScope).document.nodes.map((node) => node.id)
+    ).toEqual(['agent'])
+  }
+)

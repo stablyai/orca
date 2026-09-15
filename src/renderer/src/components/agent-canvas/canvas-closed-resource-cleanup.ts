@@ -20,7 +20,7 @@ export function removeClosedTabFromCanvases(closed: Tab, tabs: Tab[]): void {
     if (
       canvas.contentType !== 'canvas' ||
       canvas.worktreeId !== closed.worktreeId ||
-      canvas.executionHostId !== closed.executionHostId
+      (canvas.executionHostId ?? closed.executionHostId) !== closed.executionHostId
     ) {
       continue
     }

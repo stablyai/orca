@@ -61,14 +61,21 @@ export default function AgentCanvasWorkspace({ tab }: { tab: Tab }) {
     async (input: string) => {
       const url = new URL(input)
       if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        throw new Error('Enter an HTTP or HTTPS URL.')
+        throw new Error(
+          translate('agentCanvas.browserUrlSchemeRequired', 'Enter an HTTP or HTTPS URL.')
+        )
       }
       const state = useAppStore.getState()
       if (
         state.activeWorktreeId !== tab.worktreeId ||
         getActiveExecutionHostIdForWorktree(state, tab.worktreeId) !== tab.executionHostId
       ) {
-        throw new Error('Select this canvas workspace before opening a browser.')
+        throw new Error(
+          translate(
+            'agentCanvas.browserWorkspaceSelectionRequired',
+            'Select this canvas workspace before opening a browser.'
+          )
+        )
       }
       const created: { id: string | null } = { id: null }
       await openWorkspaceBrowserTab({
@@ -83,7 +90,9 @@ export default function AgentCanvasWorkspace({ tab }: { tab: Tab }) {
         }
       })
       if (!created.id) {
-        throw new Error('The browser page is not available yet.')
+        throw new Error(
+          translate('agentCanvas.browserPageUnavailable', 'The browser page is not available yet.')
+        )
       }
       return created.id
     },
@@ -121,7 +130,7 @@ export default function AgentCanvasWorkspace({ tab }: { tab: Tab }) {
         </span>
       </div>
       <CanvasBrowserContext.Provider value={browserContext}>
-        <ReactFlowProvider>
+        <ReactFlowProvider key={scope}>
           <AgentCanvasBoard
             workspaceTab={tab}
             scope={scope}

@@ -33,7 +33,10 @@ export function resolveBrowserCanvasTarget(
     terminal.executionHostId ?? getExecutionHostIdForWorktree(state, worktreeId)
   const targets: BrowserCanvasTarget[] = []
   for (const tab of tabs) {
-    if (tab.contentType !== 'canvas' || tab.executionHostId !== executionHostId) {
+    if (
+      tab.contentType !== 'canvas' ||
+      (tab.executionHostId ?? executionHostId) !== executionHostId
+    ) {
       continue
     }
     const scope = JSON.stringify(['workspace-tab', tab.executionHostId, worktreeId, tab.id])
@@ -49,7 +52,7 @@ export function resolveBrowserCanvasTarget(
         try {
           const [host, , workspace, key] = JSON.parse(node.agentKey)
           return (
-            host === (tab.executionHostId ?? null) &&
+            (host ?? executionHostId) === executionHostId &&
             workspace === worktreeId &&
             key === originPaneKey
           )

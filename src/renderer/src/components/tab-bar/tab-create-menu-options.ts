@@ -121,7 +121,11 @@ export function buildTabCreateMenuOptions(
       id: 'new-canvas',
       kind: 'new-canvas',
       label: translate('agentCanvas.newTab', 'New Canvas'),
-      keywords: ['canvas', 'agents', 'notes']
+      keywords: [
+        translate('agentCanvas.searchKeyword.canvas', 'canvas'),
+        translate('agentCanvas.searchKeyword.agents', 'agents'),
+        translate('agentCanvas.searchKeyword.notes', 'notes')
+      ]
     })
   }
 

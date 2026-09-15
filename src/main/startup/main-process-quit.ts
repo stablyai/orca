@@ -76,9 +76,6 @@ function installBeforeQuitHandler(): void {
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
     state.unsubscribeAgentAwakeStatusChanges = null
-    if (state.runtime) {
-      stopCanvasMessaging(state.runtime)
-    }
     state.agentAwakeService?.dispose()
     state.agentAwakeService = null
     // Why wait but not uninstall: a renderer beforeunload can still veto this
@@ -150,6 +147,9 @@ function installWillQuitHandler(): void {
       REF_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
+    if (state.runtime) {
+      stopCanvasMessaging(state.runtime)
+    }
     agentHookServer.stop()
     // Why Windows only: POSIX hooks short-circuit on ORCA_PANE_KEY, while Windows must register a
     // bare script path that cannot express the guard and would otherwise keep spawning after quit.

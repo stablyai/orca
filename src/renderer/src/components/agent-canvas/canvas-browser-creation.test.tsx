@@ -136,3 +136,17 @@ describe('agent-created canvas browsers', () => {
     expect(localStorage.getItem(CANVAS_STORAGE_PREFIX + scope)).toBe('{broken')
   })
 })
+
+it.each([undefined, 'local'])('resolves legacy canvas storage with agent host %s', (agentHost) => {
+  const legacy = structuredClone(state)
+  delete legacy.unifiedTabsByWorktree.folder[1].executionHostId
+  const legacyScope = JSON.stringify(['workspace-tab', undefined, 'folder', 'canvas'])
+  const doc = seed(legacyScope)
+  doc.nodes[0].agentKey = JSON.stringify([agentHost, 'repo', 'folder', pane])
+  localStorage.setItem(CANVAS_STORAGE_PREFIX + legacyScope, JSON.stringify(doc))
+  expect(resolveBrowserCanvasTarget(legacy, 'folder', pane)).toEqual({
+    scope: legacyScope,
+    groupId: 'canvas-group',
+    agentNodeId: 'agent'
+  })
+})

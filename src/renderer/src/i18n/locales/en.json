@@ -17947,7 +17947,33 @@
     "panHint": "Drag the background to pan",
     "browserAddressRequired": "Enter a website or localhost address.",
     "browserInside": "Browse inside the canvas",
-    "loadBrowser": "Open page"
+    "loadBrowser": "Open page",
+    "chooseTeammate": "Choose an agent to collaborate with in both directions.",
+    "messageQueued": "Queued",
+    "messageSending": "Submitting",
+    "messageDelivered": "Submitted to terminal",
+    "messageReceived": "Retrieved by agent",
+    "messageCancelled": "Cancelled",
+    "messageUnverifiable": "Delivery unverifiable",
+    "conversation": "Agent collaboration",
+    "collaborationPaused": "Collaboration paused · messages stay queued",
+    "collaborationReady": "Connected · agents can exchange messages",
+    "collaborationUnsupported": "Messaging unavailable on this execution host",
+    "collaborationWaiting": "Waiting for both agent sessions · run a prompt to activate",
+    "collaborationHint": "Agents choose when to ask, share a result, or reply. Connecting does not send terminal history. New messages wait until the recipient is idle and its input is empty.",
+    "messageHistory": "Message history",
+    "messagesLoading": "Loading messages…",
+    "messagesEmpty": "No messages yet. Ask either agent to collaborate with its connected teammate.",
+    "messageReplied": "Replied",
+    "browserUrlSchemeRequired": "Enter an HTTP or HTTPS URL.",
+    "browserWorkspaceSelectionRequired": "Select this canvas workspace before opening a browser.",
+    "browserPageUnavailable": "The browser page is not available yet.",
+    "persistenceFailed": "Canvas changes could not be saved on this device. Keep this view open and retry.",
+    "searchKeyword": {
+      "canvas": "canvas",
+      "agents": "agents",
+      "notes": "notes"
+    }
   },
   "notifications": {
     "agentStatus": {

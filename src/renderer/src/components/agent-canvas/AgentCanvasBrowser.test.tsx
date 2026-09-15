@@ -102,3 +102,27 @@ it('does not embed a page owned by another execution host', () => {
   expect(view.getByRole('textbox', { name: 'Browser URL' })).toBeDefined()
   expect(mocks.place).not.toHaveBeenCalled()
 })
+
+it('restores the unopened URL after undo and opens the restored address', async () => {
+  const edit = vi.fn()
+  context.create.mockResolvedValue('browser')
+  const content = (url: string) => (
+    <CanvasBrowserContext.Provider value={context}>
+      <AgentCanvasBrowser
+        node={{ ...node, content: url }}
+        readOnly={false}
+        connecting={false}
+        onEdit={edit}
+      />
+    </CanvasBrowserContext.Provider>
+  )
+  const view = render(content('https://new.example/'))
+  view.rerender(content('https://original.example/'))
+  expect((view.getByRole('textbox', { name: 'Browser URL' }) as HTMLInputElement).value).toBe(
+    'https://original.example/'
+  )
+  fireEvent.click(view.getByRole('button', { name: 'Open page' }))
+  await waitFor(() =>
+    expect(context.create).toHaveBeenCalledExactlyOnceWith('https://original.example/')
+  )
+})

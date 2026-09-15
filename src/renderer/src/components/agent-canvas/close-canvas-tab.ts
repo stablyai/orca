@@ -7,7 +7,7 @@ import { clearClosedCanvasContext } from './canvas-context-sync'
 const pending = new Map<string, Promise<boolean>>()
 
 export function closeCanvasTab(tab: Tab, onClosed?: () => void): Promise<boolean> {
-  if (tab.contentType !== 'canvas' || tab.isPinned) {
+  if (tab.contentType !== 'canvas') {
     return Promise.resolve(false)
   }
   const key = JSON.stringify([tab.executionHostId, tab.worktreeId, tab.id, tab.createdAt])
@@ -23,7 +23,6 @@ export function closeCanvasTab(tab: Tab, onClosed?: () => void): Promise<boolean
       )
       if (
         !current ||
-        current.isPinned ||
         current.createdAt !== tab.createdAt ||
         current.executionHostId !== tab.executionHostId
       ) {

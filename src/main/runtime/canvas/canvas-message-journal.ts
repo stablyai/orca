@@ -39,8 +39,24 @@ export class CanvasMessageJournal {
     ).toReversed()
   }
 
-  pending(): CanvasMessage[] {
-    return this.rows("WHERE c.state = 'queued' ORDER BY c.created_at LIMIT 1000")
+  pending(after?: Pick<CanvasMessage, 'createdAt' | 'id'>): CanvasMessage[] {
+    return this.rows(
+      `WHERE c.state = 'queued' ${after ? 'AND (c.created_at, c.id) > (?, ?)' : ''}
+       ORDER BY c.created_at, c.id LIMIT 1000`,
+      ...(after ? [after.createdAt, after.id] : [])
+    )
+  }
+
+  *queued(): Generator<CanvasMessage> {
+    let after: CanvasMessage | undefined
+    while (true) {
+      const messages = this.pending(after)
+      if (!messages.length) {
+        return
+      }
+      yield* messages
+      after = messages.at(-1)
+    }
   }
 
   count(canvasId: string, since: number): number {
@@ -96,7 +112,7 @@ export class CanvasMessageJournal {
       .run(state, JSON.stringify(metadata), message.id)
   }
 
-  private rows(suffix: string, ...params: string[]): CanvasMessage[] {
+  private rows(suffix: string, ...params: (string | number)[]): CanvasMessage[] {
     return this.db.db
       .prepare(`SELECT c.*, m.body FROM canvas_mail c JOIN messages m ON m.id = c.id ${suffix}`)
       .all(...params)
