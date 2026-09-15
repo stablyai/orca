@@ -4,6 +4,7 @@ import { hydrateGitHubPRStack } from '../../github-pr-stack'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import { derivePullRequestMergeable, type PullRequestLookupData } from './pull-request-lookup-data'
 import { getCachedGitHubPRStackSummary } from './pr-stack-summary-cache'
+import { fetchUnresolvedReviewCommentCount } from './pr-unresolved-review-threads'
 
 export async function derivePRRefreshData(args: {
   data: PullRequestLookupData
@@ -14,11 +15,13 @@ export async function derivePRRefreshData(args: {
   ghOptions: ReturnType<typeof ghRepoExecOptions>
   executionScope: string
   usedExactNumberLookup: boolean
+  includeUnresolvedReviewCommentCount?: boolean
 }): Promise<{
   mergeable: ReturnType<typeof derivePullRequestMergeable>
   stack: PullRequestLookupData['stack']
   stackMergeQueueRequired: boolean | null | undefined
   conflictSummary: Awaited<ReturnType<typeof getPRConflictSummary>>
+  unresolvedReviewCommentCount: number | undefined
 }> {
   const { data, dataRepo, repoPath, connectionId, localGitOptions, ghOptions, executionScope } =
     args
@@ -72,5 +75,16 @@ export async function derivePRRefreshData(args: {
           localGitOptions
         )
       : undefined
-  return { mergeable, stack, stackMergeQueueRequired, conflictSummary }
+  // Why: last in the sequence so the extra GraphQL call never delays merge/stack state.
+  const unresolvedReviewCommentCount =
+    args.includeUnresolvedReviewCommentCount && dataRepo
+      ? await fetchUnresolvedReviewCommentCount(dataRepo, data, ghOptions)
+      : undefined
+  return {
+    mergeable,
+    stack,
+    stackMergeQueueRequired,
+    conflictSummary,
+    unresolvedReviewCommentCount
+  }
 }

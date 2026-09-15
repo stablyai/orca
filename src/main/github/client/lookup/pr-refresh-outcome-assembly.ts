@@ -18,6 +18,7 @@ export function assemblePRRefreshFoundOutcome(args: {
   confirmedContainedHeadOid: string | null
   headDivergedFromMergedPRAtOid: string | null
   conflictSummary: PRConflictSummary | undefined
+  unresolvedReviewCommentCount?: number
 }): PRRefreshOutcome {
   const {
     data,
@@ -28,7 +29,8 @@ export function assemblePRRefreshFoundOutcome(args: {
     stackMergeQueueRequired,
     confirmedContainedHeadOid,
     headDivergedFromMergedPRAtOid,
-    conflictSummary
+    conflictSummary,
+    unresolvedReviewCommentCount
   } = args
   return {
     kind: 'found',
@@ -64,7 +66,8 @@ export function assemblePRRefreshFoundOutcome(args: {
       ...(data.headRefName ? { headRefName: data.headRefName } : {}),
       prRepo: dataRepo ?? undefined,
       headRepo: dataHeadRepo ?? undefined,
-      conflictSummary
+      conflictSummary,
+      ...(unresolvedReviewCommentCount !== undefined ? { unresolvedReviewCommentCount } : {})
     }
   }
 }
