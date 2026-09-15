@@ -3,6 +3,7 @@ import { RotateCcw } from 'lucide-react'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { admitStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { Button } from '@/components/ui/button'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
@@ -146,17 +147,15 @@ export function NativeChatStructuredSession(
           }
         ]
       : [])
-  // Only the head of the outbox is ever dispatched, so it is the only entry a
-  // Retry can act on and the only one whose state can be holding the queue.
-  // Scanning past it named a message the user was not looking at and re-sent
-  // one from earlier in the session while their newest sat behind it.
-  const outboxHead = controller.outbox[0] ?? null
-  const retryableOutboxEntry =
-    outboxHead &&
-    (outboxHead.state === 'unconfirmed' ||
-      outboxHead.clientMessageId === controller.blockedClientMessageId)
-      ? outboxHead
-      : null
+  // Whatever the drain itself stopped on, which is not always the head now that acknowledged
+  // entries no longer hold the queue. Reading it through the same rule is what keeps this from
+  // naming a message the user was not looking at and re-sending one from earlier in the session
+  // while their newest sat behind it.
+  const outboxAdmission = admitStructuredAgentSessionOutboxEntry(
+    controller.outbox,
+    controller.blockedClientMessageId
+  )
+  const retryableOutboxEntry = outboxAdmission.state === 'blocked' ? outboxAdmission.entry : null
   const structuredTransport = useMemo(
     () => ({
       send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>

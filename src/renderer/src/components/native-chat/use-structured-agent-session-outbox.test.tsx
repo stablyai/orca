@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
 
@@ -27,6 +27,16 @@ function deferred<T>() {
     reject = fail
   })
   return { promise, reject, resolve }
+}
+
+type SendRequestShape = { body?: { blocks?: { text?: string }[] } }
+
+function requestText(params: SendRequestShape | undefined): string | undefined {
+  return params?.body?.blocks?.[0]?.text
+}
+
+function sentTexts(): (string | undefined)[] {
+  return mocks.call.mock.calls.map((call) => requestText(call[2]))
 }
 
 function acceptedResult(fence: number) {
@@ -123,6 +133,9 @@ function refusedResult(code: AgentSessionWireRefusalCode) {
 
 describe('useStructuredAgentSessionOutbox', () => {
   let randomUuidSequence = 0
+
+  // Without this a hook left mounted keeps its retry timers running into the next test.
+  afterEach(cleanup)
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -793,5 +806,88 @@ describe('useStructuredAgentSessionOutbox', () => {
       globalThis.IS_REACT_ACT_ENVIRONMENT = actEnvironment
       await act(async () => root.unmount())
     }
+  })
+
+  // A hidden pane receives no journal updates, so `submissions` never moves: the head stays
+  // `dispatching` for as long as the turn ahead of it runs. Delivery must not wait on that.
+  it('dispatches the queued tail while the head is still pending', async () => {
+    const head = deferred<ReturnType<typeof pendingResultFor>>()
+    // A persistent implementation, so no queued `...Once` can outlive this test.
+    mocks.call.mockImplementation((_target, _method, params) =>
+      requestText(params) === 'first' ? head.promise : new Promise<never>(() => {})
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: []
+      })
+    )
+
+    act(() => expect(result.current.send('first')).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+    act(() => expect(result.current.send('second')).toBe(true))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    // Single-flight: the tail waits for the head's round trip, never runs beside it.
+    expect(mocks.call).toHaveBeenCalledTimes(1)
+
+    const headId = result.current.outbox[0]!.clientMessageId
+    await act(async () => head.resolve(pendingResultFor(headId, 10)))
+
+    await waitFor(() => expect(sentTexts()).toContain('second'))
+    // The admitted head still renders the user's text: it is retired by the provider echo, not
+    // by the tail going out.
+    expect(result.current.outbox).toHaveLength(2)
+    expect(result.current.outbox[0]?.clientMessageId).toBe(headId)
+    expect(result.current.outbox[0]?.state).toBe('dispatching')
+    expect(result.current.error).toBeNull()
+  })
+
+  it('keeps an unconfirmed head blocking the queue', async () => {
+    mocks.call.mockRejectedValue(new Error('socket closed'))
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: []
+      })
+    )
+
+    act(() => expect(result.current.send('first')).toBe(true))
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
+    act(() => expect(result.current.send('second')).toBe(true))
+    // Well inside the unknown probe's first delay, which would otherwise requeue the head.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    })
+
+    expect(sentTexts()).not.toContain('second')
+    expect(mocks.call).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a refused head blocking the queue', async () => {
+    mocks.call.mockResolvedValue(refusedResult('agent_session_ownership_unknown'))
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: []
+      })
+    )
+
+    act(() => expect(result.current.send('first')).toBe(true))
+    await waitFor(() => expect(result.current.blockedClientMessageId).not.toBeNull())
+    act(() => expect(result.current.send('second')).toBe(true))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    })
+
+    expect(sentTexts()).not.toContain('second')
+    expect(result.current.blockedClientMessageId).toBe(result.current.outbox[0]?.clientMessageId)
   })
 })

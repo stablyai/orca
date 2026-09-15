@@ -277,11 +277,11 @@ describe('NativeChatStructuredSession delivery', () => {
     expect(request.envelope.clientOperationId).toBe('op-head')
   })
 
-  it('raises no delivery notice for a stuck message behind a healthy head', async () => {
+  it('names the stuck message behind an admitted head, and its Retry sends that one', async () => {
     mocks.mode = 'outbox'
     mocks.submissions = []
-    // Admitted: written and awaiting the provider, so the head is not in doubt
-    // and a Retry could not act on the entry queued behind it anyway.
+    // The head is admitted -- written and awaiting the provider -- so the entry behind it is the
+    // one holding the queue, and Retry can now act on it instead of waiting for the head to clear.
     mocks.call.mockResolvedValue({
       ok: true,
       value: { submission: { clientMessageId: 'op-head', dispatchState: 'pending' } }
@@ -303,8 +303,17 @@ describe('NativeChatStructuredSession delivery', () => {
     )
 
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
-    expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull()
+    expect(mocks.call.mock.calls[0]?.[2]).toMatchObject({
+      envelope: { clientOperationId: 'op-head' }
+    })
+
+    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
+
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    expect(mocks.call.mock.calls[1]?.[2]).toMatchObject({
+      envelope: { clientOperationId: 'op-later' }
+    })
   })
 
   it('resends a transport-unconfirmed head so later messages are not wedged', async () => {

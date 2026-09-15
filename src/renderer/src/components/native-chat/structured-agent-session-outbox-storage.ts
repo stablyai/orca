@@ -28,6 +28,45 @@ export function readOutbox(sessionId: string): StructuredAgentSessionOutboxEntry
   }
 }
 
+const undeliveredSessions = new Map<string, boolean>()
+const undeliveredListeners = new Set<() => void>()
+
+function publishUndelivered(sessionId: string, undelivered: boolean): void {
+  if (undeliveredSessions.get(sessionId) === undelivered) {
+    return
+  }
+  undeliveredSessions.set(sessionId, undelivered)
+  for (const listener of undeliveredListeners) {
+    listener()
+  }
+}
+
+/** Delivery must not wait on the pane being looked at, so the journal subscription that retires
+ *  an entry is kept alive off this rather than off visibility. Every outbox mutation in the
+ *  renderer passes through `writeOutbox`, so this is the one place that can publish it. */
+export function hasUndeliveredStructuredAgentSessionOutbox(sessionId: string): boolean {
+  const known = undeliveredSessions.get(sessionId)
+  if (known !== undefined) {
+    return known
+  }
+  const undelivered = readOutbox(sessionId).length > 0
+  undeliveredSessions.set(sessionId, undelivered)
+  return undelivered
+}
+
+export function subscribeToUndeliveredStructuredAgentSessionOutbox(
+  listener: () => void
+): () => void {
+  undeliveredListeners.add(listener)
+  return () => {
+    undeliveredListeners.delete(listener)
+  }
+}
+
+export function resetUndeliveredStructuredAgentSessionOutboxForTests(): void {
+  undeliveredSessions.clear()
+}
+
 export function writeOutbox(
   sessionId: string,
   entries: readonly StructuredAgentSessionOutboxEntry[]
@@ -38,6 +77,7 @@ export function writeOutbox(
     } else {
       localStorage.setItem(storageKey(sessionId), JSON.stringify(entries))
     }
+    publishUndelivered(sessionId, entries.length > 0)
     return true
   } catch {
     return false

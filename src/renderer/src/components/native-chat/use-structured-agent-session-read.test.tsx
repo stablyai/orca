@@ -20,6 +20,11 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
+import {
+  resetUndeliveredStructuredAgentSessionOutboxForTests,
+  writeOutbox
+} from './structured-agent-session-outbox-storage'
+import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -321,5 +326,68 @@ describe('useStructuredAgentSessionRead unattached page refusals', () => {
     const result = await loadedTailThatRefusesOlder(new Error('journal read failed'))
     expect(result.current.state.status).toBe('error')
     expect(result.current.state.error).toBe('Error: journal read failed')
+  })
+})
+
+// A worktree switch hides the chat pane, but a message the user already sent is still owed a
+// delivery. The subscription is what retires it -- and its retaining hold is what keeps the host
+// from evicting the session underneath it -- so undelivered work keeps it open on its own.
+describe('useStructuredAgentSessionRead undelivered outbox', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+    resetUndeliveredStructuredAgentSessionOutboxForTests()
+    localStorage.clear()
+    mocks.call.mockResolvedValue({ ok: true, page: page('tail', [], false) })
+    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  function queuedEntry(sessionId: string) {
+    return createStructuredAgentSessionOutboxEntry({
+      clientMessageId: 'client-queued',
+      sessionId,
+      text: 'still undelivered',
+      attachments: [],
+      queuedAt: 1
+    })
+  }
+
+  it('keeps reading a hidden session that still has undelivered messages', async () => {
+    writeOutbox('session-undelivered', [queuedEntry('session-undelivered')])
+
+    const view = renderHook(() =>
+      useStructuredAgentSessionRead({
+        sessionId: 'session-undelivered',
+        target: LOCAL_TARGET,
+        isVisible: false
+      })
+    )
+
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
+    view.unmount()
+  })
+
+  it('stops reading a hidden session once its outbox drains', async () => {
+    const unsubscribe = vi.fn()
+    mocks.subscribe.mockResolvedValue({ unsubscribe })
+    writeOutbox('session-drained', [queuedEntry('session-drained')])
+
+    const view = renderHook(() =>
+      useStructuredAgentSessionRead({
+        sessionId: 'session-drained',
+        target: LOCAL_TARGET,
+        isVisible: false
+      })
+    )
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      writeOutbox('session-drained', [])
+    })
+
+    await waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
+    view.unmount()
   })
 })
