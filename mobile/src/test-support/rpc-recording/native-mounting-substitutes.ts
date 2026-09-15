@@ -36,13 +36,13 @@ import * as zod from 'zod'
  * the operation's own API instead. A recording that needed a native event would have to say so by
  * adding an emitter here.
  */
-function partialNativeModule(module: string, members: Record<string, unknown>): unknown {
+function partialNativeModule(module: string, members: Record<string | symbol, unknown>): unknown {
   return new Proxy(members, {
     get: (target, key) => {
       if (typeof key === 'string' && key !== '__esModule' && !(key in target)) {
         throw new Error(`Unsubstituted native member: ${module}.${key}`)
       }
-      return Reflect.get(target, key)
+      return target[key]
     }
   })
 }

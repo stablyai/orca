@@ -6,6 +6,7 @@
  * copied: two renderings would let the two surfaces disagree about what a tool call looked like.
  */
 
+import { claimBackgroundTaskTwins } from './native-chat-background-task-row'
 import {
   isSubagentGroupFallbackText,
   subagentGroupFallbackText
@@ -20,9 +21,16 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
   // every fallback-shaped text block as soon as any group is present and draws
   // each group, so it never has to decide which twin belongs to which group.
   const standIns = claimSubagentGroupTwins(message.blocks)
+  // A background task's row is the same shape: one block, one frozen twin. Its
+  // twin is matched on exact text rather than by shape, because the sentence is
+  // often the provider's own and has none.
+  const taskTwins = claimBackgroundTaskTwins(message.blocks)
   const blocks = message.blocks.map((block, index) => {
     if (block.type === 'text') {
       return block.text
+    }
+    if (block.type === 'background-task') {
+      return taskTwins.unpairedRows.get(index) ?? null
     }
     if (block.type === 'tool-call') {
       return `[tool ${block.name}] ${safeJson(block.input)}`

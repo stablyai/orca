@@ -46,7 +46,8 @@ const KNOWN_BLOCK_TYPES = new Set([
   'tool-call',
   'tool-result',
   'image-ref',
-  'subagent-group'
+  'subagent-group',
+  'background-task'
 ])
 
 /** Provider IDs are opaque; reject all-whitespace values without rewriting valid IDs. */
@@ -101,6 +102,23 @@ const Block = z.union([
       type: z.literal('subagent-group'),
       groupId: z.string(),
       agents: z.array(SubagentEntry)
+    }),
+    // `kind` and `state` stay open strings for the same reason a child's
+    // lifecycle does: a vocabulary a newer build writes must not turn the row
+    // malformed. The renderer falls back on anything it cannot name.
+    z.object({
+      type: z.literal('background-task'),
+      taskId: z.string().min(1),
+      kind: z.string().min(1),
+      label: z.string(),
+      state: z.string().min(1),
+      parentToolUseId: z.string().optional(),
+      summary: z.string().optional(),
+      error: z.string().optional(),
+      outputFile: z.string().optional(),
+      tokens: z.number().optional(),
+      startedAt: z.number().optional(),
+      settledAt: z.number().optional()
     })
   ]),
   z.object({ type: z.string() }).refine((block) => !KNOWN_BLOCK_TYPES.has(block.type))
