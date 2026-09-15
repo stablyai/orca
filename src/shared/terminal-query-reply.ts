@@ -42,16 +42,20 @@ const KITTY_FLAGS_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9]+u')
 const OSC_RESPONSE_PREFIX_RE = new RegExp(
   '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
 )
+const XTVERSION_DCS_BODY_PATTERN = '>\\|[^\\u001b]*'
 // DCS-framed reports xterm emits: DECRQSS "ESC P 1 $ r Pt ST" / "ESC P 0 $ r ST"
 // (vim queries cursor style this way) and XTVERSION "ESC P > | text ST".
 const DCS_RESPONSE_PREFIX_RE = new RegExp(
-  '^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\'
+  `^\\u001bP(?:[01]\\$r[^\\u001b]*|${XTVERSION_DCS_BODY_PATTERN})\\u001b\\\\`
 )
 // Private-mode DSR (CSI ? … n) — e.g. color-scheme `?997;1n` — often lands cooked.
 // Prefix form peels consecutive replies out of one coalesced payload.
 const COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9;]*n')
 const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
   '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
+)
+const COOKED_ECHO_RISK_XTVERSION_PREFIX_RE = new RegExp(
+  `^\\u001bP${XTVERSION_DCS_BODY_PATTERN}\\u001b\\\\`
 )
 const QUERY_REPLY_PREFIX_RES = [
   CPR_OR_DSR_PREFIX_RE,
@@ -106,6 +110,10 @@ function cookedEchoSafeReplyEnd(data: string, start: number): number {
   if (osc?.[0]) {
     return start + osc[0].length
   }
+  const xtversion = COOKED_ECHO_RISK_XTVERSION_PREFIX_RE.exec(slice)
+  if (xtversion?.[0]) {
+    return start + xtversion[0].length
+  }
   return -1
 }
 
@@ -152,8 +160,9 @@ export function extractOnlyTerminalQueryReplies(data: string): string[] | null {
 
 /**
  * Query replies that must use the ECHO-safe write path on POSIX PTYs so cooked
- * prompts do not paint reply bytes (e.g. `997;1n` on `npx` confirm, #13137).
- * Latency-critical CPR/DSR without `?` stay on the immediate write path.
+ * prompts do not paint reply bytes or deliver a startup XTVERSION response to
+ * the next process. Latency-critical CPR/DSR without `?` stay on the immediate
+ * write path.
  *
  * Whole-string only: a single complete reply. For repeated / write-queue
  * coalesced payloads use {@link extractOnlyCookedEchoSafeQueryReplies}.

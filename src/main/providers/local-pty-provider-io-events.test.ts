@@ -164,6 +164,17 @@ describe('LocalPtyProvider', () => {
       expect(mockProc.write).toHaveBeenCalledWith('hello')
     })
 
+    it('does not retry a failed live XTVERSION reply without echo containment', async () => {
+      const reply = '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\'
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      mockProc.write.mockImplementationOnce(() => {
+        throw new Error('EIO')
+      })
+
+      expect(provider.write(id, reply)).toBe(false)
+      expect(mockProc.write).toHaveBeenCalledTimes(1)
+    })
+
     it('is a no-op for unknown PTY ids', () => {
       expect(provider.write('nonexistent', 'hello')).toBe(false)
       expect(mockProc.write).not.toHaveBeenCalled()
