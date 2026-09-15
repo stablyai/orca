@@ -25,6 +25,7 @@ type EditorPanelRenderModelParams = {
   gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
   markdownRichModeSizeOverridden: boolean
+  markdownRichModeFaultedContent: StoreState['markdownRichModeFaultedContent']
   isChangesMode: boolean
   canOpenWorkspaceFileBrowser: boolean
 }
@@ -37,6 +38,7 @@ export function getEditorPanelRenderModel({
   gitBranchEntries,
   markdownViewMode,
   markdownRichModeSizeOverridden,
+  markdownRichModeFaultedContent,
   isChangesMode,
   canOpenWorkspaceFileBrowser
 }: EditorPanelRenderModelParams) {
@@ -105,26 +107,12 @@ export function getEditorPanelRenderModel({
     markdownViewModes.includes(storedMarkdownViewMode)
       ? storedMarkdownViewMode
       : defaultMarkdownViewMode
-  const editorToggleModes = getEditorToggleModes({
-    language: viewerLanguage,
-    mode: activeFile.mode,
-    diffSource: activeFile.diffSource
-  })
-  const isBinaryEditSurface =
-    activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
-  const availableEditorToggleModes =
-    isBinaryEditSurface || !canUseChangesModeForFile(activeFile)
-      ? editorToggleModes.filter((mode) => mode !== 'changes')
-      : editorToggleModes
-  const effectiveToggleValue: EditorToggleValue = isChangesMode
-    ? 'changes'
-    : hasViewModeToggle
-      ? mdViewMode
-      : 'edit'
   const inlineMarkdownContent =
     activeFile.mode === 'edit'
       ? (editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null)
       : null
+  const isBinaryEditSurface =
+    activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
   const shouldShowMarkdownExportAction =
     viewerLanguage === 'markdown' &&
     (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview')
@@ -139,16 +127,40 @@ export function getEditorPanelRenderModel({
     !inlineFileContent.loadError &&
     activeFile.conflict?.kind !== 'conflict-placeholder' &&
     activeFile.conflict?.conflictStatus !== 'unresolved'
-  let inlineMarkdownRenderState: MarkdownRenderState | null = null
-  if (canRenderInlineMarkdown) {
-    const shouldClassifyRichMode = mdViewMode === 'rich'
-    const richModeEligibility = shouldClassifyRichMode
+  // Why: classification scans the whole document, so it runs only in Rich
+  // mode; Source-view tabs read the stored fault (useMarkdownRichModeFaultTracking).
+  const richModeEligibility =
+    canRenderInlineMarkdown && mdViewMode === 'rich'
       ? getCachedMarkdownRichModeEligibility({
           content: inlineMarkdownContent,
           sizeOverridden: markdownRichModeSizeOverridden
         })
       : null
-    const richModeUnsupportedMessage = richModeEligibility?.unsupportedMessage ?? null
+  const richModeUnsupportedMessage = richModeEligibility?.unsupportedMessage ?? null
+  const richModeFaultedForCurrentContent =
+    canRenderInlineMarkdown &&
+    markdownRichModeFaultedContent[activeFile.id] === inlineMarkdownContent
+  const richModeFallsBackToSource =
+    richModeEligibility !== null
+      ? richModeEligibility.exceedsSizeLimit || richModeUnsupportedMessage !== null
+      : richModeFaultedForCurrentContent
+  const editorToggleModes = getEditorToggleModes({
+    language: viewerLanguage,
+    mode: activeFile.mode,
+    diffSource: activeFile.diffSource,
+    richModeFallsBackToSource
+  })
+  const availableEditorToggleModes =
+    isBinaryEditSurface || !canUseChangesModeForFile(activeFile)
+      ? editorToggleModes.filter((mode) => mode !== 'changes')
+      : editorToggleModes
+  const effectiveToggleValue: EditorToggleValue = isChangesMode
+    ? 'changes'
+    : hasViewModeToggle
+      ? mdViewMode
+      : 'edit'
+  let inlineMarkdownRenderState: MarkdownRenderState | null = null
+  if (canRenderInlineMarkdown) {
     inlineMarkdownRenderState = {
       renderMode: getMarkdownRenderMode({
         exceedsRichModeSizeLimit: richModeEligibility?.exceedsSizeLimit ?? false,
@@ -199,6 +211,7 @@ export function getEditorPanelRenderModel({
     shouldShowMarkdownExportAction,
     canExportMarkdownToPdf,
     inlineMarkdownRenderState,
+    inlineMarkdownContent,
     canShowMarkdownTableOfContents:
       viewerLanguage === 'markdown' &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
