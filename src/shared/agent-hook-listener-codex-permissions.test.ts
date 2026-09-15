@@ -16,7 +16,7 @@ function permissionEvent(permissionMode: unknown, toolName = 'Bash') {
 }
 
 describe('Codex live permission mode', () => {
-  it('keeps sandbox auto-review working without creating a human approval card', () => {
+  it('keeps noninteractive permission hooks working without creating a human approval card', () => {
     const state = createHookListenerState()
     const result = normalizeHookPayload(
       state,

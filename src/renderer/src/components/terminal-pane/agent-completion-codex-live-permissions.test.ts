@@ -50,13 +50,13 @@ function setup() {
 describe('Codex live permission hooks through attention dispatch', () => {
   useAgentCompletionCoordinatorLifecycle()
 
-  it('does not notify during auto-review or an approved command running longer than the debounce', () => {
+  it('does not notify for a noninteractive command running longer than the debounce', () => {
     const { coordinator, hook, dispatchAttention, dispatchCompletion, dispatchHookLifecycle } =
       setup()
     try {
       hook('PreToolUse')
       const permission = hook('PermissionRequest')
-      // No further hook arrives while review and the approved ten-second command run.
+      // No further hook arrives while the noninteractive ten-second command runs.
       for (let sample = 0; sample < 5; sample++) {
         vi.advanceTimersByTime(2_000)
         expect(dispatchAttention).not.toHaveBeenCalled()

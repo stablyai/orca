@@ -5,7 +5,7 @@ export function isCodexNonInteractivePermissionRequest(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): boolean {
-  // Codex maps approval_policy=never to bypassPermissions, including sandbox auto-review.
+  // Codex maps approval_policy=never to bypassPermissions; this hook cannot ask a human.
   return (
     eventName === 'PermissionRequest' &&
     hookPayload.permission_mode === 'bypassPermissions' &&

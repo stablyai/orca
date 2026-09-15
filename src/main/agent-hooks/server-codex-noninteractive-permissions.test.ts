@@ -97,7 +97,7 @@ describe('Codex noninteractive permissions across SSH normalization', () => {
     ).toBe('working')
   })
 
-  it('does not make a child auto-review hide the parent human approval', () => {
+  it('does not make a child noninteractive permission hook hide the parent human approval', () => {
     const { ingest } = setup()
     ingest({ hook_event_name: 'SessionStart' })
     ingest({ ...automaticPermission, permission_mode: 'default' })
