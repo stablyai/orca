@@ -3,6 +3,46 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'tab.moveToSplitRight',
+    title: 'Move Tab to Split Right',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'split', 'pane', 'right'],
+    // Why unbound: four directions would claim four chords, and the Mod+Alt+arrow
+    // and Mod+Shift+arrow neighbourhoods are already spoken for across platforms.
+    defaultBindings: { darwin: [], linux: [], win32: [] }
+  },
+  {
+    id: 'tab.moveToSplitLeft',
+    title: 'Move Tab to Split Left',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'split', 'pane', 'left'],
+    // Why unbound: four directions would claim four chords, and the Mod+Alt+arrow
+    // and Mod+Shift+arrow neighbourhoods are already spoken for across platforms.
+    defaultBindings: { darwin: [], linux: [], win32: [] }
+  },
+  {
+    id: 'tab.moveToSplitDown',
+    title: 'Move Tab to Split Down',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'split', 'pane', 'down'],
+    // Why unbound: four directions would claim four chords, and the Mod+Alt+arrow
+    // and Mod+Shift+arrow neighbourhoods are already spoken for across platforms.
+    defaultBindings: { darwin: [], linux: [], win32: [] }
+  },
+  {
+    id: 'tab.moveToSplitUp',
+    title: 'Move Tab to Split Up',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'split', 'pane', 'up'],
+    // Why unbound: four directions would claim four chords, and the Mod+Alt+arrow
+    // and Mod+Shift+arrow neighbourhoods are already spoken for across platforms.
+    defaultBindings: { darwin: [], linux: [], win32: [] }
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',
