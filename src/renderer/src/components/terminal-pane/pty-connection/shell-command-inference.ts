@@ -3,10 +3,10 @@ import { useAppStore } from '@/store'
 import type { AgentType } from '../../../../../shared/agent-status-types'
 import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../../shared/agent-interrupt-intent'
 import { resolvePaneAgentOwner } from '../../../../../shared/pane-agent-owner'
+import { titleSignalsLiveAgentReattach } from '../../../../../shared/live-agent-reattach-title-signal'
 
 import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 import {
-  CURSOR_AGENT_REATTACH_HEADER,
   terminalOwnsDomFocus,
   hasCursorAgentReattachPayloadScreenSignal
 } from './cursor-agent-reattach-screen'
@@ -228,9 +228,6 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
       ? signal
       : session.reattachReplayPayloadHasCursorAgentSignal || signal
   }
-  session.isCursorAgentNativeTitle = (title: string): boolean => {
-    return title.trim().toLowerCase() === CURSOR_AGENT_REATTACH_HEADER.toLowerCase()
-  }
   session.hasLiveAgentReattachStatusOrTitleSignal = (): boolean => {
     // Why: launch ownership (tab.launchAgent) never decays after the agent
     // exits, so it must not count as liveness here — only live status, live
@@ -239,10 +236,11 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
       return true
     }
     const title = session.getCurrentTerminalTitle() ?? ''
-    // Why: broad token matching (getAgentLabel) fires on titles like
-    // "ssh devin@host"; that surface is too loose to gate mode preservation
-    // and PTY byte injection, so only exact/status titles count here.
-    return detectAgentStatusFromTitle(title) !== null || session.isCursorAgentNativeTitle(title)
+    // Why: OpenCode/Cursor native OSC titles lack status glyphs; without them
+    // reattach used the shell reset and disarmed mouse tracking (#11123).
+    // Status is injected so the same detectAgentStatusFromTitle binding (and
+    // renderer test mocks) stay the authority for glyph/status titles.
+    return titleSignalsLiveAgentReattach(title, detectAgentStatusFromTitle(title))
   }
   session.hasLiveAgentReattachSignal = (): boolean => {
     return (
