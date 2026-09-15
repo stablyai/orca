@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
+import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import {
   REMOTE_BROWSER_STREAM_LIVE,
   type RemoteBrowserStreamStatus
@@ -12,16 +13,25 @@ import {
 // Everything the streamed pane wraps is inert here; this suite is about which chords the pane
 // answers itself instead of forwarding to the remote page as raw keystrokes.
 const mocks = vi.hoisted(() => ({
+  callRuntimeRpc: vi.fn(async () => ({})),
+  enqueueRemoteInput: vi.fn(),
   runRemoteNavigation: vi.fn(async () => {}),
   handleRemoteScreenshotKeyDown: vi.fn(),
   remoteError: { current: null as string | null },
   streamStatus: { current: null as RemoteBrowserStreamStatus | null },
-  viewportRenders: { current: 0 }
+  viewportRenders: { current: 0 },
+  runtimeTarget: {
+    current: { kind: 'environment' as const, environmentId: 'environment-a' }
+  },
+  getRuntimeTarget: vi.fn(),
+  createRemoteOperationToken: vi.fn(() => ({ pageId: 'page-a', generation: 1 })),
+  isCurrentRemoteOperationToken: vi.fn(() => true)
 }))
+mocks.getRuntimeTarget.mockImplementation(() => mocks.runtimeTarget.current)
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn(async () => false),
-  callRuntimeRpc: vi.fn(async () => ({}))
+  callRuntimeRpc: mocks.callRuntimeRpc
 }))
 vi.mock('@/lib/workspace-browser-tab-open', () => ({
   openWorkspaceBrowserTab: vi.fn(async () => {})
@@ -41,14 +51,14 @@ vi.mock('../annotate/useMarkupMode', () => ({
 }))
 vi.mock('./use-remote-browser-page-lifecycle', () => ({
   useRemoteBrowserPageLifecycle: () => ({
-    lifecycle: { session: {}, tokens: {} },
+    lifecycle: { session: {}, tokens: { remotePage: 'page-a' } },
     streamStatus: mocks.streamStatus.current ?? REMOTE_BROWSER_STREAM_LIVE,
     frameUrl: 'blob:frame',
     frameMetadata: null,
     runtimeWorktree: 'worktree-a',
-    runtimeTarget: () => null,
-    createRemoteOperationToken: () => null,
-    isCurrentRemoteOperationToken: () => false,
+    runtimeTarget: mocks.getRuntimeTarget,
+    createRemoteOperationToken: mocks.createRemoteOperationToken,
+    isCurrentRemoteOperationToken: mocks.isCurrentRemoteOperationToken,
     clearStreamFrame: vi.fn(),
     closeMissingRemotePage: vi.fn(),
     mountedRef: { current: true },
@@ -68,7 +78,7 @@ vi.mock('./use-remote-browser-page-stream', () => ({
 }))
 vi.mock('./use-remote-browser-page-input', () => ({
   useRemoteBrowserPageInputQueue: () => ({
-    enqueueRemoteInput: vi.fn(),
+    enqueueRemoteInput: mocks.enqueueRemoteInput,
     clearPendingRemoteWheel: vi.fn(),
     resetRemoteInputQueue: vi.fn(),
     pendingRemoteWheelRef: { current: null },
@@ -145,9 +155,16 @@ beforeEach(() => {
   mocks.remoteError.current = null
   mocks.streamStatus.current = null
   mocks.viewportRenders.current = 0
+  mocks.callRuntimeRpc.mockReset().mockResolvedValue({})
+  mocks.enqueueRemoteInput.mockReset().mockImplementation(async (operation) => operation())
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { ui: { onFocusBrowserAddressBar: () => () => {} } }
+    value: {
+      ui: {
+        onFocusBrowserAddressBar: () => () => {},
+        readClipboardText: vi.fn(async () => 'text copied on the Mac')
+      }
+    }
   })
 })
 
@@ -176,6 +193,41 @@ afterEach(() => {
 })
 
 describe('streamed browser pane chrome chords', () => {
+  it('pastes the Mac clipboard into the focused remote page', async () => {
+    renderPane()
+    const frame = screen.getByTestId('frame')
+    frame.focus()
+
+    await act(async () => {
+      window.dispatchEvent(new Event(APP_MENU_PASTE_EVENT, { cancelable: true }))
+    })
+
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      mocks.runtimeTarget.current,
+      'browser.keyboardInsertText',
+      { worktree: 'worktree-a', page: 'page-a', text: 'text copied on the Mac' },
+      { timeoutMs: 15_000, suppressFeatureInteraction: true }
+    )
+  })
+
+  it('pastes when Cmd+V arrives directly at the remote screenshot', async () => {
+    renderPane()
+    const frame = screen.getByTestId('frame')
+    frame.focus()
+
+    await act(async () => {
+      fireEvent.keyDown(frame, { key: 'v', code: 'KeyV', metaKey: true })
+    })
+
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      mocks.runtimeTarget.current,
+      'browser.keyboardInsertText',
+      { worktree: 'worktree-a', page: 'page-a', text: 'text copied on the Mac' },
+      { timeoutMs: 15_000, suppressFeatureInteraction: true }
+    )
+    expect(mocks.handleRemoteScreenshotKeyDown).not.toHaveBeenCalled()
+  })
+
   it('reloads through the remote navigation action instead of forwarding the keystroke', () => {
     renderPane()
     act(() => {
