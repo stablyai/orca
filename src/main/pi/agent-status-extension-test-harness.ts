@@ -24,6 +24,7 @@ type FakeCurlChild = {
 }
 
 export type AgentStatusExtensionHarness = {
+  killMock: ReturnType<typeof vi.fn>
   fetchMock: ReturnType<typeof vi.fn>
   spawnMock: ReturnType<typeof vi.fn>
   spawnedChildren: FakeCurlChild[]
@@ -57,6 +58,7 @@ export const AGENT_STATUS_EXTENSION_SELF_PID = 4242
 
 export function createAgentStatusExtensionHarness(args: {
   kind: 'pi' | 'omp' | 'prime-agent'
+  killImpl?: (pid: number, signal: number) => void
   env?: Record<string, string | undefined>
   pid?: number
   title?: string
@@ -115,7 +117,9 @@ export function createAgentStatusExtensionHarness(args: {
     throw new Error(`unexpected require(${specifier})`)
   })
 
+  const killMock = vi.fn(args.killImpl ?? (() => undefined))
   const processMock = {
+    kill: killMock,
     env: {
       ...BASE_ENV,
       ...(args.kind === 'prime-agent' ? { PRIME_AGENT_INTERNAL_DAEMON_WORKER: '1' } : {}),
@@ -172,6 +176,7 @@ export function createAgentStatusExtensionHarness(args: {
 
   return {
     fetchMock,
+    killMock,
     spawnMock,
     spawnedChildren,
     fsMock,

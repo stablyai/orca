@@ -107,6 +107,7 @@ describe('orchestration federation control mail', () => {
     homeDb.markWorkerDispatchReady(dispatchId)
 
     workerDb.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: task.id,
       homePeerFingerprint: homeFingerprint,

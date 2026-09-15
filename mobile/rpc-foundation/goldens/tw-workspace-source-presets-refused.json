@@ -1,0 +1,137 @@
+{
+  "operation": "tasks.workspace-source",
+  "family": "tasks.workspace-source",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "2cd1e8972f226572744dad7da82afffbdf0452a121c1cd8c3334d5c3fde5d57c",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2399e995a370": {
+      "name": "workspaceSparsePresets",
+      "value": []
+    },
+    "273f4074a9b5": {
+      "name": "workspaceSparsePresetsLoaded",
+      "value": false
+    },
+    "35afa5cb107f": {
+      "name": "workspaceBaseBranchLoading",
+      "value": false
+    },
+    "4cedb91a2f7a": {
+      "name": "repo.sparsePresets#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "5bad21b1e042": {
+      "name": "repo.sparsePresets#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.sparsePresets"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "forbidden",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "5f1c84e00d4f": {
+      "name": "workspaceBaseBranchResults",
+      "value": []
+    },
+    "62bc28c39ffc": {
+      "branchError": "",
+      "branches": [],
+      "presets": [],
+      "presetsError": "",
+      "presetsLoaded": false
+    },
+    "6c344c5f4ac0": {
+      "name": "workspaceBaseBranchError",
+      "value": ""
+    },
+    "8353b8e1a426": {
+      "name": "workspaceSparsePresetsLoading",
+      "value": true
+    },
+    "9357f7ea8445": {
+      "name": "workspaceSparsePresetId",
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "cfc8af2a7169": {
+      "name": "workspaceSparsePresetsLoading",
+      "value": false
+    },
+    "dba381378b08": {
+      "name": "workspaceSparsePresetsError",
+      "value": ""
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-workspace-source-presets-refused",
+    "checkpoints": [
+      {
+        "id": "presets-refused-empty-message",
+        "observation": {
+          "sender": ["5bad21b1e042"],
+          "payloads": ["4cedb91a2f7a"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "62bc28c39ffc",
+          "effects": [
+            "8353b8e1a426",
+            "273f4074a9b5",
+            "dba381378b08",
+            "5f1c84e00d4f",
+            "35afa5cb107f",
+            "6c344c5f4ac0",
+            "2399e995a370",
+            "273f4074a9b5",
+            "9357f7ea8445",
+            "dba381378b08",
+            "cfc8af2a7169"
+          ]
+        }
+      }
+    ]
+  }
+}

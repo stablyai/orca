@@ -14,6 +14,7 @@ import {
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { isHostReportedPtyAbsenceError, isObservedPtyExitEvidence } from '../provider/liveness'
 import { clearProviderPtyState } from '../provider/state-cleanup'
+import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 
 export type StablePaneOwner = {
   handle?: string
@@ -200,7 +201,8 @@ export function persistAdmittedStablePaneBinding(args: {
       ptyId: args.result.id,
       ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
-      expectedBinding
+      expectedBinding,
+      origin: spawnCommitBindingOrigin(args.result)
     },
     args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
   )

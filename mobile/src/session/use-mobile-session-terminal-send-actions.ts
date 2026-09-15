@@ -1,3 +1,4 @@
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
 import { triggerError } from '../platform/haptics'
@@ -98,6 +99,9 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         TERMINAL_INPUT_SEND_OPTIONS
       )
       const accepted = isTerminalSendRpcAccepted(response)
+      if (accepted) {
+        reportWorkerTerminalUserInput(client, activeHandle)
+      }
       if (!accepted) {
         restoreRejectedDraft()
       }
@@ -166,7 +170,16 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
           }),
           TERMINAL_INPUT_SEND_OPTIONS
         )
-        .then(isTerminalSendRpcAccepted, () => false)
+        .then(
+          (response) => {
+            const accepted = isTerminalSendRpcAccepted(response)
+            if (accepted) {
+              reportWorkerTerminalUserInput(rpc, handle)
+            }
+            return accepted
+          },
+          () => false
+        )
     },
     [showToast]
   )

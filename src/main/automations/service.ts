@@ -1,4 +1,8 @@
 import type { WebContents } from 'electron'
+
+/** All the service asks of the renderer: is it still there, and take this message. Narrower
+ *  than WebContents so a test can supply the real shape instead of casting one. */
+export type AutomationRendererChannel = Pick<WebContents, 'isDestroyed' | 'send'>
 import type { Store } from '../persistence'
 import {
   isFinalAutomationRunStatus,
@@ -12,7 +16,7 @@ import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import { runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
-import { collectAutomationRunUsage } from './run-usage-collection'
+import { writeAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
@@ -21,9 +25,12 @@ import {
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
+import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledRefusal,
   recordRefusedAutomationRun,
+  recordUnevaluableAutomation,
+  sendRendererDispatch,
   NO_DISPATCH_HOST
 } from './dispatch-refusal'
 import type {
@@ -37,7 +44,7 @@ export class AutomationService {
   private readonly store: Store
   private readonly tickMs: number
   private timer: ReturnType<typeof setInterval> | null = null
-  private webContents: WebContents | null = null
+  private webContents: AutomationRendererChannel | null = null
   private rendererReady = false
   private evaluating = false
   private readonly claudeUsage: ClaudeUsageStore | null
@@ -88,7 +95,7 @@ export class AutomationService {
     this.publish?.(payload)
   }
 
-  setWebContents(webContents: WebContents | null): void {
+  setWebContents(webContents: AutomationRendererChannel | null): void {
     this.webContents = webContents
     this.rendererReady = false
   }
@@ -109,6 +116,7 @@ export class AutomationService {
       void this.evaluateDueRuns()
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
+    reportAutomationScheduleDrift(this.store.listAutomations())
     // Why: headless serve never gets a renderer-ready IPC, but due runs still
     // need the same startup catch-up pass desktop gets after renderer attach.
     if (this.rendererReady || this.headlessDispatcher) {
@@ -204,24 +212,12 @@ export class AutomationService {
     if (run.usage) {
       return run
     }
-    const usage = await collectAutomationRunUsage({
-      automation: this.store.listAutomations().find((entry) => entry.id === run.automationId),
+    return await writeAutomationRunUsage({
+      store: this.store,
+      runs: this.runs,
       run,
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
-    })
-    // Why: the run is final during the await above, so a concurrent create-time
-    // retention prune may have evicted it — the usage write must not throw then.
-    if (!this.store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
-      return run
-    }
-    return this.runs.updateRun({
-      runId: run.id,
-      status: run.status,
-      workspaceId: run.workspaceId,
-      terminalSessionId: run.terminalSessionId,
-      usage,
-      error: run.error
     })
   }
 
@@ -236,7 +232,13 @@ export class AutomationService {
         if (!automation.enabled || automation.nextRunAt > now) {
           continue
         }
-        await this.evaluateAutomation(automation, now)
+        // Isolated per record (#16303): an unreadable schedule throws out of the
+        // occurrence math, and an uncaught throw here skipped every later due row.
+        try {
+          await this.evaluateAutomation(automation, now)
+        } catch (error) {
+          recordUnevaluableAutomation({ runs: this.runs, automation, error })
+        }
       }
     } finally {
       this.evaluating = false
@@ -336,7 +338,6 @@ export class AutomationService {
       run: updated,
       dispatchToken: createAutomationDispatchToken(automation.id, updated.id)
     }
-    this.webContents?.send('automations:dispatchRequested', payload)
-    return updated
+    return sendRendererDispatch(this.webContents, payload, this.runs, updated)
   }
 }

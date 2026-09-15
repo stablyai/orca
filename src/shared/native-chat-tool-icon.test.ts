@@ -50,6 +50,9 @@ describe('native chat tool icons', () => {
     expect(nativeChatToolCategory('list')).toBe('listFiles')
     expect(nativeChatToolCategory('shell')).toBe('unknown')
     expect(nativeChatToolCategory('apply_patch')).toBe('fileChange')
+    expect(nativeChatToolCategory('update_plan')).toBe('todoList')
+    expect(nativeChatToolIconName('update_plan')).toBe('list-checks')
+    expect(nativeChatToolRunIconName([{ name: 'update_plan' }])).toBe('list-checks')
     expect(nativeChatToolCategory('web search')).toBe('webSearch')
   })
 
@@ -243,5 +246,36 @@ describe('native chat tool icons', () => {
     expect(nativeChatToolCategory('__proto__')).toBeNull()
     expect(nativeChatToolCategory('constructor')).toBeNull()
     expect(nativeChatToolIconName('__proto__')).toBe('wrench')
+  })
+})
+
+describe('qualified tool identity icons', () => {
+  it.each(['mcp__linear__list_issues'])('uses the MCP glyph for %s', (name) =>
+    expect(nativeChatToolIconName(name)).toBe('plug')
+  )
+  it.each([
+    'setup.py',
+    'src/read',
+    'src/tool.ts',
+    '/usr/bin/tool',
+    'tools/read',
+    'browser.open',
+    'package.lock',
+    'linear/list_issues',
+    'linear.list_issues'
+  ])('does not claim MCP for %s', (name) => expect(nativeChatToolCategory(name)).toBeNull())
+  it('uses confirmed MCP metadata for row and run icons', () => {
+    const call = {
+      name: 'linear/list_issues',
+      mcpIdentity: { server: 'linear', tool: 'list_issues' }
+    }
+    expect(nativeChatToolIconName(call.name, call.mcpIdentity)).toBe('plug')
+    expect(nativeChatToolRunIconName([call])).toBe('plug')
+  })
+  it('keeps classified command and web identities', () => {
+    expect(nativeChatToolCategory('read')).toBe('read')
+    expect(nativeChatToolCategory('search')).toBe('search')
+    expect(nativeChatToolCategory('list')).toBe('listFiles')
+    expect(nativeChatToolIconName('web_search')).toBe('globe')
   })
 })

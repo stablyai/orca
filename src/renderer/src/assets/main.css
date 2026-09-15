@@ -60,6 +60,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-editor-surface: var(--editor-surface);
   --color-agent-question: var(--agent-question);
   --color-agent-question-text: var(--agent-question-text);
   --color-chart-1: var(--chart-1);
@@ -400,11 +401,6 @@
   z-index: 40 !important;
 }
 
-/* Above the z-40 updater/onboarding chrome, below the floating workspace panel's z-45. */
-.native-chat-pane-shell:has([data-native-chat-working='true']) {
-  z-index: 44;
-}
-
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
   align-items: flex-start;
   flex-wrap: wrap;
@@ -511,6 +507,18 @@
 
   :where(button:disabled) {
     cursor: default;
+  }
+}
+
+/* Why @utility, not a plain class: this is a Tailwind-shaped name, so it has to be
+   one Tailwind generates or `scrollbar-none` silently produces no CSS. */
+@utility scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 }
 
@@ -1514,18 +1522,16 @@ html.native-shell .app-layout {
   grid-template-rows: 1fr;
 }
 
-/* Why: must stay a compositor-driven CSS animation — a JS clock writing
-   per-element transforms blocks the renderer input thread (STA-3328: 41
-   spinners ⇒ ~490 style writes/s, keystroke p90 363ms). The component anchors
-   each animation's startTime once; steps(12) preserves the retired cadence. */
+/* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */
+/* One day per iteration avoids per-second React animation events; still 12 steps/second. */
 @keyframes agent-spinner-rotate {
   to {
-    transform: rotate(360deg);
+    transform: rotate(86400turn);
   }
 }
 
 .agent-working-spinner {
-  animation: agent-spinner-rotate 1s steps(12, end) infinite;
+  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1926,7 +1932,8 @@ html.native-shell .app-layout {
   overflow: visible;
   border-radius: var(--radius);
   opacity: 0.96;
-  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--foreground) 18%, transparent));
+  background: var(--worktree-sidebar);
+  box-shadow: var(--shadow-floating);
   will-change: transform;
 }
 

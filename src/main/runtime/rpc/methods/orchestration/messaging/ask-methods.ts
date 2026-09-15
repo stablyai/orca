@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
 import { isGroupAddress } from '../../../../orchestration/groups'
@@ -6,7 +6,7 @@ import { AskParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { askRemoteRunHome } from './ask-remote'
 
-export const ORCHESTRATION_ASK_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_ASK_METHODS = [
   defineMethod({
     name: 'orchestration.ask',
     params: AskParams,
@@ -16,8 +16,9 @@ export const ORCHESTRATION_ASK_METHODS: RpcMethod[] = [
     ) => {
       // Why: group addresses have no unambiguous first-answer authority.
       if (params.to && isGroupAddress(params.to)) {
-        throw new Error(
-          'ask does not support group addresses; use send for non-blocking fan-out questions'
+        throw new OrchestrationError(
+          'invalid_argument',
+          'ask does not support group addresses; ask your owning run:<id>, or use send for a non-blocking fan-out within your Run.'
         )
       }
 

@@ -49,8 +49,8 @@ export function listAddressableStructuredWorkers(): OrchestrationAddressableAgen
  * A structured worker's agent status, in the vocabulary `@idle` already matches on.
  *
  * Null when the session cannot be read: unknown must not read as idle, or a broadcast to `@idle`
- * would wake a worker mid-turn — which Codex answers with `turn already running` and Claude queues
- * behind the running turn.
+ * would wake a worker mid-turn — which Codex coalesces into the running turn and Claude queues
+ * behind it.
  */
 export function structuredWorkerAgentStatus(sessionId: string): string | null {
   const facts = readStructuredSessionGateFacts(sessionId)

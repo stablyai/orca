@@ -41,8 +41,17 @@ function openOpenCodeDatabaseReadonly(dbPath: string): SyncDatabase {
     fileMustExist: true,
     timeout: openCodeBusyTimeoutMs(dbPath)
   })
-  db.pragma('query_only = ON')
-  return db
+  try {
+    db.pragma('query_only = ON')
+    return db
+  } catch (error) {
+    try {
+      db.close()
+    } catch {
+      // Why: close must not hide the query_only setup failure.
+    }
+    throw error
+  }
 }
 
 /**

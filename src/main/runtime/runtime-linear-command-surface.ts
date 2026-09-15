@@ -47,6 +47,7 @@ function overrideAwareReceiver(
           return override.bind(facade)
         }
       }
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: raw string|symbol pass-through; the receiver stays the target on purpose.
       return Reflect.get(target, property, proxyReceiver)
     }
   })
@@ -66,7 +67,7 @@ export function installRuntimeLinearCommandSurface(target: object): void {
     const method = {
       [name](this: LinearFacadeInstance, ...args: unknown[]): unknown {
         const commands = this.linearCommands as unknown as LinearMethodBag
-        return Reflect.apply(commands[name], overrideAwareReceiver(this, commands, names), args)
+        return commands[name].call(overrideAwareReceiver(this, commands, names), ...args)
       }
     }[name]
     delegators.add(method)

@@ -15,7 +15,7 @@ const LEAF_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const LEAF_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
 function registerSurface(worktreeId: string, leafId: string, ptyId: string): () => void {
-  const pane = { id: 1, leafId }
+  const pane = { id: 1, leafId, container: { querySelector: () => null } }
   const manager = {
     getPanes: () => [pane],
     getActivePane: () => pane,
@@ -79,8 +79,9 @@ describe('runtime terminal registration ownership', () => {
   it('focuses the requested worktree when tab ids collide', () => {
     const focusA = vi.fn()
     const focusB = vi.fn()
-    const paneA = { id: 1, leafId: LEAF_A, terminal: { focus: focusA } }
-    const paneB = { id: 1, leafId: LEAF_B, terminal: { focus: focusB } }
+    const container = { querySelector: () => null }
+    const paneA = { id: 1, leafId: LEAF_A, container, terminal: { focus: focusA } }
+    const paneB = { id: 1, leafId: LEAF_B, container, terminal: { focus: focusB } }
     const managerA = {
       getPanes: () => [paneA],
       getActivePane: () => paneA,

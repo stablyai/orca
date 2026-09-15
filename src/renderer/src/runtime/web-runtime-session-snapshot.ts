@@ -11,6 +11,7 @@ import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { captureRuntimeEnvironmentCall } from './web-runtime-session-environment'
 import { throwIfE2eWebRuntimeBrowserReconciliationFails } from './web-runtime-browser-creation-e2e-fault'
+import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'
 import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
 
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
@@ -56,6 +57,8 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     if (options.afterCurrentInFlight) {
       throwIfE2eWebRuntimeBrowserReconciliationFails()
     }
+    // Why: a joined in-flight list leaves this undefined, and recovery then fences on the adoption response instead.
+    let runtimeId: string | undefined
     const snapshot = await listSessionTabs({
       environmentId,
       worktreeId,
@@ -67,6 +70,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           },
           timeoutMs: 15_000
         })
+        runtimeId = getSessionTabsRuntimeIdFromResponse(response)
         return unwrapRuntimeRpcResult(
           response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
         )
@@ -96,6 +100,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       environmentId,
       {
         expectedEnvironmentPairingRevision,
+        expectedRuntimeId: runtimeId,
         getCurrentState: () => useAppStore.getState()
       }
     )

@@ -13,7 +13,7 @@ export type StructuredRefusalFallback = () =>
 
 export type StructuredAgentLaunchOptions = {
   prompt?: string
-  promptDelivery?: 'auto-submit' | 'submit-after-ready'
+  promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
   /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
    *  identity, not a preference — see `launchIdentity`. */

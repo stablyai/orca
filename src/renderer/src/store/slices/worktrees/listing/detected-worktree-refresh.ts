@@ -35,6 +35,15 @@ const runtimeDetectedWorktreeRefreshesInFlight = new Map<
   Promise<DetectedWorktreeListResult>
 >()
 
+const STALE_RUNTIME_GENERATION_ERROR = 'runtime_environment_generation_changed'
+// Why exactly one: a second stale answer means the connection is still churning, and
+// retrying into that would stall the caller instead of letting it fail visibly.
+const STALE_RUNTIME_GENERATION_RETRIES = 1
+
+export function isStaleRuntimeGenerationError(error: unknown): boolean {
+  return error instanceof Error && error.message === STALE_RUNTIME_GENERATION_ERROR
+}
+
 export const detectedWorktreeRefreshLeaseRegistry = createDetectedWorktreeRefreshLeaseRegistry({
   startProviderRequest: startDetectedWorktreeProviderRequest,
   cancelProviderRequest: async (request) => {
@@ -133,57 +142,82 @@ export function normalizeNotAdmittedProviderResult(
   }
 }
 
+async function listDetectedWorktreesForRuntimeRepoOnce(
+  settings: AppState['settings'],
+  repoId: string,
+  options: DetectedWorktreeRefreshOptions,
+  environmentId: string
+): Promise<DetectedWorktreeRefreshOutcome> {
+  // Why recomputed per attempt: the key embeds both generations, so a retry after a
+  // reconnect must not join the superseded connection's in-flight scan.
+  const key = detectedWorktreeRefreshKey(settings, repoId, options)
+  const connectionGeneration = getEnvironmentSshStateGeneration(environmentId)
+  const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+  let refresh = runtimeDetectedWorktreeRefreshesInFlight.get(key)
+  if (!refresh) {
+    refresh = listDetectedWorktreesForRepo(settings, repoId, {
+      reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
+    })
+    runtimeDetectedWorktreeRefreshesInFlight.set(key, refresh)
+  }
+  try {
+    const result = await refresh
+    if (
+      getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
+      getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
+    ) {
+      throw new Error(STALE_RUNTIME_GENERATION_ERROR)
+    }
+    // Why (#10562): the scan coalesces, but teardown must not — each caller carries
+    // its own known-id snapshot and purges its own state, so a caller that joined
+    // an in-flight scan would otherwise purge without ever stopping those terminals.
+    await teardownMissingWorktreeTerminalsBestEffort(
+      settings,
+      repoId,
+      options.connectionId,
+      options.knownWorktreeIds,
+      result
+    )
+    return {
+      status: 'admitted',
+      result,
+      executionHostId: options.executionHostId,
+      runtimeAuthority: {
+        environmentId,
+        connectionGeneration,
+        runtimeConnectionGeneration
+      }
+    }
+  } finally {
+    if (runtimeDetectedWorktreeRefreshesInFlight.get(key) === refresh) {
+      runtimeDetectedWorktreeRefreshesInFlight.delete(key)
+    }
+  }
+}
+
 export async function listDetectedWorktreesForRepoCoalesced(
   settings: AppState['settings'],
   repoId: string,
   options: DetectedWorktreeRefreshOptions
 ): Promise<DetectedWorktreeRefreshOutcome> {
-  const key = detectedWorktreeRefreshKey(settings, repoId, options)
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'environment') {
-    const connectionGeneration = getEnvironmentSshStateGeneration(target.environmentId)
-    const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(
-      target.environmentId
-    )
-    let refresh = runtimeDetectedWorktreeRefreshesInFlight.get(key)
-    if (!refresh) {
-      refresh = listDetectedWorktreesForRepo(settings, repoId, {
-        reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
-      })
-      runtimeDetectedWorktreeRefreshesInFlight.set(key, refresh)
-    }
-    try {
-      const result = await refresh
-      if (
-        getEnvironmentSshStateGeneration(target.environmentId) !== connectionGeneration ||
-        getRuntimeEnvironmentConnectionGeneration(target.environmentId) !==
-          runtimeConnectionGeneration
-      ) {
-        throw new Error('runtime_environment_generation_changed')
-      }
-      // Why (#10562): the scan coalesces, but teardown must not — each caller carries
-      // its own known-id snapshot and purges its own state, so a caller that joined
-      // an in-flight scan would otherwise purge without ever stopping those terminals.
-      await teardownMissingWorktreeTerminalsBestEffort(
-        settings,
-        repoId,
-        options.connectionId,
-        options.knownWorktreeIds,
-        result
-      )
-      return {
-        status: 'admitted',
-        result,
-        executionHostId: options.executionHostId,
-        runtimeAuthority: {
-          environmentId: target.environmentId,
-          connectionGeneration,
-          runtimeConnectionGeneration
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await listDetectedWorktreesForRuntimeRepoOnce(
+          settings,
+          repoId,
+          options,
+          target.environmentId
+        )
+      } catch (err) {
+        // Why re-read instead of surfacing: the fence proves this answer predates the
+        // current connection, not that the repo has no worktrees. Callers drop the repo
+        // on any throw, so a discarded scan left those rows absent until an unrelated
+        // refresh happened to run (#19241).
+        if (attempt >= STALE_RUNTIME_GENERATION_RETRIES || !isStaleRuntimeGenerationError(err)) {
+          throw err
         }
-      }
-    } finally {
-      if (runtimeDetectedWorktreeRefreshesInFlight.get(key) === refresh) {
-        runtimeDetectedWorktreeRefreshesInFlight.delete(key)
       }
     }
   }

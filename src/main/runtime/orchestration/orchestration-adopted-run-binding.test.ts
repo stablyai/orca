@@ -47,11 +47,13 @@ function createAdoptedFixture(options: { settleWork: boolean }): AdoptedFixture 
 
   const before = new OrchestrationDb(dbPath)
   const task = before.createTask({
+    runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: LEGACY_COORDINATOR_HANDLE
   })
   const dispatch = createRootDispatch(before, task.id, LEGACY_WORKER_HANDLE, LEGACY_WORKER_PANE)
   const recovery = before.insertMessage({
+    runId: 'run_legacy_local',
     from: LEGACY_WORKER_HANDLE,
     to: LEGACY_COORDINATOR_HANDLE,
     subject: 'recovered worker outcome',

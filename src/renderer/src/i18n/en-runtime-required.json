@@ -2535,6 +2535,14 @@
       }
     },
     "hooks": {
+      "useComposerState": {
+        "attachSkipMissing": "No longer at its original path.",
+        "attachSkipPermissionDenied": "Permission denied.",
+        "attachSkipSymlink": "Symbolic links cannot be attached.",
+        "attachSkipUnsupported": "Unsupported file type.",
+        "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
+        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
+      },
       "useIpcEvents": {
         "60428567b4": "Local terminal reveal is unavailable while a remote runtime is active",
         "f6300deb8b": "New Browser Tab"
@@ -2610,6 +2618,9 @@
   },
   "components": {
     "native-chat": {
+      "approval": {
+        "cancel": "Cancel"
+      },
       "composer": {
         "effort": "Effort"
       },
@@ -2644,6 +2655,7 @@
       "tool": {
         "countN": "{{value0}} tool calls",
         "countOne": "1 tool call",
+        "moreCalls": "+{{value0}} more",
         "ranCommandManyToolsSummary": "Ran {{commandCount}} command and used {{toolCount}} tools",
         "ranCommandOneToolSummary": "Ran {{commandCount}} command and used {{toolCount}} tool",
         "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",

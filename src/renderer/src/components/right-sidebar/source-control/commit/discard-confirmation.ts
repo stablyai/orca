@@ -9,14 +9,22 @@ export type DiscardConfirmationCopy = {
   confirmLabel: string
 }
 
+/**
+ * Untracked and newly-added paths have no HEAD version to restore, so Orca's discard removes the
+ * working-tree file. Every surface that names the operation must say "delete" for these.
+ */
+export function isDeleteShapedDiscardEntry(
+  entry: Pick<GitStatusEntry, 'area' | 'status'>
+): boolean {
+  return entry.area === 'untracked' || entry.status === 'untracked' || entry.status === 'added'
+}
+
 export function getDiscardEntryConfirmationCopy(
   entry: Pick<GitStatusEntry, 'area' | 'path' | 'status'>
 ): DiscardConfirmationCopy {
   const name = basename(entry.path)
 
-  // Why: untracked and newly-added paths have no HEAD version to restore.
-  // Orca's discard path removes the working-tree file in those cases.
-  if (entry.area === 'untracked' || entry.status === 'untracked' || entry.status === 'added') {
+  if (isDeleteShapedDiscardEntry(entry)) {
     return {
       title: translate(
         'auto.components.right.sidebar.source.control.discard.confirmation.96c772bee9',

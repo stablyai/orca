@@ -190,6 +190,7 @@ export type FederatedDispatchRow = {
 }
 
 export type RemoteDispatchAttachmentRow = {
+  home_run_id: string
   dispatch_id: string
   task_id: string
   home_peer_fingerprint: string

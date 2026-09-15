@@ -1,3 +1,8 @@
+import {
+  isAgentSessionRewindResult,
+  type AgentSessionRewindReason,
+  type AgentSessionRewindResult
+} from './agent-session-rewind'
 /**
  * Durable client-operation ledger.
  *
@@ -27,8 +32,9 @@ export type AgentSessionOperationOutcome =
       status: 'succeeded'
       sessionId: string
       conversationCommand?: AgentSessionConversationCommandResult
+      rewind?: AgentSessionRewindResult
     }
-  | { status: 'failed'; code: string; message?: string }
+  | { status: 'failed'; code: string; message?: string; rewindReason?: AgentSessionRewindReason }
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
   | { status: 'unknown' }
 
@@ -186,6 +192,7 @@ export function isAgentSessionOperationRow(value: unknown): value is AgentSessio
     ((outcome.status === 'pending' && true) ||
       (outcome.status === 'succeeded' &&
         typeof outcome.sessionId === 'string' &&
+        (outcome.rewind === undefined || isAgentSessionRewindResult(outcome.rewind)) &&
         (outcome.conversationCommand === undefined ||
           isAgentSessionConversationCommandResult(outcome.conversationCommand))) ||
       (outcome.status === 'failed' && typeof outcome.code === 'string') ||

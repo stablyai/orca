@@ -34,6 +34,7 @@ import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
+import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { RuntimePtySpawnState } from './spawn-state'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
@@ -159,7 +160,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         ...(ctx.hostSessionBinding.expectedSourceBinding
           ? { expectedSourceBinding: ctx.hostSessionBinding.expectedSourceBinding }
-          : {})
+          : {}),
+        origin: spawnCommitBindingOrigin(ctx.result, ctx.hostSessionBinding.expectedSourceBinding)
       }
       const persisted = args.connectionId
         ? ctx.hostSessionBinding.store.persistPtyBinding(

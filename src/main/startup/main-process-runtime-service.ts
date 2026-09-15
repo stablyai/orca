@@ -1,3 +1,5 @@
+import { installChildSessionSearchService } from '../ai-vault-search/session-search-enablement'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider, getSshPtyProvider, clearProviderPtyState } from '../ipc/pty'
@@ -87,6 +89,12 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () =>
       agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    // Why: structured chats have no hooks, so the host writes their projections here itself; the
+    // snapshot above then lists them for the CLI and mobile without a second store.
+    structuredAgentStatusSink: {
+      publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
+      forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
+    },
     // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
     // read, so a row observed under one process otherwise acquires whatever the pane owns now.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
@@ -125,15 +133,19 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     orchestrationEnvironmentTransport,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
+  // Both desktop and headless serve own a host-local search service.
+  const sessionSearch = installChildSessionSearchService({
+    dataRoot: getCanonicalUserDataPath(),
+    getSettings: () => store.getSettings()
+  })
+  app.once('will-quit', () => sessionSearch?.dispose())
   state.runtime = runtime
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
   )
-  runtime.prepareLegacyWorkerTerminalRecovery()
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.
   runtime.rehydrateClientHostedBrowserPages()
-  state.publishProviderSessionChanges?.(agentHookServer.getProviderSessionIdentities())
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtime.notifyMobileSessionTabsChanged(worktreeId)
   })

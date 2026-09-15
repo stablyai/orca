@@ -1,10 +1,8 @@
+import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
-  structuredAgentLaunchSupported,
-  type AgentLaunchRoutingInput
-} from '@/lib/agent-launch-routing'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+  structuredAgentSessionLaunchFeasible,
+  type AgentSessionStructuredFeasibilityRequest
+} from '@/lib/agent-session-launch-plan'
 import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { useAppStore } from '@/store'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -25,7 +23,7 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   resumeState: AiVaultSessionResumeState
   activeWorkspaceId: string | null
   targetState: AiVaultSessionResumeTargetState
-  settings: AgentLaunchRoutingInput['settings']
+  settings: AgentSessionStructuredFeasibilityRequest['settings']
 }): AiVaultResumeInChatEligibility {
   const targetWorkspaceId = args.resumeState.usesSessionWorktree
     ? args.resumeState.worktreeId
@@ -39,23 +37,14 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
     targetWorkspacePath,
     structuredRouteAvailable:
       isAgentSessionHandleProvider(args.session.agent) &&
-      Boolean(targetWorkspaceId) &&
-      structuredAgentLaunchSupported({
+      targetWorkspaceId !== null &&
+      structuredAgentSessionLaunchFeasible(useAppStore.getState(), {
         agent: args.session.agent,
-        settings: args.settings,
-        executionHostId: getExecutionHostIdForWorktree(
-          useAppStore.getState(),
-          targetWorkspaceId as string
-        ),
-        platform: CLIENT_PLATFORM,
-        hostCapabilities: readLocalRuntimeCapabilities(),
-        workspaceKind: (targetWorkspaceId as string).startsWith('folder:')
-          ? 'folder'
-          : 'git-worktree',
-        projectRuntime: getLocalProjectExecutionRuntimeContext(
-          useAppStore.getState(),
-          targetWorkspaceId as string
-        )
+        workspace: {
+          kind: workspaceKindForWorktreeId(targetWorkspaceId),
+          worktreeId: targetWorkspaceId
+        },
+        settings: args.settings
       }) &&
       readLocalRuntimeCapabilities().includes(
         STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY

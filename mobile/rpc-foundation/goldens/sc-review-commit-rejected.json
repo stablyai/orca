@@ -1,0 +1,86 @@
+{
+  "operation": "source-control.review-git-preparation",
+  "family": "git.review-preparation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
+  "scenarioSha256": "de079de9cc21bfb40da6e1431273b10c3e2a5b5402b91b2b8a85c8d7ac41bc97",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "01bab795ab1e": {
+      "name": "git.commit#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "message": "recorded message",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "connection lost",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "465d78c22406": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "connection lost",
+        "ok": false
+      }
+    },
+    "7c923ba16626": {
+      "committed": {
+        "error": "connection lost",
+        "ok": false
+      },
+      "status": "unread"
+    },
+    "e9c816eee026": {
+      "name": "git.commit#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "sc-review-commit-rejected",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["01bab795ab1e"],
+          "payloads": ["e9c816eee026"],
+          "settlements": {
+            "commit": "465d78c22406"
+          },
+          "state": "7c923ba16626",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

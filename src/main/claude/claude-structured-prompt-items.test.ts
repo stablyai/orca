@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { encodeAgentSessionQuestionAnswers } from '../../shared/agent-session-question-answer'
+import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../native-chat/agent-session-journal/journal-row-schema'
 import { claudeQuestionItems } from './claude-structured-prompt-items'
 import {
   applyClaudePromptAnswer,
@@ -9,6 +11,46 @@ import {
 } from './claude-structured-prompt-replies'
 
 describe('Claude structured question addressing', () => {
+  it('bounds a valid grouped question before cancellation enters a lifecycle batch', () => {
+    const oversized = 'large prompt text '.repeat(40_000)
+    const questions = Array.from({ length: 4 }, (_, questionIndex) => ({
+      question: `${questionIndex}:${oversized}`,
+      header: oversized,
+      options: Array.from({ length: 4 }, (_, optionIndex) => ({
+        label: `${optionIndex}:${oversized}`,
+        description: oversized
+      }))
+    }))
+    const prompt: ClaudePendingPrompt = {
+      requestId: 'oversized-question',
+      promptKey: 'oversized-question',
+      toolUseId: 'tool-oversized',
+      toolName: 'AskUserQuestion',
+      kind: 'question',
+      input: { questions },
+      suggestions: [],
+      questionIds: questions.map((question) => question.question),
+      answers: new Map(),
+      settle: () => {}
+    }
+
+    const body = claudeQuestionItems({ sessionId: 'session-1', prompt })[0]?.body
+    if (!body) {
+      throw new Error('expected grouped question body')
+    }
+    const cancelled = cancelledJournalPromptBody(body)
+    if (!cancelled) {
+      throw new Error('expected cancellable grouped question body')
+    }
+
+    expect(body.questions).toHaveLength(4)
+    expect(body.questions?.[0]?.question).toContain('[Orca: output truncated')
+    expect(body.questions?.[0]?.options[0]?.description).toContain('[Orca: output truncated')
+    expect(Buffer.byteLength(JSON.stringify(cancelled), 'utf8') + 4_096).toBeLessThan(
+      MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
+    )
+  })
+
   it('keeps wire IDs bounded while returning the original question and choice', () => {
     const questionId = 'Which option? '.repeat(100)
     const label = 'A detailed choice '.repeat(100)

@@ -1,5 +1,5 @@
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalLifecycleBatchRow, JournalLifecycleMutation } from './journal-row-schema'
 import {
@@ -54,7 +54,9 @@ function serializedLifecycleBatchFits(
   mutations: readonly JournalLifecycleMutationInput[]
 ): boolean {
   const row: JournalLifecycleBatchRow = {
-    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+    v: journalRowSchemaVersion(
+      mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
+    ),
     kind: 'lifecycle-batch',
     epoch: '00000000-0000-4000-8000-000000000000',
     seq: Number.MAX_SAFE_INTEGER,

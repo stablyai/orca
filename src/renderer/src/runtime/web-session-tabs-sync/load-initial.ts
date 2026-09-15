@@ -103,6 +103,7 @@ export function loadInitialWebSessionTabs({
               environmentId,
               {
                 expectedEnvironmentPairingRevision,
+                expectedRuntimeId: runtimeId,
                 getCurrentState: () => useAppStore.getState()
               }
             )

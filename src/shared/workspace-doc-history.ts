@@ -1,4 +1,3 @@
-import { browserPageDocLocationsEqual } from './browser-page-doc-location'
 import type { BrowserPageDocLocation } from './browser-workspace-types'
 import { isDocPreviewUrl } from './doc-preview-scheme'
 
@@ -16,6 +15,21 @@ export type WorkspaceDocHistoryEntry = {
 
 export const MAX_WORKSPACE_DOC_HISTORY_ENTRIES = 100
 
+/**
+ * Shallow-equal over whatever keys an entry actually carries, rather than a hand-listed subset, so
+ * a field added to `WorkspaceDocHistoryEntry` later cannot slip past a skip-if-unchanged check.
+ */
+export function workspaceDocHistoryEntriesEqual(
+  left: WorkspaceDocHistoryEntry,
+  right: WorkspaceDocHistoryEntry
+): boolean {
+  const leftKeys = Object.keys(left) as (keyof WorkspaceDocHistoryEntry)[]
+  return (
+    leftKeys.length === Object.keys(right).length &&
+    leftKeys.every((key) => Object.is(left[key], right[key]))
+  )
+}
+
 /** The title fence the page store applies, for history rows: a url-as-title falls back to the file. */
 export function normalizeWorkspaceDocHistoryTitle(
   title: string | null | undefined,
@@ -32,6 +46,7 @@ export function normalizeWorkspaceDocHistoryEntries(
   entries: readonly WorkspaceDocHistoryEntry[]
 ): WorkspaceDocHistoryEntry[] {
   const normalized: WorkspaceDocHistoryEntry[] = []
+  const seenPathsByWorktree = new Map<string, Set<string>>()
   const candidates = [...entries].sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
   for (const entry of candidates) {
     if (
@@ -41,10 +56,18 @@ export function normalizeWorkspaceDocHistoryEntries(
     ) {
       continue
     }
-    if (
-      normalized.some((kept) => browserPageDocLocationsEqual(kept.docLocation, entry.docLocation))
-    ) {
+    // Nested, not a joined key: any separator would collide with worktree ids or paths that
+    // contain it. Must stay equivalent to `browserPageDocLocationsEqual`, which the store's
+    // doc-history dedupe still uses — divergence would show up as duplicate dropdown rows.
+    const { worktreeId, filePath } = entry.docLocation
+    const seenPaths = seenPathsByWorktree.get(worktreeId)
+    if (seenPaths?.has(filePath)) {
       continue
+    }
+    if (seenPaths) {
+      seenPaths.add(filePath)
+    } else {
+      seenPathsByWorktree.set(worktreeId, new Set([filePath]))
     }
     normalized.push({
       ...entry,

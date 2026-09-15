@@ -1,30 +1,16 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../../../core'
-import { OptionalBoolean, OptionalString, requiredString } from '../../../schemas'
-import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../../../shared/orchestration-run-pagination'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
+import {
+  RunCreateParams,
+  RunCurrentParams,
+  RunListParams,
+  RunShowParams,
+  RunUseParams
+} from '../../../../../../shared/rpc-contract/orchestration-runs-params'
 
-const RunCreateParams = z.object({
-  objective: requiredString('Missing --objective'),
-  from: requiredString('Missing coordinator terminal')
-})
-
-const RunUseParams = z.object({
-  id: requiredString('Missing --id'),
-  from: requiredString('Missing coordinator terminal'),
-  takeoverLegacy: OptionalBoolean
-})
-
-const RunCurrentParams = z.object({ from: requiredString('Missing coordinator terminal') })
-const RunListParams = z.object({
-  limit: z.number().int().min(1).max(ORCHESTRATION_RUN_PAGE_LIMIT).optional(),
-  cursor: z.string().min(1).optional()
-})
-const RunShowParams = z.object({ id: requiredString('Missing --id'), from: OptionalString })
-
-export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_RUN_METHODS = [
   defineMethod({
     name: 'orchestration.runCreate',
     params: RunCreateParams,

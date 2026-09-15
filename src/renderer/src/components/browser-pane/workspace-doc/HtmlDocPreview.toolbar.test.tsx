@@ -5,6 +5,8 @@
 // showing the internal preview scheme, Back/Forward really drive the guest's history, and the chip
 // hands over the path the owner spells rather than the one the grant was minted with.
 import { act } from 'react'
+import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type * as WebviewRegistryModule from '../host-guest/webview-registry'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -39,7 +41,8 @@ vi.mock('@/lib/doc-preview-grants', () => ({
   releaseDocPreviewGrant: () => undefined
 }))
 
-vi.mock('@/components/browser-pane/host-guest/webview-registry', () => ({
+vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof WebviewRegistryModule>()),
   moveFocusToRendererBeforeWebviewDetach: () => undefined
 }))
 
@@ -126,13 +129,14 @@ type StubWebview = Element & {
 async function renderPreview(
   container: HTMLDivElement,
   root: Root,
-  options: { holdsGuestFocus?: boolean } = {}
+  options: { holdsGuestFocus?: boolean; isActive?: boolean } = {}
 ): Promise<StubWebview> {
   const { HtmlDocPreview } = await import('./HtmlDocPreview')
   await act(async () => {
     root.render(
       <TooltipProvider>
         <HtmlDocPreview
+          isActive={options.isActive ?? true}
           previewId="preview-1"
           filePath={ABSOLUTE_PATH}
           relativePath={ENTRY_RELATIVE_PATH}
@@ -199,6 +203,7 @@ describe('HtmlDocPreview browser chrome', () => {
         }
       },
       browser: {
+        unregisterGuest: () => Promise.resolve(),
         setGrabMode: (args: { browserPageId: string; enabled: boolean }) => {
           grabCalls.push(args)
           return Promise.resolve({ ok: true })
@@ -220,6 +225,55 @@ describe('HtmlDocPreview browser chrome', () => {
       mounted = false
     }
     container.remove()
+  })
+
+  it('counts document guests in the workspace budget and restores only on activation', async () => {
+    const { hasLiveBrowserGuest, webviewRegistry } = await import('../host-guest/webview-registry')
+    const { worktreeHoldsLiveBrowserGuests, selectBrowserGuestEvictionWorktreeIds } =
+      await import('../host-guest/browser-guest-worktree-retention')
+    const { destroyWorktreeBrowserGuests } = await import('@/store/slices/browser-webview-cleanup')
+    const guest = await renderPreview(container, root)
+    expect(hasLiveBrowserGuest('preview-1')).toBe(true)
+    expect(await renderPreview(container, root, { isActive: false })).toBe(guest)
+    const page: BrowserPage = {
+      id: 'preview-1',
+      workspaceId: 'browser-1',
+      worktreeId: 'wt-1',
+      url: 'about:blank',
+      title: 'Report',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 1,
+      docLocation: { kind: 'workspace-doc', worktreeId: 'wt-1', filePath: ABSOLUTE_PATH }
+    }
+    const browsers: BrowserWorkspace[] = [{ ...page, id: 'browser-1', pageIds: [page.id] }]
+    const pages: Record<string, BrowserPage[]> = { 'browser-1': [page] }
+    const evicted = selectBrowserGuestEvictionWorktreeIds({
+      orderedWorktreeIds: ['wt-1'],
+      activeWorktreeId: 'wt-2',
+      limit: 0,
+      isRetained: () => true,
+      isEvictable: () => true,
+      holdsLiveGuests: () => worktreeHoldsLiveBrowserGuests(browsers, pages, hasLiveBrowserGuest)
+    })
+    expect(evicted).toEqual(['wt-1'])
+    await act(async () => {
+      destroyWorktreeBrowserGuests({ 'wt-1': browsers }, pages, 'wt-1')
+    })
+    expect(guest.isConnected).toBe(false)
+    expect(hasLiveBrowserGuest('preview-1')).toBe(false)
+    expect(container.querySelector('webview')).toBeNull()
+    const restored = await renderPreview(container, root)
+    expect(restored).not.toBe(guest)
+    expect(webviewRegistry.get('preview-1')).toBe(restored)
+    expect(await renderPreview(container, root, { isActive: false })).toBe(restored)
+    expect(await renderPreview(container, root)).toBe(restored)
+    await act(async () => root.unmount())
+    mounted = false
+    expect(hasLiveBrowserGuest('preview-1')).toBe(false)
   })
 
   it('identifies the document by its workspace path and owning machine', async () => {

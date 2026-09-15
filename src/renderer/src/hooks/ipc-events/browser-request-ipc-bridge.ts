@@ -107,7 +107,10 @@ export function registerBrowserRequestIpcBridge(
         const workspacePages = store.browserPagesByWorkspace[owningWorkspace.id] ?? []
         if (workspacePages.length > 0) {
           for (const page of workspacePages) {
-            destroyPersistentWebview(page.id)
+            // Document previews use a fixed partition, so profile changes must preserve their guests.
+            if (!page.docLocation) {
+              destroyPersistentWebview(page.id)
+            }
           }
         } else {
           destroyPersistentWebview(data.browserPageId)

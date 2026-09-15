@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
+import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import type { ConnectionState } from '../transport/types'
 import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
+import { gitBranchCompareRead, gitStatusHostPayloadRead } from './mobile-git-read-operations'
 import {
-  isMobileGitUnavailable,
   isMobileGitTransientRefreshError,
+  isMobileGitUnavailableReply,
+  readMobileGitRefusal,
   type MobileGitStatusResult
 } from './mobile-git-status'
 import type { MobileGitBranchCompareResult } from './mobile-branch-compare'
@@ -117,28 +120,34 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
           })
           return false
         }
-        const response = await client.sendRequest('git.branchCompare', {
+        const reply = await gitBranchCompareRead.request(client, {
           worktree: `id:${worktreeId}`,
           baseRef
         })
         if (!isCurrentLoad()) {
           return false
         }
-        if (!response.ok) {
-          if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
-            setBranchCompareState((prev) => {
-              if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
-                return prev
-              }
-              return { kind: 'idle' }
-            })
-            return false
-          }
-          throw new Error(response.error?.message || 'Unable to load committed changes')
+        // Why the raw refusal: a host that does not offer git to mobile is a capability gap this
+        // screen degrades on, and no acceptance policy carries the code and message through.
+        if (isMobileGitUnavailableReply(reply)) {
+          setBranchCompareState((prev) => {
+            if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
+              return prev
+            }
+            return { kind: 'idle' }
+          })
+          return false
+        }
+        let compared: unknown
+        try {
+          compared = gitBranchCompareRead.interpret(reply)
+        } catch (error) {
+          throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load committed changes'))
         }
         setBranchCompareState({
           kind: 'ready',
-          result: (response as RpcSuccess).result as MobileGitBranchCompareResult
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          result: compared as MobileGitBranchCompareResult
         })
         return true
       } catch (err) {
@@ -195,14 +204,18 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
         try {
           for (let attempt = 0; attempt <= SELECTOR_RETRY_COUNT; attempt += 1) {
-            const response = await client.sendRequest('git.status', {
+            const reply = await gitStatusHostPayloadRead.request(client, {
               worktree: `id:${worktreeId}`
             })
             if (!isCurrentLoad()) {
               return false
             }
-            if (response.ok) {
-              const result = (response as RpcSuccess).result as MobileGitStatusResult
+            // Why the raw refusal: the retry and capability routes below are decided by the
+            // refusal's code, which no acceptance policy carries through.
+            const refusal = readMobileGitRefusal(reply)
+            if (!refusal) {
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+              const result = gitStatusHostPayloadRead.interpret(reply) as MobileGitStatusResult
               setScreenState({ kind: 'ready', status: result })
               void loadBranchCompare({ preserveReadyOnFailure: true })
               if (options?.clearActionErrorOnSuccess !== false) {
@@ -213,7 +226,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
               onStatusLoadSuccess?.()
               return true
             }
-            if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
+            if (isMobileGitUnavailableReply(reply)) {
               setScreenState({
                 kind: 'unavailable',
                 message: 'Update Orca desktop to use Source Control on mobile.'
@@ -221,8 +234,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
               return false
             }
             const shouldRetry =
-              response.error?.code === 'selector_not_found' ||
-              isMobileGitTransientRefreshError(response.error?.code, response.error?.message)
+              refusal.code === 'selector_not_found' ||
+              isMobileGitTransientRefreshError(refusal.code, refusal.message)
             if (shouldRetry && attempt < SELECTOR_RETRY_COUNT) {
               await wait(SELECTOR_RETRY_DELAY_MS)
               if (!isCurrentLoad()) {
@@ -230,7 +243,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
               }
               continue
             }
-            throw new Error(response.error?.message || 'Unable to load source control')
+            throw new Error(refusal.message || 'Unable to load source control')
           }
         } catch (err) {
           if (!isCurrentLoad()) {

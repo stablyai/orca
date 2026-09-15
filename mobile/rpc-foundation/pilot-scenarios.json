@@ -1,0 +1,6758 @@
+{
+  "schemaVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "scenarios": [
+    {
+      "id": "b1",
+      "operation": "workspace.file-inventory",
+      "version": 1,
+      "family": "legacy-inventory",
+      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "schedules": ["a-b-a", "stale-inflight-cleanup"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "query",
+          "id": "old",
+          "args": {
+            "query": "old"
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "files.searchPaths#1",
+          "params": {
+            "worktree": "id:A",
+            "query": "old",
+            "limit": 16
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "bind": "old-inventory",
+          "request": "files.list#1",
+          "params": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "checkpoint": "old-pending"
+        },
+        {
+          "action": "select",
+          "id": "select-b",
+          "args": {
+            "workspace": "B"
+          }
+        },
+        {
+          "action": "select",
+          "id": "reset-a",
+          "args": {
+            "workspace": "A"
+          }
+        },
+        {
+          "action": "query",
+          "id": "fresh",
+          "args": {
+            "query": "fresh"
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "files.searchPaths#2",
+          "params": {
+            "worktree": "id:A",
+            "query": "fresh",
+            "limit": 16
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "bind": "fresh-inventory",
+          "request": "files.list#2",
+          "params": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "complete": "old-inventory",
+          "params": {
+            "worktree": "id:A"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "stale-arrived-fresh-pending"
+        },
+        {
+          "action": "query",
+          "id": "third",
+          "args": {
+            "query": "third"
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "checkpoint": "third-query"
+        },
+        {
+          "complete": "fresh-inventory",
+          "params": {
+            "worktree": "id:A"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "fresh.ts"
+                },
+                {
+                  "relativePath": "third.ts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "fresh-arrived"
+        }
+      ]
+    },
+    {
+      "id": "b2",
+      "operation": "project.update-metadata",
+      "version": 1,
+      "family": "project-explicit-false",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "github.project.updateIssueBySlug#1",
+          "params": {
+            "owner": "owner",
+            "repo": "repo",
+            "host": "github.enterprise.test",
+            "number": 1,
+            "updates": {
+              "addLabels": ["recorded"]
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": null
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "b3",
+      "operation": "linear.issue-detail",
+      "version": 1,
+      "family": "linear-detail-barrier",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx"],
+      "schedules": ["issue-first", "peer-pending"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "linear.getIssue#1",
+          "params": {
+            "id": "issue-1",
+            "workspaceId": "linear-workspace"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "issue refused"
+            }
+          }
+        },
+        {
+          "checkpoint": "issue-refused-comments-pending"
+        },
+        {
+          "complete": "linear.issueComments#1",
+          "params": {
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          },
+          "reject": {
+            "message": "comments transport error",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-new-tab-ssh",
+      "operation": "settings.new-tab-agents",
+      "version": 1,
+      "family": "settings-agent-read",
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": []
+              }
+            }
+          }
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex", "claude"]
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-write",
+      "operation": "settings.task-preferences",
+      "version": 1,
+      "family": "settings-best-effort",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "write",
+          "id": "write",
+          "args": {
+            "preset": "assigned"
+          }
+        },
+        {
+          "checkpoint": "optimistic"
+        },
+        {
+          "complete": "settings.update#1",
+          "params": {
+            "defaultTaskViewPreset": "assigned"
+          },
+          "reject": {
+            "message": "write disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-bot-overrides-fulfilled",
+      "operation": "settings.bot-overrides",
+      "version": 1,
+      "family": "settings.bot-overrides",
+      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-bot-overrides-refused",
+      "operation": "settings.bot-overrides",
+      "version": 1,
+      "family": "settings.bot-overrides",
+      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-bot-overrides-transport-error",
+      "operation": "settings.bot-overrides",
+      "version": 1,
+      "family": "settings.bot-overrides",
+      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-workspace-context-fulfilled",
+      "operation": "settings.workspace-context",
+      "version": 1,
+      "family": "settings.workspace-context",
+      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ],
+      "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
+    },
+    {
+      "id": "settings-workspace-context-refused",
+      "operation": "settings.workspace-context",
+      "version": 1,
+      "family": "settings.workspace-context",
+      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ],
+      "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
+    },
+    {
+      "id": "settings-workspace-context-transport-error",
+      "operation": "settings.workspace-context",
+      "version": 1,
+      "family": "settings.workspace-context",
+      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ],
+      "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
+    },
+    {
+      "id": "settings-home-providers-fulfilled",
+      "operation": "settings.home-providers",
+      "version": 1,
+      "family": "settings.home-providers",
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-home-providers-refused",
+      "operation": "settings.home-providers",
+      "version": 1,
+      "family": "settings.home-providers",
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-home-providers-transport-error",
+      "operation": "settings.home-providers",
+      "version": 1,
+      "family": "settings.home-providers",
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-resume-metadata-fulfilled",
+      "operation": "settings.resume-metadata",
+      "version": 1,
+      "family": "settings.resume-metadata",
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        },
+        {
+          "complete": "folderWorkspace.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        },
+        {
+          "complete": "projectGroup.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "worktree.ps#1",
+          "params": {
+            "limit": 10000,
+            "supportsWorktreeVisibilitySourceDefaults": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktrees": []
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-resume-metadata-refused",
+      "operation": "settings.resume-metadata",
+      "version": 1,
+      "family": "settings.resume-metadata",
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        },
+        {
+          "complete": "folderWorkspace.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        },
+        {
+          "complete": "projectGroup.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "worktree.ps#1",
+          "params": {
+            "limit": 10000,
+            "supportsWorktreeVisibilitySourceDefaults": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktrees": []
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-resume-metadata-transport-error",
+      "operation": "settings.resume-metadata",
+      "version": 1,
+      "family": "settings.resume-metadata",
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        },
+        {
+          "complete": "folderWorkspace.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        },
+        {
+          "complete": "projectGroup.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "complete": "worktree.ps#1",
+          "params": {
+            "limit": 10000,
+            "supportsWorktreeVisibilitySourceDefaults": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktrees": []
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-repo-metadata-fulfilled",
+      "operation": "settings.repo-metadata",
+      "version": 1,
+      "family": "settings.repo-metadata",
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "displayName": "Local",
+                  "connectionId": null
+                },
+                {
+                  "id": "repo-2",
+                  "displayName": "Remote",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "ssh.listTargetSummaries#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "host.platform#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-repo-metadata-refused",
+      "operation": "settings.repo-metadata",
+      "version": 1,
+      "family": "settings.repo-metadata",
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "displayName": "Local",
+                  "connectionId": null
+                },
+                {
+                  "id": "repo-2",
+                  "displayName": "Remote",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "ssh.listTargetSummaries#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "host.platform#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-repo-metadata-transport-error",
+      "operation": "settings.repo-metadata",
+      "version": 1,
+      "family": "settings.repo-metadata",
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "displayName": "Local",
+                  "connectionId": null
+                },
+                {
+                  "id": "repo-2",
+                  "displayName": "Remote",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "ssh.listTargetSummaries#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "complete": "host.platform#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-hydration-fulfilled",
+      "operation": "settings.task-hydration",
+      "version": 1,
+      "family": "settings.task-hydration",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["mobile.tasks.v1"]
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-hydration-refused",
+      "operation": "settings.task-hydration",
+      "version": 1,
+      "family": "settings.task-hydration",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["mobile.tasks.v1"]
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-hydration-transport-error",
+      "operation": "settings.task-hydration",
+      "version": 1,
+      "family": "settings.task-hydration",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["mobile.tasks.v1"]
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-workspace-submit-fulfilled",
+      "operation": "settings.workspace-submit",
+      "version": 1,
+      "family": "settings.workspace-submit",
+      "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-workspace-submit-refused",
+      "operation": "settings.workspace-submit",
+      "version": 1,
+      "family": "settings.workspace-submit",
+      "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-workspace-submit-transport-error",
+      "operation": "settings.workspace-submit",
+      "version": 1,
+      "family": "settings.workspace-submit",
+      "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-workspace-fulfilled",
+      "operation": "settings.task-workspace",
+      "version": 1,
+      "family": "settings.task-workspace",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-workspace-refused",
+      "operation": "settings.task-workspace",
+      "version": 1,
+      "family": "settings.task-workspace",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-workspace-transport-error",
+      "operation": "settings.task-workspace",
+      "version": 1,
+      "family": "settings.task-workspace",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-workspace-create-linear",
+      "operation": "settings.task-workspace-create",
+      "version": 1,
+      "family": "settings.task-workspace-create",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit",
+          "args": {
+            "item": {
+              "key": "linear:1",
+              "provider": "linear",
+              "title": "Recorded issue",
+              "source": {
+                "identifier": "ORC-1",
+                "title": "Recorded issue",
+                "url": "https://linear.app/orca/issue/ORC-1"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": [],
+                "defaultTuiAgent": "codex"
+              }
+            }
+          }
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "orc-1",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "setupDecision": "inherit",
+            "activate": true,
+            "startupDraft": "https://linear.app/orca/issue/ORC-1",
+            "createdWithAgent": "claude"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "wt-1",
+                "displayName": "ORC-1 Recorded issue"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-workspace-create-pr-start-point",
+      "operation": "settings.task-workspace-create",
+      "version": 1,
+      "family": "settings.task-workspace-create",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit",
+          "args": {
+            "item": {
+              "key": "github:7",
+              "provider": "github",
+              "title": "Recorded pull request",
+              "source": {
+                "type": "pr",
+                "repoId": "repo-1",
+                "number": 7,
+                "title": "Recorded pull request",
+                "url": "https://github.com/o/r/pull/7"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": [],
+                "defaultTuiAgent": "codex"
+              }
+            }
+          }
+        },
+        {
+          "complete": "worktree.resolvePrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "prNumber": 7
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "baseBranch": "main"
+            }
+          }
+        },
+        {
+          "checkpoint": "pr-base-resolved"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "pr-7",
+            "displayName": "Recorded pull request",
+            "displayNameKind": "generated",
+            "setupDecision": "inherit",
+            "activate": true,
+            "startupDraft": "https://github.com/o/r/pull/7",
+            "createdWithAgent": "claude",
+            "baseBranch": "main",
+            "linkedPR": 7
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "wt-2"
+              },
+              "warning": "shallow clone"
+            }
+          }
+        },
+        {
+          "checkpoint": "created-from-pr-base"
+        }
+      ]
+    },
+    {
+      "id": "settings-new-tab-refused",
+      "operation": "settings.new-tab-agents",
+      "version": 1,
+      "family": "settings-agent-read",
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex", "claude"]
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-new-tab-transport-error",
+      "operation": "settings.new-tab-agents",
+      "version": 1,
+      "family": "settings-agent-read",
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["settings-first"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex", "claude"]
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-home-coalesced",
+      "operation": "settings.home-providers",
+      "version": 1,
+      "family": "settings.home-providers",
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["stale-inflight-cleanup", "follow-up-cache-observation"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "action": "load",
+          "id": "overlapping-load"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "complete": "settings.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "follow-up-settled"
+        },
+        {
+          "action": "load",
+          "id": "third-load"
+        },
+        {
+          "checkpoint": "third-query"
+        }
+      ]
+    },
+    {
+      "id": "settings-repo-cache-expiry",
+      "operation": "settings.repo-metadata",
+      "version": 1,
+      "family": "settings.repo-metadata",
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["follow-up-cache-observation", "timer-expiry"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "displayName": "Local",
+                  "connectionId": null
+                },
+                {
+                  "id": "repo-2",
+                  "displayName": "Remote",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "ssh.listTargetSummaries#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "host.platform#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "action": "load-cached",
+          "id": "cached-query"
+        },
+        {
+          "checkpoint": "cache-hit"
+        },
+        {
+          "advance": 59000
+        },
+        {
+          "action": "load-cached",
+          "id": "warm-query"
+        },
+        {
+          "checkpoint": "cache-warm"
+        },
+        {
+          "advance": 1000
+        },
+        {
+          "action": "load-cached",
+          "id": "expired-query"
+        },
+        {
+          "checkpoint": "cache-expired"
+        }
+      ]
+    },
+    {
+      "id": "inventory-lifecycle",
+      "operation": "workspace.file-inventory",
+      "version": 1,
+      "family": "legacy-inventory",
+      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "schedules": ["reset", "unmount-remount", "blur-retained-route"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "query",
+          "id": "old",
+          "args": {
+            "query": "old"
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "files.searchPaths#1",
+          "params": {
+            "worktree": "id:A",
+            "query": "old",
+            "limit": 16
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "bind": "old-inventory",
+          "request": "files.list#1",
+          "params": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "complete": "old-inventory",
+          "params": {
+            "worktree": "id:A"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "inventory-repeat-query",
+      "operation": "workspace.file-inventory",
+      "version": 1,
+      "family": "legacy-inventory",
+      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "schedules": ["normalized-repeat", "cache-cancels-debounce", "cache-stales-inflight"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "query",
+          "id": "alpha",
+          "args": {
+            "query": "  ALPHA  "
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "files.searchPaths#1",
+          "params": {
+            "worktree": "id:A",
+            "query": "alpha",
+            "limit": 16
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "alpha.ts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "action": "query",
+          "id": "beta",
+          "args": {
+            "query": "beta"
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "files.searchPaths#2",
+          "params": {
+            "worktree": "id:A",
+            "query": "beta",
+            "limit": 16
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "beta.ts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "action": "query",
+          "id": "gamma",
+          "args": {
+            "query": "gamma"
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "bind": "stale-search",
+          "request": "files.searchPaths#3",
+          "params": {
+            "worktree": "id:A",
+            "query": "gamma",
+            "limit": 16
+          }
+        },
+        {
+          "action": "query",
+          "id": "repeat-alpha",
+          "args": {
+            "query": "alpha"
+          }
+        },
+        {
+          "checkpoint": "cached-alpha"
+        },
+        {
+          "complete": "stale-search",
+          "params": {
+            "worktree": "id:A",
+            "query": "gamma",
+            "limit": 16
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "gamma.ts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "stale-search-ignored"
+        },
+        {
+          "action": "query",
+          "id": "delta",
+          "args": {
+            "query": "delta"
+          }
+        },
+        {
+          "action": "query",
+          "id": "repeat-beta",
+          "args": {
+            "query": " BETA "
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "checkpoint": "cached-beta-cancels-debounce"
+        }
+      ]
+    },
+    {
+      "id": "settings-repo-metadata-single-host",
+      "operation": "settings.repo-metadata",
+      "version": 1,
+      "family": "settings.repo-metadata",
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["single-ssh-host"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "displayName": "Remote",
+                  "connectionId": "ssh-1"
+                },
+                {
+                  "id": "repo-2",
+                  "displayName": "Remote folder",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "single-host-without-label-lookups"
+        }
+      ]
+    },
+    {
+      "id": "settings-bot-overrides-refresh-refused",
+      "operation": "settings.bot-overrides",
+      "version": 1,
+      "family": "settings.bot-overrides",
+      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "schedules": ["success-then-refused"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "action": "reset",
+          "id": "refresh"
+        },
+        {
+          "checkpoint": "refresh-pending"
+        },
+        {
+          "complete": "settings.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "Settings refused"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-retains-overrides"
+        }
+      ]
+    },
+    {
+      "id": "settings-workspace-context-refuse-after-data",
+      "operation": "settings.workspace-context",
+      "version": 1,
+      "family": "settings.workspace-context",
+      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "schedules": ["success-then-refused"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "checkpoint": "data-present"
+        },
+        {
+          "action": "blur",
+          "id": "blur"
+        },
+        {
+          "action": "reset",
+          "id": "revisit"
+        },
+        {
+          "checkpoint": "refresh-pending"
+        },
+        {
+          "complete": "settings.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "ui.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-after-data"
+        }
+      ]
+    },
+    {
+      "id": "settings-home-providers-refuse-after-data",
+      "operation": "settings.home-providers",
+      "version": 1,
+      "family": "settings.home-providers",
+      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
+      "schedules": ["success-then-refused"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "checkpoint": "data-present"
+        },
+        {
+          "action": "load",
+          "id": "reload"
+        },
+        {
+          "checkpoint": "refresh-pending"
+        },
+        {
+          "complete": "settings.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-after-data"
+        }
+      ]
+    },
+    {
+      "id": "settings-resume-metadata-refuse-after-data",
+      "operation": "settings.resume-metadata",
+      "version": 1,
+      "family": "settings.resume-metadata",
+      "sites": ["mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx"],
+      "schedules": ["success-then-refused"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        },
+        {
+          "complete": "folderWorkspace.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        },
+        {
+          "complete": "projectGroup.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "worktree.ps#1",
+          "params": {
+            "limit": 10000,
+            "supportsWorktreeVisibilitySourceDefaults": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktrees": []
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "checkpoint": "data-present"
+        },
+        {
+          "action": "load",
+          "id": "reload"
+        },
+        {
+          "checkpoint": "refresh-pending"
+        },
+        {
+          "complete": "repo.list#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        },
+        {
+          "complete": "folderWorkspace.list#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        },
+        {
+          "complete": "projectGroup.list#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        },
+        {
+          "complete": "settings.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "worktree.ps#2",
+          "params": {
+            "limit": 10000,
+            "supportsWorktreeVisibilitySourceDefaults": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktrees": []
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-after-data"
+        }
+      ]
+    },
+    {
+      "id": "settings-repo-metadata-refuse-after-data",
+      "operation": "settings.repo-metadata",
+      "version": 1,
+      "family": "settings.repo-metadata",
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["success-then-refused"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "displayName": "Local",
+                  "connectionId": null
+                },
+                {
+                  "id": "repo-2",
+                  "displayName": "Remote",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "ssh.listTargetSummaries#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "host.platform#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "checkpoint": "data-present"
+        },
+        {
+          "action": "load",
+          "id": "reload"
+        },
+        {
+          "checkpoint": "refresh-pending"
+        },
+        {
+          "complete": "repo.list#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "displayName": "Local",
+                  "connectionId": null
+                },
+                {
+                  "id": "repo-2",
+                  "displayName": "Remote",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "ssh.listTargetSummaries#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "host.platform#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-after-data"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-hydration-refuse-after-data",
+      "operation": "settings.task-hydration",
+      "version": 1,
+      "family": "settings.task-hydration",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx"],
+      "schedules": ["success-then-refused"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["mobile.tasks.v1"]
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "checkpoint": "data-present"
+        },
+        {
+          "action": "remount",
+          "id": "revisit"
+        },
+        {
+          "checkpoint": "refresh-pending"
+        },
+        {
+          "complete": "status.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["mobile.tasks.v1"]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "ui.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {}
+            }
+          }
+        },
+        {
+          "complete": "preflight.check#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        },
+        {
+          "complete": "linear.status#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-after-data"
+        }
+      ]
+    },
+    {
+      "id": "probe-new-tab-both-refused",
+      "operation": "settings.new-tab-agents",
+      "version": 1,
+      "family": "settings-agent-read",
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["both-refused"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "agents refused"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "probe-new-tab-refused-sibling-rejects",
+      "operation": "settings.new-tab-agents",
+      "version": 1,
+      "family": "settings-agent-read",
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["refused-sibling-rejects"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "settings refused"
+            }
+          }
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reject": {
+            "message": "agents disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "probe-new-tab-rejects-sibling-refused",
+      "operation": "settings.new-tab-agents",
+      "version": 1,
+      "family": "settings-agent-read",
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["rejects-sibling-refused"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reject": {
+            "message": "settings disconnected",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "agents refused"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "probe-new-tab-null-sibling-refused",
+      "operation": "settings.new-tab-agents",
+      "version": 1,
+      "family": "settings-agent-read",
+      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "schedules": ["null-sibling-refused"],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": null
+          }
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "agents refused"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-base-ref-default",
+      "operation": "source-control.branch-base-ref",
+      "version": 1,
+      "family": "git.base-ref-chain",
+      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "resolve",
+          "id": "resolve"
+        },
+        {
+          "checkpoint": "requests-pending"
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "baseRef": "   "
+              }
+            }
+          }
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo42",
+                  "worktreeBaseRef": null
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "barrier-settled"
+        },
+        {
+          "complete": "repo.baseRefDefault#1",
+          "params": {
+            "repo": "id:repo42"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "defaultBaseRef": " origin/main "
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-base-ref-worktree-hit",
+      "operation": "source-control.branch-base-ref",
+      "version": 1,
+      "family": "git.base-ref-chain",
+      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "resolve",
+          "id": "resolve"
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "baseRef": "origin/dev"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "repo-list-outstanding"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-base-ref-repo-fallback",
+      "operation": "source-control.branch-base-ref",
+      "version": 1,
+      "family": "git.base-ref-chain",
+      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "resolve",
+          "id": "resolve"
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "no worktree"
+            }
+          }
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo42",
+                  "worktreeBaseRef": " origin/rel "
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-base-ref-unavailable",
+      "operation": "source-control.branch-base-ref",
+      "version": 1,
+      "family": "git.base-ref-chain",
+      "sites": ["mobile/src/source-control/mobile-branch-base-ref.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "resolve",
+          "id": "resolve"
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": "nope"
+            }
+          }
+        },
+        {
+          "complete": "repo.baseRefDefault#1",
+          "params": {
+            "repo": "id:repo42"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": "git is not available to mobile clients"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-history-loaded",
+      "operation": "source-control.git-history",
+      "version": 1,
+      "family": "git.history-read",
+      "sites": ["mobile/src/source-control/mobile-git-history.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "git.history#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "limit": 50
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "displayId": "aaaaaaa",
+                  "subject": "first",
+                  "author": "dev",
+                  "parentIds": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+                  "timestamp": 1767222000000
+                },
+                {
+                  "id": "cccccccccccccccccccccccccccccccccccccccc",
+                  "subject": "",
+                  "parentIds": [],
+                  "timestamp": null
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-commit-message-generated",
+      "operation": "source-control.commit-message",
+      "version": 1,
+      "family": "git.commit-message-ai",
+      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "generate",
+          "id": "generate"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "git.generateCommitMessage#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "success": true,
+              "message": "feat: recorded"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-commit-message-canceled",
+      "operation": "source-control.commit-message",
+      "version": 1,
+      "family": "git.commit-message-ai",
+      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "generate",
+          "id": "generate"
+        },
+        {
+          "complete": "git.generateCommitMessage#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "success": false,
+              "error": "",
+              "canceled": true
+            }
+          }
+        },
+        {
+          "checkpoint": "generate-settled"
+        },
+        {
+          "action": "cancel",
+          "id": "cancel"
+        },
+        {
+          "complete": "git.cancelGenerateCommitMessage#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "internal",
+              "message": "late"
+            }
+          }
+        },
+        {
+          "checkpoint": "cancel-settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-commit-message-cancel-rejected",
+      "operation": "source-control.commit-message",
+      "version": 1,
+      "family": "git.commit-message-ai",
+      "sites": ["mobile/src/source-control/mobile-commit-message-ai.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "cancel",
+          "id": "cancel"
+        },
+        {
+          "complete": "git.cancelGenerateCommitMessage#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reject": {
+            "message": "transport failure",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-pr-link-set",
+      "operation": "source-control.pr-link",
+      "version": 1,
+      "family": "worktree.review-link",
+      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "link",
+          "id": "link"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "worktree.set#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "linkedPR": 12
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-pr-link-hosted-review",
+      "operation": "source-control.pr-link",
+      "version": 1,
+      "family": "worktree.review-link",
+      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "link-review",
+          "id": "link-review"
+        },
+        {
+          "complete": "worktree.set#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "baseRef": "origin/release",
+            "linkedGitLabMR": 12
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "action": "unlink",
+          "id": "unlink"
+        },
+        {
+          "complete": "worktree.set#2",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "linkedPR": null
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-pr-link-read",
+      "operation": "source-control.pr-link",
+      "version": 1,
+      "family": "worktree.review-link",
+      "sites": ["mobile/src/source-control/mobile-pr-link.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "read",
+          "id": "read"
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": 7
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "read-settled"
+        },
+        {
+          "action": "read",
+          "id": "read-again"
+        },
+        {
+          "complete": "worktree.show#2",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": null
+          }
+        },
+        {
+          "checkpoint": "null-result-settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-reveal-first-poll",
+      "operation": "source-control.session-diff-reveal",
+      "version": 1,
+      "family": "session.tab-reveal",
+      "sites": ["mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "reveal",
+          "id": "reveal"
+        },
+        {
+          "checkpoint": "list-pending"
+        },
+        {
+          "complete": "session.tabs.list#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tabs": [
+                {
+                  "id": "tab-term",
+                  "type": "terminal"
+                },
+                {
+                  "id": "tab-other",
+                  "type": "file",
+                  "mode": "diff",
+                  "relativePath": "src/other.ts"
+                },
+                {
+                  "id": "tab-1",
+                  "type": "file",
+                  "mode": "diff",
+                  "relativePath": "src/app.ts",
+                  "diffSource": "unstaged"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "activate-pending"
+        },
+        {
+          "complete": "session.tabs.activate#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "tabId": "tab-1",
+            "notifyClients": false,
+            "navigation": "caller",
+            "intent": "user"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "activeTabId": "tab-1"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-reveal-timeout",
+      "operation": "source-control.session-diff-reveal",
+      "version": 1,
+      "family": "session.tab-reveal",
+      "sites": ["mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "reveal",
+          "id": "reveal"
+        },
+        {
+          "complete": "session.tabs.list#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "no tabs"
+            }
+          }
+        },
+        {
+          "advance": 300
+        },
+        {
+          "complete": "session.tabs.list#2",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tabs": []
+            }
+          }
+        },
+        {
+          "checkpoint": "second-poll-empty"
+        },
+        {
+          "advance": 600
+        },
+        {
+          "complete": "session.tabs.list#3",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tabs": [
+                {
+                  "id": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "advance": 900
+        },
+        {
+          "complete": "session.tabs.list#4",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reject": {
+            "message": "transport failure",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-review-status-normalized",
+      "operation": "source-control.review-git-preparation",
+      "version": 1,
+      "family": "git.review-preparation",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "status",
+          "id": "status"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "git.status#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "branch": "feature",
+              "head": "abc1234",
+              "entries": [
+                {
+                  "path": "src/app.ts",
+                  "status": "modified",
+                  "area": "staged"
+                },
+                {
+                  "path": "src/new.ts",
+                  "status": "untracked",
+                  "area": "untracked"
+                }
+              ],
+              "upstreamStatus": {
+                "ahead": 1,
+                "behind": 0,
+                "hasUpstream": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-review-status-entries-not-array",
+      "operation": "source-control.review-git-preparation",
+      "version": 1,
+      "family": "git.review-preparation",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "status",
+          "id": "status"
+        },
+        {
+          "complete": "git.status#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "entries": "nope",
+              "branch": "feature"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-review-commit",
+      "operation": "source-control.review-git-preparation",
+      "version": 1,
+      "family": "git.review-preparation",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "commit",
+          "id": "commit"
+        },
+        {
+          "complete": "git.commit#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "message": "recorded message"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "success": true,
+              "commit": "abc1234"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-review-commit-inner-failure",
+      "operation": "source-control.review-git-preparation",
+      "version": 1,
+      "family": "git.review-preparation",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "commit",
+          "id": "commit"
+        },
+        {
+          "complete": "git.commit#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "message": "recorded message"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "success": false,
+              "error": "nothing staged"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-review-commit-refused-empty-message",
+      "operation": "source-control.review-git-preparation",
+      "version": 1,
+      "family": "git.review-preparation",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "commit",
+          "id": "commit"
+        },
+        {
+          "complete": "git.commit#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "message": "recorded message"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "internal",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-review-commit-rejected",
+      "operation": "source-control.review-git-preparation",
+      "version": 1,
+      "family": "git.review-preparation",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-git-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "commit",
+          "id": "commit"
+        },
+        {
+          "complete": "git.commit#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "message": "recorded message"
+          },
+          "reject": {
+            "message": "connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-prerequisite-push",
+      "operation": "source-control.remote-prerequisite",
+      "version": 1,
+      "family": "git.remote-prerequisite",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "apply",
+          "id": "apply",
+          "args": {
+            "blockedReason": "needs_push"
+          }
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "git.push#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-prerequisite-publish",
+      "operation": "source-control.remote-prerequisite",
+      "version": 1,
+      "family": "git.remote-prerequisite",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "apply",
+          "id": "apply",
+          "args": {
+            "blockedReason": "no_upstream"
+          }
+        },
+        {
+          "complete": "git.push#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "publish": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-prerequisite-force-with-lease",
+      "operation": "source-control.remote-prerequisite",
+      "version": 1,
+      "family": "git.remote-prerequisite",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "apply",
+          "id": "apply",
+          "args": {
+            "blockedReason": "needs_sync",
+            "patchEquivalent": true
+          }
+        },
+        {
+          "complete": "git.push#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "forceWithLease": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-prerequisite-skipped",
+      "operation": "source-control.remote-prerequisite",
+      "version": 1,
+      "family": "git.remote-prerequisite",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "apply",
+          "id": "apply",
+          "args": {
+            "blockedReason": "needs_sync"
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-eligibility-fetched",
+      "operation": "source-control.hosted-review-eligibility",
+      "version": 1,
+      "family": "hostedReview.eligibility",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "fetch",
+          "id": "fetch"
+        },
+        {
+          "checkpoint": "pending"
+        },
+        {
+          "complete": "hostedReview.getCreationEligibility#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "branch": "feature",
+            "base": null,
+            "linkedGitHubPR": null,
+            "linkedGitLabMR": null
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "gitlab",
+              "defaultBaseRef": "main",
+              "title": "Host title",
+              "body": "Host body",
+              "canCreate": true,
+              "blockedReason": null,
+              "nextAction": null,
+              "reviewLookupOutcome": "none"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-prefill-unavailable-on-refusal",
+      "operation": "source-control.hosted-review-eligibility",
+      "version": 1,
+      "family": "hostedReview.eligibility",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "prefill",
+          "id": "prefill"
+        },
+        {
+          "complete": "hostedReview.getCreationEligibility#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "branch": "feature",
+            "base": null,
+            "linkedGitHubPR": null,
+            "linkedGitLabMR": null
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "no eligibility"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-prefill-unavailable-on-rejection",
+      "operation": "source-control.hosted-review-eligibility",
+      "version": 1,
+      "family": "hostedReview.eligibility",
+      "sites": ["mobile/src/source-control/mobile-hosted-review-service.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "prefill",
+          "id": "prefill"
+        },
+        {
+          "complete": "hostedReview.getCreationEligibility#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "branch": "feature",
+            "base": null,
+            "linkedGitHubPR": null,
+            "linkedGitLabMR": null
+          },
+          "reject": {
+            "message": "transport failure",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-create-pushes-then-creates",
+      "operation": "source-control.hosted-review-create",
+      "version": 1,
+      "family": "hostedReview.create-chain",
+      "sites": [
+        "mobile/src/source-control/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/mobile-pr-link.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "pushBeforeCreate": true
+          }
+        },
+        {
+          "checkpoint": "push-pending"
+        },
+        {
+          "complete": "git.push#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "create-pending"
+        },
+        {
+          "complete": "hostedReview.create#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "provider": "github",
+            "base": "main",
+            "head": "feature",
+            "title": "Recorded title",
+            "body": "Recorded body",
+            "draft": false
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "number": 5,
+              "url": "https://review.test/5"
+            }
+          }
+        },
+        {
+          "checkpoint": "link-pending"
+        },
+        {
+          "complete": "worktree.set#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "baseRef": "main",
+            "linkedPR": 5
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-create-link-failure-is-non-fatal",
+      "operation": "source-control.hosted-review-create",
+      "version": 1,
+      "family": "hostedReview.create-chain",
+      "sites": [
+        "mobile/src/source-control/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/mobile-pr-link.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {}
+        },
+        {
+          "complete": "hostedReview.create#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "provider": "github",
+            "base": "main",
+            "head": "feature",
+            "title": "Recorded title",
+            "body": "Recorded body",
+            "draft": false
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "number": 5,
+              "url": "https://review.test/5"
+            }
+          }
+        },
+        {
+          "complete": "worktree.set#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "baseRef": "main",
+            "linkedPR": 5
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "internal",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-create-existing-review",
+      "operation": "source-control.hosted-review-create",
+      "version": 1,
+      "family": "hostedReview.create-chain",
+      "sites": [
+        "mobile/src/source-control/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/mobile-pr-link.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {}
+        },
+        {
+          "complete": "hostedReview.create#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "provider": "github",
+            "base": "main",
+            "head": "feature",
+            "title": "Recorded title",
+            "body": "Recorded body",
+            "draft": false
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": false,
+              "error": "Create pull request failed: already exists",
+              "existingReview": {
+                "number": 9,
+                "url": "https://review.test/9"
+              }
+            }
+          }
+        },
+        {
+          "complete": "worktree.set#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "baseRef": "main",
+            "linkedPR": 9
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-create-refused-empty-message",
+      "operation": "source-control.hosted-review-create",
+      "version": 1,
+      "family": "hostedReview.create-chain",
+      "sites": [
+        "mobile/src/source-control/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/mobile-pr-link.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {}
+        },
+        {
+          "complete": "hostedReview.create#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "provider": "github",
+            "base": "main",
+            "head": "feature",
+            "title": "Recorded title",
+            "body": "Recorded body",
+            "draft": false
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "internal",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-create-rejected-empty-message",
+      "operation": "source-control.hosted-review-create",
+      "version": 1,
+      "family": "hostedReview.create-chain",
+      "sites": [
+        "mobile/src/source-control/mobile-hosted-review-service.ts",
+        "mobile/src/source-control/mobile-pr-link.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {}
+        },
+        {
+          "complete": "hostedReview.create#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "provider": "github",
+            "base": "main",
+            "head": "feature",
+            "title": "Recorded title",
+            "body": "Recorded body",
+            "draft": false
+          },
+          "reject": {
+            "message": "",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "sc-create-intent-stage-commit-push-create",
+      "operation": "source-control.create-intent",
+      "version": 1,
+      "family": "hostedReview.create-intent",
+      "sites": [
+        "mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts",
+        "mobile/src/source-control/mobile-hosted-review-create-intent.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "run",
+          "id": "run",
+          "args": {}
+        },
+        {
+          "checkpoint": "initial-status-pending"
+        },
+        {
+          "complete": "git.status#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "branch": "feature",
+              "head": "abc1234",
+              "entries": [
+                {
+                  "path": "src/app.ts",
+                  "status": "modified",
+                  "area": "staged"
+                },
+                {
+                  "path": "src/new.ts",
+                  "status": "untracked",
+                  "area": "untracked"
+                }
+              ],
+              "upstreamStatus": {
+                "ahead": 1,
+                "behind": 0,
+                "hasUpstream": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "stage-pending"
+        },
+        {
+          "complete": "git.bulkStage#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "filePaths": ["src/new.ts"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "complete": "git.status#2",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "branch": "feature",
+              "head": "abc1234",
+              "entries": [
+                {
+                  "path": "src/app.ts",
+                  "status": "modified",
+                  "area": "staged"
+                }
+              ],
+              "upstreamStatus": {
+                "ahead": 1,
+                "behind": 0,
+                "hasUpstream": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "generate-message-pending"
+        },
+        {
+          "complete": "git.generateCommitMessage#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "success": true,
+              "message": "feat: recorded"
+            }
+          }
+        },
+        {
+          "checkpoint": "commit-pending"
+        },
+        {
+          "complete": "git.commit#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "message": "feat: recorded"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "success": true
+            }
+          }
+        },
+        {
+          "complete": "git.status#3",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "branch": "feature",
+              "head": "def5678",
+              "entries": [],
+              "upstreamStatus": {
+                "ahead": 1,
+                "behind": 0,
+                "hasUpstream": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "prefill-pending"
+        },
+        {
+          "complete": "hostedReview.getCreationEligibility#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "branch": "feature",
+            "base": null,
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "ahead": 1,
+            "behind": 0,
+            "linkedGitHubPR": null,
+            "linkedGitLabMR": null
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "defaultBaseRef": "main",
+              "title": "Host title",
+              "body": "Host body",
+              "canCreate": true,
+              "blockedReason": "needs_push",
+              "nextAction": null,
+              "reviewLookupOutcome": "not_found"
+            }
+          }
+        },
+        {
+          "checkpoint": "push-pending"
+        },
+        {
+          "complete": "git.push#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "complete": "git.status#4",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "branch": "feature",
+              "head": "def5678",
+              "entries": [],
+              "upstreamStatus": {
+                "ahead": 0,
+                "behind": 0,
+                "hasUpstream": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "hostedReview.getCreationEligibility#2",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "branch": "feature",
+            "base": null,
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "ahead": 0,
+            "behind": 0,
+            "linkedGitHubPR": null,
+            "linkedGitLabMR": null
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "defaultBaseRef": "main",
+              "title": "Host title",
+              "body": "Host body",
+              "canCreate": true,
+              "blockedReason": null,
+              "nextAction": null,
+              "reviewLookupOutcome": "not_found"
+            }
+          }
+        },
+        {
+          "checkpoint": "create-pending"
+        },
+        {
+          "complete": "hostedReview.create#1",
+          "params": {
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p",
+            "provider": "github",
+            "base": "main",
+            "head": "feature",
+            "title": "Host title",
+            "body": "Host body",
+            "draft": false
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "number": 5,
+              "url": "https://review.test/5"
+            }
+          }
+        },
+        {
+          "complete": "worktree.set#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "baseRef": "main",
+            "linkedPR": 5
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-created",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "repo-1::/w",
+                "displayName": "kestrel"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-warning-kept",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "repo-1::/w"
+              },
+              "warning": "  startup terminal failed  "
+            }
+          }
+        },
+        {
+          "checkpoint": "created-with-warning"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-name-collision",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "conflict",
+              "message": "Branch \"kestrel\" already exists."
+            }
+          }
+        },
+        {
+          "checkpoint": "retrying"
+        },
+        {
+          "complete": "worktree.create#2",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel-2",
+            "clientMutationId": "mutation-2"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "repo-1::/w2",
+                "displayName": "kestrel-2"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created-suffixed"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-unretryable-refusal",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "internal",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-empty-message"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-ambiguous-while-connected",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reject": {
+            "message": "Request timed out",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "unknown-not-failed"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-ambiguous-after-drop",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "action": "disconnect",
+          "id": "drop"
+        },
+        {
+          "checkpoint": "waiting-for-reconnect"
+        },
+        {
+          "advance": 20000
+        },
+        {
+          "checkpoint": "replay-window-abandoned"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-ambiguous-without-idempotency",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "idempotency": false
+          }
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel"
+          },
+          "reject": {
+            "message": "Connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "unstamped-create-is-not-replayed"
+        }
+      ]
+    },
+    {
+      "id": "tw-capabilities-advertised",
+      "operation": "tasks.worktree-capabilities",
+      "version": 1,
+      "family": "worktree.runtime-capabilities",
+      "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "probe",
+          "id": "probe"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["mobile.tasks.v1", "worktree.create-idempotency.v1"],
+              "worktreeCreateIdempotency": {
+                "dedupeTtlMs": 45000
+              },
+              "platform": "linux"
+            }
+          }
+        },
+        {
+          "checkpoint": "probed"
+        }
+      ]
+    },
+    {
+      "id": "tw-capabilities-legacy-idempotency",
+      "operation": "tasks.worktree-capabilities",
+      "version": 1,
+      "family": "worktree.runtime-capabilities",
+      "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "probe",
+          "id": "probe"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["worktree.create-idempotency.v1"]
+            }
+          }
+        },
+        {
+          "checkpoint": "legacy-host-window"
+        }
+      ]
+    },
+    {
+      "id": "tw-capabilities-cutover-retried",
+      "operation": "tasks.worktree-capabilities",
+      "version": 1,
+      "family": "worktree.runtime-capabilities",
+      "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "probe",
+          "id": "probe"
+        },
+        {
+          "action": "cutover",
+          "id": "migrate"
+        },
+        {
+          "bind": "status-after-cutover",
+          "request": "status.get#2",
+          "params": {
+            "$undefined": true
+          }
+        },
+        {
+          "checkpoint": "reprobing-after-cutover"
+        },
+        {
+          "complete": "status-after-cutover",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["mobile.tasks.v1"]
+            }
+          }
+        },
+        {
+          "checkpoint": "probed-on-replacement"
+        }
+      ]
+    },
+    {
+      "id": "tw-hosted-base-resolved",
+      "operation": "tasks.composer-hosted-base",
+      "version": 1,
+      "family": "worktree.hosted-base",
+      "sites": ["mobile/src/tasks/composer-source-base-resolve.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "pr-base",
+          "id": "pr"
+        },
+        {
+          "complete": "worktree.resolvePrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "prNumber": 12,
+            "headRefName": "feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "baseBranch": "main",
+              "compareBaseRef": "origin/main"
+            }
+          }
+        },
+        {
+          "checkpoint": "pr-base-resolved"
+        },
+        {
+          "action": "mr-base",
+          "id": "mr"
+        },
+        {
+          "complete": "worktree.resolveMrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "mrIid": 7,
+            "sourceBranch": "feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "baseBranch": "develop"
+            }
+          }
+        },
+        {
+          "checkpoint": "mr-base-resolved"
+        }
+      ]
+    },
+    {
+      "id": "tw-hosted-base-soft-error",
+      "operation": "tasks.composer-hosted-base",
+      "version": 1,
+      "family": "worktree.hosted-base",
+      "sites": ["mobile/src/tasks/composer-source-base-resolve.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "pr-base",
+          "id": "pr"
+        },
+        {
+          "complete": "worktree.resolvePrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "prNumber": 12,
+            "headRefName": "feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "error": "pull request not found"
+            }
+          }
+        },
+        {
+          "checkpoint": "in-band-error"
+        },
+        {
+          "action": "mr-base",
+          "id": "mr"
+        },
+        {
+          "complete": "worktree.resolveMrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "mrIid": 7,
+            "sourceBranch": "feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "error": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "in-band-empty-error"
+        }
+      ]
+    },
+    {
+      "id": "tw-setup-hook-trust-approved",
+      "operation": "tasks.setup-hook-trust",
+      "version": 1,
+      "family": "worktree.setup-hook-trust",
+      "sites": ["mobile/src/tasks/setup-hook-trust.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "approve",
+          "id": "approve"
+        },
+        {
+          "complete": "ui.set#1",
+          "params": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "contentHash": "hash-1",
+                  "approvedAt": 1767225600000
+                }
+              }
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "approved"
+        }
+      ]
+    },
+    {
+      "id": "tw-setup-hook-trust-always",
+      "operation": "tasks.setup-hook-trust",
+      "version": 1,
+      "family": "worktree.setup-hook-trust",
+      "sites": ["mobile/src/tasks/setup-hook-trust.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "approve",
+          "id": "approve",
+          "args": {
+            "always": true
+          }
+        },
+        {
+          "complete": "ui.set#1",
+          "params": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "all": {
+                  "approvedAt": 1767225600000
+                }
+              }
+            }
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-empty-message"
+        }
+      ]
+    },
+    {
+      "id": "tw-smart-search-all-providers",
+      "operation": "tasks.smart-source-search",
+      "version": 1,
+      "family": "tasks.smart-source-search",
+      "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "github",
+          "id": "github"
+        },
+        {
+          "complete": "github.listWorkItems#1",
+          "params": {
+            "repo": "id:repo-1",
+            "limit": 36,
+            "query": "bug"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "number": 1,
+                  "title": "one"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "github-items"
+        },
+        {
+          "action": "gitlab",
+          "id": "gitlab"
+        },
+        {
+          "complete": "gitlab.listWorkItems#1",
+          "params": {
+            "repo": "id:repo-1",
+            "state": "opened",
+            "page": 1,
+            "perPage": 50,
+            "query": "bug"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "iid": 2,
+                  "title": "two"
+                }
+              ],
+              "error": {
+                "type": "not_found",
+                "message": "missing"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "gitlab-items"
+        },
+        {
+          "action": "linear",
+          "id": "linear"
+        },
+        {
+          "complete": "linear.searchIssues#1",
+          "params": {
+            "query": "bug",
+            "limit": 50,
+            "workspaceId": "linear-workspace"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "id": "issue-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "linear-search"
+        },
+        {
+          "action": "branches",
+          "id": "branches"
+        },
+        {
+          "complete": "repo.searchRefs#1",
+          "params": {
+            "repo": "id:repo-1",
+            "query": "bug",
+            "limit": 20
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "refs": ["main", "release"]
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-refs"
+        },
+        {
+          "action": "linear",
+          "id": "linear-assigned",
+          "args": {
+            "query": "  ",
+            "workspace": null
+          }
+        },
+        {
+          "complete": "linear.listIssues#1",
+          "params": {
+            "filter": "assigned",
+            "limit": 50,
+            "workspaceId": {
+              "$undefined": true
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-3"
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "linear-assigned-listed"
+        }
+      ]
+    },
+    {
+      "id": "tw-smart-search-linear-listed",
+      "operation": "tasks.smart-source-search",
+      "version": 1,
+      "family": "tasks.smart-source-search",
+      "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "linear",
+          "id": "linear",
+          "args": {
+            "query": "  ",
+            "workspace": null
+          }
+        },
+        {
+          "complete": "linear.listIssues#1",
+          "params": {
+            "filter": "assigned",
+            "limit": 50,
+            "workspaceId": {
+              "$undefined": true
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-2"
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "linear-assigned"
+        }
+      ]
+    },
+    {
+      "id": "tw-smart-search-gitlab-provider-error",
+      "operation": "tasks.smart-source-search",
+      "version": 1,
+      "family": "tasks.smart-source-search",
+      "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "gitlab",
+          "id": "gitlab"
+        },
+        {
+          "complete": "gitlab.listWorkItems#1",
+          "params": {
+            "repo": "id:repo-1",
+            "state": "opened",
+            "page": 1,
+            "perPage": 50,
+            "query": "bug"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [],
+              "error": {
+                "type": "quota",
+                "message": "rate limited"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "in-band-provider-error"
+        },
+        {
+          "action": "branches",
+          "id": "branches",
+          "args": {
+            "query": " main "
+          }
+        },
+        {
+          "complete": "repo.searchRefs#1",
+          "params": {
+            "repo": "id:repo-1",
+            "query": "main",
+            "limit": 20
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "refDetails": [
+                {
+                  "refName": "origin/main",
+                  "localBranchName": "main"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-ref-details"
+        }
+      ]
+    },
+    {
+      "id": "tw-paste-lookup-resolved",
+      "operation": "tasks.paste-lookup",
+      "version": 1,
+      "family": "tasks.paste-lookup",
+      "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "by-number",
+          "id": "by-number"
+        },
+        {
+          "complete": "github.workItem#1",
+          "params": {
+            "repo": "id:repo-1",
+            "number": 12
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "number": 12,
+              "title": "twelve"
+            }
+          }
+        },
+        {
+          "checkpoint": "by-number"
+        },
+        {
+          "action": "by-slug",
+          "id": "by-slug"
+        },
+        {
+          "complete": "github.workItemByOwnerRepo#1",
+          "params": {
+            "repo": "id:repo-1",
+            "owner": "owner",
+            "ownerRepo": "repo",
+            "number": 12,
+            "type": "issue"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "number": 12,
+              "title": "twelve"
+            }
+          }
+        },
+        {
+          "checkpoint": "by-slug"
+        },
+        {
+          "action": "gitlab-path",
+          "id": "gitlab-path"
+        },
+        {
+          "complete": "gitlab.workItemByPath#1",
+          "params": {
+            "repo": "id:repo-1",
+            "host": "gitlab.com",
+            "path": "group/project",
+            "iid": 7,
+            "type": "issue"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "iid": 7,
+              "title": "seven"
+            }
+          }
+        },
+        {
+          "checkpoint": "gitlab-path"
+        },
+        {
+          "action": "repo-slug",
+          "id": "repo-slug"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
+        },
+        {
+          "checkpoint": "repo-slug-matched"
+        }
+      ]
+    },
+    {
+      "id": "tw-paste-lookup-slug-unsupported",
+      "operation": "tasks.paste-lookup",
+      "version": 1,
+      "family": "tasks.paste-lookup",
+      "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "repo-slug",
+          "id": "repo-slug"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "checkpoint": "host-wide-probe-cached"
+        },
+        {
+          "action": "repo-slug-again",
+          "id": "repo-slug-again"
+        },
+        {
+          "checkpoint": "no-second-probe"
+        }
+      ]
+    },
+    {
+      "id": "tw-paste-lookup-slug-refused",
+      "operation": "tasks.paste-lookup",
+      "version": 1,
+      "family": "tasks.paste-lookup",
+      "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "repo-slug",
+          "id": "repo-slug"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": "no access"
+            }
+          }
+        },
+        {
+          "complete": "github.repoSlug#2",
+          "params": {
+            "repo": "id:repo-2"
+          },
+          "reply": {
+            "ok": true,
+            "result": null
+          }
+        },
+        {
+          "checkpoint": "refusal-is-per-repo"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-source-presets",
+      "operation": "tasks.workspace-source",
+      "version": 1,
+      "family": "tasks.workspace-source",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "repo.sparsePresets#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "presets": [
+                {
+                  "id": "p1",
+                  "name": "docs",
+                  "directories": ["docs"]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "presets-loaded"
+        },
+        {
+          "action": "branch-query",
+          "id": "branch-query"
+        },
+        {
+          "complete": "repo.searchRefs#1",
+          "params": {
+            "repo": "id:repo-1",
+            "query": "main",
+            "limit": 20
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "refs": ["main"]
+            }
+          }
+        },
+        {
+          "checkpoint": "branches-loaded"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-source-presets-refused",
+      "operation": "tasks.workspace-source",
+      "version": 1,
+      "family": "tasks.workspace-source",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "repo.sparsePresets#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "presets-refused-empty-message"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-sparse-saved",
+      "operation": "tasks.workspace-sparse",
+      "version": 1,
+      "family": "tasks.workspace-sparse",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "ssh.getState#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "state": {
+                "targetId": "ssh-1",
+                "status": "connected",
+                "error": null,
+                "reconnectAttempt": 0
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "ssh-state-read"
+        },
+        {
+          "action": "save-preset",
+          "id": "save"
+        },
+        {
+          "complete": "repo.saveSparsePreset#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "docs",
+            "directories": ["docs"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "preset": {
+                "id": "p1",
+                "name": "docs",
+                "directories": ["docs"]
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "preset-saved"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-sparse-missing-preset",
+      "operation": "tasks.workspace-sparse",
+      "version": 1,
+      "family": "tasks.workspace-sparse",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "ssh.getState#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": ""
+            }
+          }
+        },
+        {
+          "action": "save-preset",
+          "id": "save"
+        },
+        {
+          "complete": "repo.saveSparsePreset#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "docs",
+            "directories": ["docs"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {}
+          }
+        },
+        {
+          "checkpoint": "saved-without-preset"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-ssh-connected",
+      "operation": "tasks.workspace-ssh",
+      "version": 1,
+      "family": "tasks.workspace-ssh",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex"]
+          }
+        },
+        {
+          "checkpoint": "agents-detected"
+        },
+        {
+          "action": "connect",
+          "id": "connect"
+        },
+        {
+          "complete": "ssh.connect#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "state": {
+                "targetId": "ssh-1",
+                "status": "connected",
+                "error": null,
+                "reconnectAttempt": 0
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "connected"
+        },
+        {
+          "action": "resolve-setup",
+          "id": "setup"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hooks": {
+                "scripts": {
+                  "setup": "  pnpm install  "
+                }
+              },
+              "setupRunPolicy": "ask",
+              "source": "repo",
+              "setupTrust": {
+                "contentHash": "hash-1",
+                "scriptContent": "pnpm install"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "setup-prompted"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-ssh-not-ready",
+      "operation": "tasks.workspace-ssh",
+      "version": 1,
+      "family": "tasks.workspace-ssh",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": "no access"
+            }
+          }
+        },
+        {
+          "action": "ensure-ready",
+          "id": "ensure"
+        },
+        {
+          "complete": "ssh.getState#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "state": {
+                "targetId": "ssh-1",
+                "status": "disconnected",
+                "error": null,
+                "reconnectAttempt": 0
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "ensure-rejected"
+        },
+        {
+          "action": "resolve-setup",
+          "id": "setup"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hooks": {
+                "scripts": {}
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "no-setup-script"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-ssh-connect-refused",
+      "operation": "tasks.workspace-ssh",
+      "version": 1,
+      "family": "tasks.workspace-ssh",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reject": {
+            "message": "Connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "action": "connect",
+          "id": "connect"
+        },
+        {
+          "complete": "ssh.connect#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "ssh_failed",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "connect-refused-empty-message"
+        },
+        {
+          "action": "resolve-setup",
+          "id": "setup"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hooks": {
+                "scripts": {
+                  "setup": "pnpm i"
+                }
+              },
+              "setupRunPolicy": "never"
+            }
+          }
+        },
+        {
+          "checkpoint": "setup-skipped"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-ssh-local-agents",
+      "operation": "tasks.workspace-ssh-local",
+      "version": 1,
+      "family": "tasks.workspace-ssh-local",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "preflight.detectAgents#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex", "claude"]
+          }
+        },
+        {
+          "checkpoint": "local-agents-detected"
+        }
+      ]
+    },
+    {
+      "id": "tw-task-preferences-resume-write",
+      "operation": "settings.task-preferences",
+      "version": 1,
+      "family": "settings-best-effort",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "resume",
+          "id": "resume"
+        },
+        {
+          "complete": "ui.set#1",
+          "params": {
+            "taskResumeState": {
+              "githubItemsPreset": "issues"
+            }
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": "no access"
+            }
+          }
+        },
+        {
+          "checkpoint": "best-effort-resume-write"
+        },
+        {
+          "action": "trust",
+          "id": "trust"
+        },
+        {
+          "complete": "ui.set#2",
+          "params": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "contentHash": "hash-1",
+                  "approvedAt": 1767225600000
+                }
+              }
+            }
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "awaited-trust-write-refused"
+        }
+      ]
+    }
+  ]
+}

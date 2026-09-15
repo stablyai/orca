@@ -10,6 +10,8 @@ import {
   type PostgresPoolPressureCounts
 } from './postgres-pool-pressure.js'
 import { applyPostgresSchema } from './postgres-schema-startup.js'
+import { POSTGRES_STATEMENT_STATS_MIGRATION } from './postgres-statement-stats.js'
+import { reportPostgresQueryFailure } from './postgres-query-failure.js'
 import {
   CellInventoryHoldSamples,
   emptyCellInventoryHoldCounts,
@@ -197,6 +199,24 @@ CREATE TABLE IF NOT EXISTS relay_assignment_region_preferences (
 CREATE INDEX IF NOT EXISTS relay_assignment_region_preferences_observed
   ON relay_assignment_region_preferences(observed_at);
 
+CREATE TABLE IF NOT EXISTS relay_region_decisions (
+  user_id TEXT NOT NULL, relay_host_id TEXT NOT NULL,
+  generation BIGINT NOT NULL, expires_at BIGINT NOT NULL,
+  assignment_epoch BIGINT NOT NULL, incumbent_region TEXT NOT NULL,
+  policy_version BIGINT NOT NULL, outcome TEXT NOT NULL,
+  cohort_bucket BIGINT NOT NULL DEFAULT 0,
+  last_considered_at BIGINT NOT NULL DEFAULT 0,
+  preferred_region TEXT, observed_at BIGINT NOT NULL, report_json TEXT,
+  PRIMARY KEY (user_id, relay_host_id)
+);
+CREATE TABLE IF NOT EXISTS relay_control_capabilities (
+  user_id TEXT NOT NULL, relay_host_id TEXT NOT NULL, activity_id TEXT NOT NULL,
+  cell_id TEXT NOT NULL, cell_incarnation TEXT NOT NULL,
+  assignment_epoch BIGINT NOT NULL, generation BIGINT NOT NULL,
+  finish_existing BIGINT NOT NULL,
+  idle_regional_rehome BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, relay_host_id, activity_id)
+);
 CREATE TABLE IF NOT EXISTS relay_region_rehome_worker_state (
   worker_id TEXT PRIMARY KEY,
   next_dispatch_at BIGINT NOT NULL,
@@ -228,6 +248,7 @@ CREATE TABLE IF NOT EXISTS relay_region_rehome_attempts (
     CHECK (preferred_region IN (${REGION_LIST})),
   source_cell_id TEXT NOT NULL,
   source_cell_incarnation TEXT NOT NULL,
+  source_generation BIGINT NOT NULL DEFAULT 0,
   target_cell_id TEXT NOT NULL,
   target_cell_incarnation TEXT NOT NULL,
   previous_epoch BIGINT NOT NULL,
@@ -600,6 +621,9 @@ CREATE INDEX IF NOT EXISTS relay_audit_events_at ON relay_audit_events(at);
 // auto-named; the replacement is named, so both statements are no-ops on a
 // database the current schema created and neither can drop the other.
 export const POSTGRES_SCHEMA_MIGRATIONS = [
+  POSTGRES_STATEMENT_STATS_MIGRATION,
+  `ALTER TABLE relay_region_decisions ADD COLUMN IF NOT EXISTS last_considered_at BIGINT NOT NULL DEFAULT 0`,
+  `ALTER TABLE relay_region_decisions ADD COLUMN IF NOT EXISTS cohort_bucket BIGINT NOT NULL DEFAULT 0`,
   `ALTER TABLE relay_region_rehome_attempts
      DROP CONSTRAINT IF EXISTS relay_region_rehome_attempts_preferred_region_check`,
   `ALTER TABLE relay_region_rehome_attempts
@@ -607,7 +631,9 @@ export const POSTGRES_SCHEMA_MIGRATIONS = [
      CHECK (preferred_region IN (${REGION_LIST}))`,
   `ALTER TABLE relay_region_rehome_control
      ADD COLUMN IF NOT EXISTS host_cooldown_ms BIGINT NOT NULL
-     DEFAULT ${REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS}`
+     DEFAULT ${REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS}`,
+  `ALTER TABLE relay_control_capabilities ADD COLUMN IF NOT EXISTS idle_regional_rehome BIGINT NOT NULL DEFAULT 0`,
+  `ALTER TABLE relay_region_rehome_attempts ADD COLUMN IF NOT EXISTS source_generation BIGINT NOT NULL DEFAULT 0`
 ]
 
 function postgresSql(sql: string): string {
@@ -885,12 +911,25 @@ class PostgresDatabase implements RelayDatabase {
   }
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
-    const client = await this.pressure.connect()
+    const startedAt = performance.now()
+    let phase: 'acquire' | 'execute' = 'acquire'
+    let client: pg.PoolClient | undefined
     try {
+      client = await this.pressure.connect()
+      phase = 'execute'
       const result = await client.query(postgresSql(sql), params)
       return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
+    } catch (error) {
+      reportPostgresQueryFailure({
+        error,
+        phase,
+        sql,
+        elapsedMs: performance.now() - startedAt,
+        pool: this.pool
+      })
+      throw error
     } finally {
-      client.release()
+      client?.release()
     }
   }
 
@@ -1012,6 +1051,15 @@ export function absorbPostgresIdleClientErrors(pool: Pick<pg.Pool, 'on'>): void 
 async function applySchema(database: RelayDatabase): Promise<void> {
   for (const statement of SCHEMA.split(';')) {
     if (statement.trim()) await database.query(statement)
+  }
+  for (const [table, column] of [
+    ['relay_control_capabilities', 'idle_regional_rehome'],
+    ['relay_region_rehome_attempts', 'source_generation']
+  ]) {
+    const columns = await database.query('SELECT name FROM pragma_table_info(?)', [table])
+    if (!columns.some((existing) => existing.name === column)) {
+      await database.query(`ALTER TABLE ${table} ADD COLUMN ${column} BIGINT NOT NULL DEFAULT 0`)
+    }
   }
 }
 

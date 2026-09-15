@@ -1,5 +1,10 @@
 /** Combines rollups produced by separate sources (rollout files, sibling databases) of one provider. */
 import {
+  indexUsageSessionBreakdowns,
+  usageLocationModelKey,
+  type UsageSessionBreakdownIndex
+} from './usage-session-breakdown-index'
+import {
   usageDailyAggregateKey,
   type UsageDailyAggregate,
   type UsageMetricFold,
@@ -16,6 +21,7 @@ export function mergeUsageSessions<TMetric extends object>(
   sessions: UsageSession<TMetric>[],
   { fold, cloneSessionForMerge }: UsageRollupMergeOptions<TMetric>
 ): void {
+  const breakdownsBySession = new Map<string, UsageSessionBreakdownIndex<TMetric>>()
   for (const session of sessions) {
     const existing = target.get(session.sessionId)
     if (!existing) {
@@ -39,10 +45,13 @@ export function mergeUsageSessions<TMetric extends object>(
     existing.totalTokens += session.totalTokens
     fold(existing, session)
 
+    let breakdowns = breakdownsBySession.get(session.sessionId)
+    if (!breakdowns) {
+      breakdowns = indexUsageSessionBreakdowns(existing)
+      breakdownsBySession.set(session.sessionId, breakdowns)
+    }
     for (const location of session.locationBreakdown) {
-      const existingLocation =
-        existing.locationBreakdown.find((entry) => entry.locationKey === location.locationKey) ??
-        null
+      const existingLocation = breakdowns.locations.get(location.locationKey)
       if (existingLocation) {
         existingLocation.eventCount += location.eventCount
         existingLocation.inputTokens += location.inputTokens
@@ -52,13 +61,14 @@ export function mergeUsageSessions<TMetric extends object>(
         existingLocation.totalTokens += location.totalTokens
         fold(existingLocation, location)
       } else {
-        existing.locationBreakdown.push({ ...location })
+        const copy = { ...location }
+        existing.locationBreakdown.push(copy)
+        breakdowns.locations.set(location.locationKey, copy)
       }
     }
 
     for (const model of session.modelBreakdown) {
-      const existingModel =
-        existing.modelBreakdown.find((entry) => entry.modelKey === model.modelKey) ?? null
+      const existingModel = breakdowns.models.get(model.modelKey)
       if (existingModel) {
         existingModel.eventCount += model.eventCount
         existingModel.inputTokens += model.inputTokens
@@ -68,17 +78,16 @@ export function mergeUsageSessions<TMetric extends object>(
         existingModel.totalTokens += model.totalTokens
         fold(existingModel, model)
       } else {
-        existing.modelBreakdown.push({ ...model })
+        const copy = { ...model }
+        existing.modelBreakdown.push(copy)
+        breakdowns.models.set(model.modelKey, copy)
       }
     }
 
     for (const locationModel of session.locationModelBreakdown) {
-      const existingLocationModel =
-        existing.locationModelBreakdown.find(
-          (entry) =>
-            entry.locationKey === locationModel.locationKey &&
-            entry.modelKey === locationModel.modelKey
-        ) ?? null
+      const existingLocationModel = breakdowns.locationModels.get(
+        usageLocationModelKey(locationModel.locationKey, locationModel.modelKey)
+      )
       if (existingLocationModel) {
         existingLocationModel.eventCount += locationModel.eventCount
         existingLocationModel.inputTokens += locationModel.inputTokens
@@ -88,7 +97,12 @@ export function mergeUsageSessions<TMetric extends object>(
         existingLocationModel.totalTokens += locationModel.totalTokens
         fold(existingLocationModel, locationModel)
       } else {
-        existing.locationModelBreakdown.push({ ...locationModel })
+        const copy = { ...locationModel }
+        existing.locationModelBreakdown.push(copy)
+        breakdowns.locationModels.set(
+          usageLocationModelKey(locationModel.locationKey, locationModel.modelKey),
+          copy
+        )
       }
     }
   }

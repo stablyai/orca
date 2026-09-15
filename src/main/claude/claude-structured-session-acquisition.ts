@@ -1,10 +1,9 @@
+import { ClaudeRewindAttempt, proveClaudeRewindRecovery } from './claude-structured-rewind'
 import {
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionPreSpawnError
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type {
-  AgentSessionAcquisition,
-  StructuredAgentSessionAcquireInput
+  AgentSessionPreSpawnError,
+  type AgentSessionAcquisition,
+  type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/environment'
 import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
@@ -24,13 +23,18 @@ import {
 } from './claude-structured-init-deadline'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { CLAUDE_SPAWN_TOKEN_ENV, claudeProcessIdentity } from './claude-structured-owner-identity'
-import {
-  restoreClaudeStructuredSessionOptions,
-  restoredClaudeStructuredSessionOptions
-} from './claude-structured-options'
+import { restoreClaudeStructuredSessionOptions } from './claude-structured-options'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { createClaudeSessionJournalTranslator } from './claude-structured-journal-translation'
-import { readClaudeSettingsEffort } from './claude-structured-session-options'
+import {
+  observeClaudeFastModeFacts,
+  readClaudeSettingsEffort
+} from './claude-structured-session-options'
+import {
+  claudeStructuredSessionPublicationOptions,
+  prepareClaudeStructuredSessionAcquisitionOptions,
+  readClaudeStructuredSessionSettings
+} from './claude-structured-session-acquisition-options'
 import { createClaudeSessionPublication } from './claude-structured-session-publication'
 import {
   cancelClaudeAcquisitionAttempt,
@@ -42,8 +46,9 @@ import {
   type ClaudeAcquireCallbacks
 } from './claude-structured-session-state'
 import {
+  claudeAcquisitionCleanupError,
   closeClaudePublishedSessionForDeps,
-  claudeAcquisitionCleanupError
+  resolveClaudeAcquisitionError
 } from './claude-structured-session-close'
 import { readClaudeTranscriptEntryUuid } from './claude-tui-exit'
 
@@ -85,6 +90,7 @@ export async function acquireClaudeSession({
   const initTimeoutMs = deps.initTimeoutMs ?? CLAUDE_STRUCTURED_INIT_TIMEOUT_MS
   const initDeadline = createClaudeInitDeadline(sessionId, initTimeoutMs)
 
+  const rewind = new ClaudeRewindAttempt(input.rewind, input.rewind?.onProved)
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
@@ -93,6 +99,11 @@ export async function acquireClaudeSession({
       if (init || (message.type === 'system' && message.subtype === 'init')) {
         initDeadline.reject(new Error('claude provider session expected'))
       }
+      return
+    }
+    const refusal = rewind.observe(message)
+    if (refusal) {
+      initDeadline.reject(refusal)
       return
     }
     if (init) {
@@ -108,24 +119,30 @@ export async function acquireClaudeSession({
     observedLeafUuid = readClaudeTranscriptEntryUuid(message) ?? observedLeafUuid
     if (liveSession) {
       liveSession.leafUuid = observedLeafUuid
+      observeClaudeFastModeFacts(liveSession, message)
     }
     const startsTurn = liveSession
       ? resolveClaudeReplayWaiter(liveSession, message, (settlement) =>
           deps.onDispatchSettledLate?.({ sessionId, ...settlement })
         )
       : false
+    // Turn endpoints are stamped on the host clock, never the frame's own timestamp.
+    const observedAt =
+      startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, {
         type: 'message',
         sessionId,
         message,
-        ...(startsTurn ? { startsTurn: true } : {})
+        ...(startsTurn ? { startsTurn: true } : {}),
+        ...observedAt
       })
     )
   }
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId,
     prompts,
+    currentTurnId: () => liveSession?.activeTurnId ?? null,
     emit: (event) =>
       callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
   })
@@ -178,6 +195,7 @@ export async function acquireClaudeSession({
           ? error
           : new AgentSessionPreSpawnError(error)
       })
+    rewind.applyLaunch(launch, deps)
     expectedProviderSessionId = launch.providerSessionId
     observedLeafUuid = launch.resumeLeafUuid
     acquisitions.assertCurrent(sessionId, attempt)
@@ -231,9 +249,13 @@ export async function acquireClaudeSession({
         `claude proved session ${init.providerSessionId}, expected ${launch.providerSessionId}`
       )
     }
-    const settings = await connection
-      .getSettings({ timeoutMs: deps.requestTimeoutMs })
-      .catch(() => null)
+    const settings = await readClaudeStructuredSessionSettings(connection, deps.requestTimeoutMs)
+    const acquisitionOptions = prepareClaudeStructuredSessionAcquisitionOptions({
+      settings,
+      initialization,
+      inputOptions: input.options,
+      resumed: launch.resumed
+    })
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, {
         type: 'auth-diagnostic',
@@ -241,6 +263,9 @@ export async function acquireClaudeSession({
         diagnostic: claudeAuthDiagnostic(init, settings)
       })
     )
+    observedLeafUuid = (await rewind.prove(launch, deps)) ?? observedLeafUuid
+    observedLeafUuid =
+      (await proveClaudeRewindRecovery(input.rewindRecovery, launch, deps)) ?? observedLeafUuid
     const process = await claudeProcessIdentity(
       { ...input, pid: connection.pid },
       deps.readProcessStartTime
@@ -257,18 +282,18 @@ export async function acquireClaudeSession({
       leafUuid: observedLeafUuid,
       fence: input.fence,
       effort: readClaudeSettingsEffort(settings),
+      ...claudeStructuredSessionPublicationOptions(acquisitionOptions),
       resumed: launch.resumed,
       prompts,
       translator,
       events: input.events,
       process,
       acquisitionGeneration: mintClaudeAcquisitionGeneration(deps),
-      options: restoredClaudeStructuredSessionOptions(input.options),
+      options: acquisitionOptions.options,
       capabilities: readClaudeCapabilities(init, initialization),
       ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
       observedAt: deps.now?.() ?? Date.now()
     })
-    const acquired: AgentSessionAcquisition = publication.acquisition
     liveSession = publication.session
     await restoreClaudeStructuredSessionOptions(liveSession, deps.requestTimeoutMs)
     acquisitions.assertCurrent(sessionId, attempt)
@@ -278,26 +303,21 @@ export async function acquireClaudeSession({
     for (const event of attempt.buffered.splice(0)) {
       event()
     }
-    return acquired
+    return publication.acquisition
   } catch (error) {
     initDeadline.clear()
-    let acquisitionError = error
-    if (sessions.get(sessionId)?.connection !== attempt.connection) {
-      translator?.dispose()
-      // Settle any callback that fired before the failure so no SDK promise dangles.
-      for (const prompt of prompts.clear()) {
-        prompt.settle(null)
-      }
-      const closed = (await attempt.connection?.close()) ?? true
-      if (attempt.connection?.exitVerdict.root === 'processless') {
-        acquisitionError = new AgentSessionPreSpawnError(error)
-      } else if (!closed) {
-        acquisitionError = claudeAcquisitionCleanupError(attempt.connection, error)
-      }
-    }
+    const acquisitionError = await resolveClaudeAcquisitionError({
+      error,
+      sessionId,
+      sessions,
+      attempt,
+      translator,
+      prompts
+    })
     acquisitions.deleteIfCurrent(sessionId, attempt)
     throw acquisitionError
   } finally {
+    rewind.clear()
     attempt.finish()
   }
 }

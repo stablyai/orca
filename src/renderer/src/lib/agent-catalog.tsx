@@ -21,6 +21,7 @@ export type AgentCatalogEntry = {
   label: string
   /** Default CLI binary name used for PATH detection. */
   cmd: string
+  searchAliases?: readonly string[]
   /** Direct or bundled image URL for agents whose project identity is not represented by a favicon service. */
   iconUrl?: string
   /** Domain for Google's favicon service — used for agents without an SVG icon. */
@@ -123,6 +124,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'omp',
     label: translate('auto.lib.agent.catalog.09973b4d84', 'OMP'),
     cmd: 'omp',
+    searchAliases: ['oh-my-pi', 'oh my pi'],
     // Why: no faviconDomain — omp renders the hand-authored OmpIcon glyph, so a
     // favicon fallback would never be reached.
     homepageUrl: 'https://omp.sh'

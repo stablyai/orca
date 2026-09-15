@@ -1,3 +1,4 @@
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
@@ -64,7 +65,11 @@ export async function sendMobileNativeChatMessageWithOutcome(
       // pins the composer for twice as long.
       { timeoutMs, budgetSpansConnect: true }
     )
-    return isTerminalSendRpcAccepted(response) ? 'accepted' : 'rejected'
+    if (!isTerminalSendRpcAccepted(response)) {
+      return 'rejected'
+    }
+    reportWorkerTerminalUserInput(args.client, args.terminal)
+    return 'accepted'
   } catch (error) {
     // Why: a logical relay↔direct cutover rejects the in-flight send without
     // knowing whether its frame reached the wire (the desktop may have delivered

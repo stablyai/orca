@@ -16,6 +16,10 @@ function roundTripMarkdown(content: string): string {
   })
 
   try {
+    // Why: markdown serialization walks the document without running
+    // NodeType.checkContent, so it emits byte-identical output from a
+    // schema-invalid document that would crash on the user's next keystroke.
+    editor.state.doc.check()
     return editor.getMarkdown().trimEnd()
   } finally {
     editor.destroy()
@@ -46,6 +50,32 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
       throw new Error(`Missing text: ${search}`)
     }
     editor.view.dispatch(editor.state.tr.insertText(replacement, from, from + search.length))
+    return editor.getMarkdown().trimEnd()
+  } finally {
+    editor.destroy()
+  }
+}
+
+function markdownAfterTypingBesideImage(content: string, typed: string): string {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
+    contentType: 'markdown'
+  })
+
+  try {
+    let after = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (after === -1 && node.type.name === 'image') {
+        after = pos + node.nodeSize
+      }
+    })
+    if (after === -1) {
+      throw new Error('Missing image node')
+    }
+    editor.view.dispatch(editor.state.tr.insertText(typed, after, after))
     return editor.getMarkdown().trimEnd()
   } finally {
     editor.destroy()
@@ -114,6 +144,28 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('<details><summary>Toggle</summary><p>Body</p></details>\n')).toBe(
       '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
     )
+  })
+
+  it('preserves an image in a details summary across an edit', () => {
+    expect(
+      markdownAfterTextReplace(
+        '<details><summary>Toggle ![i](x.png)</summary><p>Body</p></details>\n',
+        'Toggle',
+        'Switch'
+      )
+    ).toBe(
+      '<details class="orca-details">\n<summary>Switch ![i](x.png)</summary>\n\nBody\n\n</details>'
+    )
+  })
+
+  it('preserves inline math in a details summary across an edit', () => {
+    expect(
+      markdownAfterTextReplace(
+        '<details><summary>Toggle $x^2$</summary><p>Body</p></details>\n',
+        'Toggle',
+        'Switch'
+      )
+    ).toBe('<details class="orca-details">\n<summary>Switch $x^2$</summary>\n\nBody\n\n</details>')
   })
 
   it('does not double-escape entities in editable details summaries', () => {
@@ -296,6 +348,42 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)\n')).toBe(
       '![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)'
     )
+  })
+
+  it('preserves an image that sits mid-sentence inside a paragraph', () => {
+    expect(roundTripMarkdown('Install the ![icon](icon.png) extension\n')).toBe(
+      'Install the ![icon](icon.png) extension'
+    )
+  })
+
+  it('preserves a mid-sentence image after an editor transaction', () => {
+    expect(
+      markdownAfterTextReplace('Install the ![icon](icon.png) extension\n', 'extension', 'add-on')
+    ).toBe('Install the ![icon](icon.png) add-on')
+  })
+
+  it('preserves a standalone image as its own block', () => {
+    expect(roundTripMarkdown('Intro\n\n![shot](shot.png)\n\nOutro\n')).toBe(
+      'Intro\n\n![shot](shot.png)\n\nOutro'
+    )
+    // Typing beside the image must join its paragraph instead of opening a new block,
+    // which only holds while the standalone image stays wrapped in a paragraph.
+    expect(markdownAfterTypingBesideImage('Intro\n\n![shot](shot.png)\n\nOutro\n', 'X')).toBe(
+      'Intro\n\n![shot](shot.png)X\n\nOutro'
+    )
+  })
+
+  it('preserves images nested in list items and table cells', () => {
+    expect(roundTripMarkdown('- step ![shot](shot.png)\n')).toBe('- step ![shot](shot.png)')
+    expect(roundTripMarkdown('| a |\n| - |\n| ![shot](shot.png) |\n')).toContain(
+      '![shot](shot.png)'
+    )
+    expect(markdownAfterTextReplace('- step ![shot](shot.png)\n', 'step', 'stage')).toBe(
+      '- stage ![shot](shot.png)'
+    )
+    expect(
+      markdownAfterTextReplace('| a |\n| - |\n| b ![shot](shot.png) |\n', 'b ', 'c ')
+    ).toContain('![shot](shot.png)')
   })
 
   it('preserves links whose label is inline code', () => {

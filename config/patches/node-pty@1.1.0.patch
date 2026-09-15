@@ -165,7 +165,7 @@ index e2f9bc9131077b53ebc32d207207ad82804ff185..6c63bfaaf75128d88f9a2efece134763
      Terminal.prototype._parseEnv = function (env) {
          var keys = Object.keys(env || {});
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..d838d795ecb9ea72e3bcc31113344947c006af7e 100644
+index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71ededb01f 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -207,9 +207,26 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..d838d795ecb9ea72e3bcc31113344947
          pty.resize(this._fd, cols, rows);
          this._cols = cols;
          this._rows = rows;
-@@ -287,8 +301,15 @@ var CustomWriteStream = /** @class */ (function () {
+@@ -273,6 +287,13 @@ var UnixTerminal = /** @class */ (function (_super) {
+     return UnixTerminal;
+ }(terminal_1.Terminal));
+ exports.UnixTerminal = UnixTerminal;
++/**
++ * Orca: upstream retries EAGAIN with `setImmediate`, which re-attempts within microseconds
++ * and pins a core on the daemon thread when a reader stops draining. 1ms keeps ~97% of that
++ * CPU saving; longer delays cost 2-3x delivery time to a reader that drains in bursts (an
++ * agent). Re-measure both before changing.
++ */
++var EAGAIN_RETRY_DELAY_MS = 1;
+ /**
+  * A custom write stream that writes directly to a file descriptor with proper
+  * handling of backpressure and errors. This avoids some event loop exhaustion
+@@ -285,10 +306,17 @@ var CustomWriteStream = /** @class */ (function () {
+         this._writeQueue = [];
+     }
      CustomWriteStream.prototype.dispose = function () {
-         clearImmediate(this._writeImmediate);
+-        clearImmediate(this._writeImmediate);
++        clearTimeout(this._writeImmediate);
          this._writeImmediate = undefined;
 +        // Orca: retire this stream's own copy of the master fd and drop what has
 +        // not shipped, so nothing queued here reaches a reused descriptor.
@@ -223,7 +240,7 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..d838d795ecb9ea72e3bcc31113344947
          // Writes are put in a queue and processed asynchronously in order to handle
          // backpressure from the kernel buffer.
          var buffer = typeof data === 'string'
-@@ -304,7 +325,8 @@ var CustomWriteStream = /** @class */ (function () {
+@@ -304,7 +332,8 @@ var CustomWriteStream = /** @class */ (function () {
      CustomWriteStream.prototype._processWriteQueue = function () {
          var _this = this;
          this._writeImmediate = undefined;
@@ -233,6 +250,19 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..d838d795ecb9ea72e3bcc31113344947
              return;
          }
          var task = this._writeQueue[0];
+@@ -314,9 +343,9 @@ var CustomWriteStream = /** @class */ (function () {
+         fs.write(this._fd, task.buffer, task.offset, function (err, written) {
+             if (err) {
+                 if ('code' in err && err.code === 'EAGAIN') {
+-                    // `setImmediate` is used to yield to the event loop and re-attempt
+-                    // the write later.
+-                    _this._writeImmediate = setImmediate(function () { return _this._processWriteQueue(); });
++                    // Paced, not `setImmediate`: a stalled reader keeps this branch EAGAIN-ing, and an
++                    // immediate re-attempt turns the retry into a busy-loop on the daemon thread.
++                    _this._writeImmediate = setTimeout(function () { return _this._processWriteQueue(); }, EAGAIN_RETRY_DELAY_MS);
+                 }
+                 else {
+                     // Stop processing immediately on unexpected error and log
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
 index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
 --- a/src/conpty_console_list_agent.ts
@@ -607,6 +637,80 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
    }
  }
  #endif
+diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
+index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650dad503ec6 100644
+--- a/src/unixTerminal.ts
++++ b/src/unixTerminal.ts
+@@ -306,6 +306,14 @@ interface IWriteTask {
+   offset: number;
+ }
+ 
++/**
++ * Orca: upstream retries EAGAIN with `setImmediate`, which re-attempts within microseconds
++ * and pins a core on the daemon thread when a reader stops draining. 1ms keeps ~97% of that
++ * CPU saving; longer delays cost 2-3x delivery time to a reader that drains in bursts (an
++ * agent). Re-measure both before changing.
++ */
++const EAGAIN_RETRY_DELAY_MS = 1;
++
+ /**
+  * A custom write stream that writes directly to a file descriptor with proper
+  * handling of backpressure and errors. This avoids some event loop exhaustion
+@@ -314,20 +322,28 @@ interface IWriteTask {
+ class CustomWriteStream implements IDisposable {
+ 
+   private readonly _writeQueue: IWriteTask[] = [];
+-  private _writeImmediate: NodeJS.Immediate | undefined;
++  private _writeImmediate: NodeJS.Timeout | undefined;
+ 
+   constructor(
+-    private readonly _fd: number,
++    private _fd: number,
+     private readonly _encoding: BufferEncoding
+   ) {
+   }
+ 
+   dispose(): void {
+-    clearImmediate(this._writeImmediate);
++    clearTimeout(this._writeImmediate);
+     this._writeImmediate = undefined;
++    // Orca: retire this stream's own copy of the master fd and drop what has
++    // not shipped, so nothing queued here reaches a reused descriptor.
++    this._fd = -1;
++    this._writeQueue.length = 0;
+   }
+ 
+   write(data: string | Buffer): void {
++    if (this._fd < 0) {
++      return;
++    }
++
+     // Writes are put in a queue and processed asynchronously in order to handle
+     // backpressure from the kernel buffer.
+     const buffer = typeof data === 'string'
+@@ -345,7 +361,8 @@ class CustomWriteStream implements IDisposable {
+   private _processWriteQueue(): void {
+     this._writeImmediate = undefined;
+ 
+-    if (this._writeQueue.length === 0) {
++    // Orca: an in-flight fs.write can re-enter here after dispose().
++    if (this._fd < 0 || this._writeQueue.length === 0) {
+       return;
+     }
+ 
+@@ -357,9 +374,9 @@ class CustomWriteStream implements IDisposable {
+     fs.write(this._fd, task.buffer, task.offset, (err, written) => {
+       if (err) {
+         if ('code' in err && err.code === 'EAGAIN') {
+-          // `setImmediate` is used to yield to the event loop and re-attempt
+-          // the write later.
+-          this._writeImmediate = setImmediate(() => this._processWriteQueue());
++          // Paced, not `setImmediate`: a stalled reader keeps this branch EAGAIN-ing, and an
++          // immediate re-attempt turns the retry into a busy-loop on the daemon thread.
++          this._writeImmediate = setTimeout(() => this._processWriteQueue(), EAGAIN_RETRY_DELAY_MS);
+         } else {
+           // Stop processing immediately on unexpected error and log
+           this._writeQueue.length = 0;
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
 index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c6678cf86 100644
 --- a/src/win/conpty.cc

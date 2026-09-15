@@ -32,6 +32,11 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     null
   )
   const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
+  // Prompt cancellation is negotiated with the same host capability probe as
+  // the other session surfaces; consumers never maintain a second status cache.
+  const [agentSessionPromptCancelSupported, setAgentSessionPromptCancelSupported] = useState<
+    boolean | null
+  >(null)
   // Why: stable callbacks (handleFileTap) read the live value via this ref, since
   // the capability probe resolves after the callbacks are created.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
@@ -115,6 +120,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setAgentSessionHistorySupported,
     quickCommandsSupported,
     setQuickCommandsSupported,
+    agentSessionPromptCancelSupported,
+    setAgentSessionPromptCancelSupported,
     browserScreencastSupportedRef,
     reconciledCreateWarningState,
     createWarning,

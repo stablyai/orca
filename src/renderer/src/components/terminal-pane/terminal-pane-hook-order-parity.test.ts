@@ -16,8 +16,10 @@ const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
 // toggle in projection (208 hooks, still 8 useMemo).
 // Then chat-state's orchestration dispatch-status subscription went with the
 // paused notice that read it (207 hooks, still 8 useMemo).
+// Then host-authoritative layout removal added two `useRef`s in reconciliation
+// (last host layout leaf set, retired leaf set) (209 hooks, still 8 useMemo).
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  '2bbb42427b61e3722114ac37c407230cb7daffbf9b899090c7a635f15731ccad'
+  'f6de13ab7d6d130444c50fec2cfe097851ee1b7ecf0f3a2cbdc082c2e8e8838b'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))
@@ -82,7 +84,7 @@ function readFlattenedHookOrder(): string[] {
 describe('TerminalPane refactor hook parity', () => {
   it('preserves the recursively flattened render hook order', () => {
     const hooks = readFlattenedHookOrder()
-    expect(hooks).toHaveLength(207)
+    expect(hooks).toHaveLength(209)
     expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(8)
     expect(createHash('sha256').update(hooks.join('\n')).digest('hex')).toBe(
       PRE_REFACTOR_HOOK_ORDER_SHA256

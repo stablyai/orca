@@ -62,3 +62,9 @@ export function probeSshRangedReadCapability(
     (capabilities) => capabilities?.rangedReadVersion === 1
   )
 }
+
+export function probeSshPathExistenceBatchCapability(mux: SshChannelMultiplexer): Promise<boolean> {
+  return readSshFsCapabilities(mux).then(
+    (capabilities) => capabilities?.pathExistenceBatchVersion === 1
+  )
+}

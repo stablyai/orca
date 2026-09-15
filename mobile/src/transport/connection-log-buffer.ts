@@ -32,6 +32,10 @@ export function createConnectionLogStore(
   const hydrationFailedHosts = new Set<string>()
   const hydrationByHost = new Map<string, Promise<void>>()
   const saveByHost = new Map<string, Promise<void>>()
+  const persistenceRevisionByHost = new Map<
+    string,
+    { snapshot: readonly ConnectionLogEntry[]; saved: boolean }
+  >()
   // Why: useSyncExternalStore compares snapshots by reference — getSnapshot
   // must return the SAME array until the data actually changes, or React
   // loops re-rendering. Cache per host; invalidate on append.
@@ -46,6 +50,7 @@ export function createConnectionLogStore(
 
   const notify = (hostId: string): void => {
     snapshotByHost.delete(hostId)
+    persistenceRevisionByHost.delete(hostId)
     const listeners = listenersByHost.get(hostId)
     if (listeners) {
       for (const listener of listeners) {
@@ -58,16 +63,29 @@ export function createConnectionLogStore(
     if (!persistence || !hydratedHosts.has(hostId)) {
       return
     }
-    const snapshot = [...(entriesByHost.get(hostId) ?? [])]
+    let revision = persistenceRevisionByHost.get(hostId)
+    if (!revision) {
+      revision = { snapshot: [...(entriesByHost.get(hostId) ?? [])], saved: false }
+      persistenceRevisionByHost.set(hostId, revision)
+    }
+    const currentRevision = revision
+    if (currentRevision.saved) {
+      return
+    }
     const previous = saveByHost.get(hostId) ?? Promise.resolve()
     const pending = previous
       .catch(() => {})
       .then(async () => {
-        try {
-          await persistence.save(hostId, snapshot)
-        } catch {
-          await persistence.save(hostId, snapshot)
+        // Duplicate requests retain retry opportunities until this revision is durable.
+        if (currentRevision.saved) {
+          return
         }
+        try {
+          await persistence.save(hostId, currentRevision.snapshot)
+        } catch {
+          await persistence.save(hostId, currentRevision.snapshot)
+        }
+        currentRevision.saved = true
       })
       .catch(() => {})
     saveByHost.set(hostId, pending)

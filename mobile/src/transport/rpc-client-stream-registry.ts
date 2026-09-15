@@ -8,6 +8,7 @@ import {
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
 import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
+import { isStreamingOpenerReply } from './rpc-acceptance-policies'
 import {
   isStreamingSubscriptionReadyResult,
   isTerminalSubscribedResult
@@ -112,7 +113,7 @@ export class RpcClientStreamRegistry {
   }
 
   handleResponse(response: RpcResponse): boolean {
-    if (response.ok && response.streaming === true) {
+    if (isStreamingOpenerReply(response)) {
       this.handleStreamingResponse(response)
       return true
     }

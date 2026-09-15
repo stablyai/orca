@@ -81,7 +81,7 @@ export function formatOrchestrationCheckText(
     : ''
   const deliveryNotice = formatCurrentDeliveryNotice(prepared.legacyCompatibility?.currentDelivery)
   if (prepared.formatted) {
-    return `${legacyHeader}${prepared.formatted}${deliveryNotice}`
+    return `${legacyHeader}${prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n` : ''}${prepared.formatted}${deliveryNotice}`
   }
   if (prepared.count === 0) {
     if (prepared.timedOut) {

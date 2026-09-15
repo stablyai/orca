@@ -59,7 +59,19 @@ export function beginWorkerStop(
       this.db.exec('COMMIT')
       return { disposition: 'already_settled', worker, dispatch }
     }
-    if (!['ready', 'start_unknown'].includes(worker.state)) {
+    // Why `stopping` under a DIFFERENT epoch is accepted: a stop whose runtime died mid-flight
+    // leaves the row here forever, and refusing the re-issue was the only operator escape
+    // (#16904). Re-running the stop earns the honest outcome — settled, or `stop_unknown`, from
+    // which the worker can be abandoned. It never asserts an exit the runtime did not observe.
+    //
+    // Why the epoch and not just the state: this runtime's own `stopping` row means its stop is
+    // still in flight, and a second pass would record `stop_unknown` over it. The exit event that
+    // follows claims a clean stop only from `stopping` under its own epoch
+    // (failActiveDispatchOnExit), so it would then read the operator's stop as a crash and
+    // escalate it. Same predicate as that reader, so both agree on whose stop this is.
+    const stopStrandedByAnotherRuntime =
+      worker.state === 'stopping' && worker.runtime_epoch !== runtimeEpoch
+    if (!['ready', 'start_unknown'].includes(worker.state) && !stopStrandedByAnotherRuntime) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${dispatchId} cannot stop from ${worker.state}.`
