@@ -22,7 +22,7 @@ describe('quick-open-search', () => {
       totalCount: 1
     })
   })
-  it('orders numbered paths naturally for empty queries and fuzzy-score ties', () => {
+  it('keeps unranked numbered paths in input order for empty queries and fuzzy-score ties', () => {
     const files = prepareQuickOpenFiles([
       'songs/100 - b.txt',
       'songs/9 - c.txt',
@@ -30,23 +30,23 @@ describe('quick-open-search', () => {
     ])
 
     expect(rankQuickOpenFiles('', files).map((item) => item.path)).toEqual([
+      'songs/100 - b.txt',
       'songs/9 - c.txt',
-      'songs/99 - a.txt',
-      'songs/100 - b.txt'
+      'songs/99 - a.txt'
     ])
     expect(rankQuickOpenFiles('songs', files).map((item) => item.path)).toEqual([
+      'songs/100 - b.txt',
       'songs/9 - c.txt',
-      'songs/99 - a.txt',
-      'songs/100 - b.txt'
+      'songs/99 - a.txt'
     ])
   })
 
-  it('returns the first 50 naturally sorted paths with score 0 for an empty query', () => {
+  it('returns the first 50 input-order paths with score 0 for an empty query', () => {
     const files = Array.from({ length: 75 }, (_, index) => `src/file-${74 - index}.ts`)
 
     expect(rankQuickOpenFiles('', prepareQuickOpenFiles(files))).toEqual(
       Array.from({ length: QUICK_OPEN_RESULT_LIMIT }, (_, index) => ({
-        path: `src/file-${index}.ts`,
+        path: `src/file-${74 - index}.ts`,
         score: 0
       }))
     )
@@ -62,6 +62,16 @@ describe('quick-open-search', () => {
     ])
   })
 
+  it('lists indexed recents first for an empty query, then remaining files', () => {
+    const files = prepareQuickOpenFiles(['a.ts', 'b.ts', 'c.ts', 'd.ts'])
+
+    expect(
+      rankQuickOpenFiles('', files, QUICK_OPEN_RESULT_LIMIT, ['c.ts', 'a.ts']).map(
+        (item) => item.path
+      )
+    ).toEqual(['c.ts', 'a.ts', 'b.ts', 'd.ts'])
+  })
+
   it('prefers filename substring matches over path-only matches', () => {
     const files = ['button-area/deep/path/file.tsx', 'src/components/Button.tsx']
 
@@ -70,15 +80,31 @@ describe('quick-open-search', () => {
     ).toEqual(['src/components/Button.tsx', 'button-area/deep/path/file.tsx'])
   })
 
-  it('uses natural order for tie-heavy results at the limit boundary', () => {
+  it('prefers recency over inputIndex when fuzzy scores are equal', () => {
+    const files = prepareQuickOpenFiles(['a.ts', 'c.ts'])
+    const ranked = rankQuickOpenFiles('ts', files, QUICK_OPEN_RESULT_LIMIT, ['c.ts'])
+
+    expect(ranked.map((item) => item.path)).toEqual(['c.ts', 'a.ts'])
+    expect(ranked[0]?.score).toBe(ranked[1]?.score)
+  })
+
+  it('uses input order for unranked equal-score results at the limit boundary', () => {
     const files = Array.from({ length: 10 }, (_, index) => `src/path-${9 - index}.bin`)
 
     expect(rankQuickOpenFiles('s', prepareQuickOpenFiles(files), 4)).toEqual([
-      { path: 'src/path-0.bin', score: 0 },
-      { path: 'src/path-1.bin', score: 0 },
-      { path: 'src/path-2.bin', score: 0 },
-      { path: 'src/path-3.bin', score: 0 }
+      { path: 'src/path-9.bin', score: 0 },
+      { path: 'src/path-8.bin', score: 0 },
+      { path: 'src/path-7.bin', score: 0 },
+      { path: 'src/path-6.bin', score: 0 }
     ])
+  })
+
+  it('keeps unranked equal-score files in input order rather than path order', () => {
+    const files = prepareQuickOpenFiles(['z.ts', 'a.ts'])
+    const ranked = rankQuickOpenFiles('ts', files)
+
+    expect(ranked.map((item) => item.path)).toEqual(['z.ts', 'a.ts'])
+    expect(ranked[0]?.score).toBe(ranked[1]?.score)
   })
 
   it('returns 50 top-ranked results from a 100k synthetic list', () => {

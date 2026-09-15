@@ -12,7 +12,11 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
-import { prepareQuickOpenFiles, rankQuickOpenFiles } from '@/components/quick-open-search'
+import {
+  prepareQuickOpenFiles,
+  QUICK_OPEN_RESULT_LIMIT,
+  rankQuickOpenFiles
+} from '@/components/quick-open-search'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
@@ -22,6 +26,7 @@ import {
 } from '@/components/quick-open-install-rg-guidance'
 
 const QUICK_OPEN_CLOSE_LINGER_MS = 300
+const EMPTY_QUICK_OPEN_RECENTS: readonly string[] = []
 
 function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -54,6 +59,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   const closeModal = useAppStore((s) => s.closeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const openFile = useAppStore((s) => s.openFile)
+  const openFiles = useAppStore((s) => s.openFiles)
   const activeWorktree = useActiveWorktree()
 
   const [query, setQuery] = useState('')
@@ -83,9 +89,30 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   }
 
   const indexedFiles = useMemo(() => prepareQuickOpenFiles(files), [files])
+  // Why: openFiles is oldest-first (new tabs append); Quick Open recency is most-recent first.
+  const recents = useMemo(() => {
+    if (!activeWorktreeId) {
+      return EMPTY_QUICK_OPEN_RECENTS
+    }
+    const paths: string[] = []
+    const seen = new Set<string>()
+    for (let index = openFiles.length - 1; index >= 0; index--) {
+      const file = openFiles[index]
+      if (file.worktreeId !== activeWorktreeId) {
+        continue
+      }
+      const relativePath = file.relativePath
+      if (!relativePath || seen.has(relativePath)) {
+        continue
+      }
+      seen.add(relativePath)
+      paths.push(relativePath)
+    }
+    return paths
+  }, [activeWorktreeId, openFiles])
   const filtered = useMemo(
-    () => rankQuickOpenFiles(deferredQuery, indexedFiles),
-    [deferredQuery, indexedFiles]
+    () => rankQuickOpenFiles(deferredQuery, indexedFiles, QUICK_OPEN_RESULT_LIMIT, recents),
+    [deferredQuery, indexedFiles, recents]
   )
 
   const handleSelect = useCallback(
