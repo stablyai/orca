@@ -161,7 +161,15 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'next', searchState)).toBe(true)
-    expect(findNext).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findNext).toHaveBeenCalledWith(
+      'hello',
+      expect.objectContaining({
+        caseSensitive: true,
+        regex: false,
+        incremental: false,
+        decorations: expect.objectContaining({ activeMatchBackground: '#c4580e' })
+      })
+    )
     expect(findPrevious).not.toHaveBeenCalled()
   })
 
@@ -173,7 +181,15 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'previous', searchState)).toBe(true)
-    expect(findPrevious).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findPrevious).toHaveBeenCalledWith(
+      'hello',
+      expect.objectContaining({
+        caseSensitive: true,
+        regex: false,
+        incremental: false,
+        decorations: expect.objectContaining({ activeMatchBackground: '#c4580e' })
+      })
+    )
     expect(findNext).not.toHaveBeenCalled()
   })
 
