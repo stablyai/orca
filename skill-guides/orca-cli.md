@@ -23,6 +23,18 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
+## Runtime access failures
+
+`runtime_unavailable` alone does not prove Orca stopped. `EPERM`/`EACCES`, or error data
+with `reason: permission_denied`, means the current command cannot access the runtime;
+its process state is `unverifiable`. Check the command's sandbox and OS permissions
+instead of restarting Orca or weakening global permissions. Older CLIs may hide denied
+socket connections and PID probes behind `stale_bootstrap` and `app.running: false`.
+
+Resolve a pending command approval through its owning approval flow. Repeating requests
+is not approval and may supersede an earlier request. Start Orca with `ORCA open --json`
+when runtime absence is confirmed, rather than inferred from a permission failure.
+
 ## Full Handoffs
 
 A full handoff transfers ownership to another agent or worktree, then the original agent stops. Treat requests phrased as "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs unless the user explicitly asks to supervise, monitor, wait for results, track completion, coordinate a DAG, use decision gates, or manage ask/reply.
