@@ -13,5 +13,9 @@ export const bitbucketApi = {
 
   disconnect: (): Promise<void> => ipcRenderer.invoke('bitbucket:disconnect'),
 
-  status: () => ipcRenderer.invoke('bitbucket:status')
+  status: () => ipcRenderer.invoke('bitbucket:status'),
+
+  mergePR: (args) => ipcRenderer.invoke('bitbucket:mergePR', args),
+
+  closePR: (args) => ipcRenderer.invoke('bitbucket:closePR', args)
 } satisfies PreloadApi['bitbucket']
