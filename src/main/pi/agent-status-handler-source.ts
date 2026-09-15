@@ -1,3 +1,4 @@
+import { getOmpModelCommandSourceLines } from './omp-model-command-source'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
 
@@ -60,6 +61,21 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           ''
         ]
 
+  // Why: OMP does not fire model_select today, but Pi does and OMP wraps Pi's
+  // runtime; when it arrives it is the one event that reports a switch between turns.
+  const modelSelectHandler =
+    kind === 'prime-agent'
+      ? []
+      : [
+          `  pi.on('model_select', (event${ctxParam}) => {`,
+          ...captureSessionMetadata,
+          '    if (!isOmpRuntime()) return',
+          '    updateModelMetadata(event)',
+          "    post('model_select')",
+          '  })',
+          ''
+        ]
+
   return [
     '// Why: pi assistant messages carry content as an array of parts',
     "// ({ type: 'text', text } / tool_use / tool_result / reasoning). We only",
@@ -114,6 +130,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  const selfPid = String(process.pid)',
     '  if (ownerPid && ownerPid !== selfPid && isStatusOwnerAlive(ownerPid)) return',
     `  process.env.${ownerEnv} = selfPid`,
+    ...getOmpModelCommandSourceLines(),
     ...sessionStartHandler,
     `  pi.on('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
@@ -155,6 +172,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     ...approvalHandlers,
     ...getPiAgentStatusUiPromptHandlerSourceLines(kind),
+    ...modelSelectHandler,
     "  // Why: capture the assistant's final text on each completed message",
     '  // so the dashboard preview reflects the most recent reply even before',
     '  // agent_end fires. message_end is the right hook because pi guarantees',

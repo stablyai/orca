@@ -8,6 +8,9 @@ import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
+/** Maps a Pi-family hook event (Pi, OMP, Prime) onto a pane status: lifecycle
+ *  events become `working` / `done`, an ask tool becomes `blocked`, and OMP's
+ *  `model` stamp rides along. Returns null for events that carry no status. */
 export function normalizePiCompatibleEvent(
   state: HookListenerState,
   agentType: 'pi' | 'omp' | 'prime-agent',
@@ -23,6 +26,21 @@ export function normalizePiCompatibleEvent(
     if (agentType !== 'pi' || hookPayload.ui_prompt_active !== true) {
       return null
     }
+  }
+
+  // Why: the OMP extension stamps `provider/id` on every post; Pi posts carry none.
+  const model = readString(hookPayload, 'model')
+  const modelSwitchCommand =
+    hookPayload.model_switch_command === 'orca-model' ? 'orca-model' : undefined
+  if (eventName === 'model_select') {
+    // Why: a model switch happens between turns, so it must ride on the pane's last
+    // known status instead of inventing a state — and before any status exists there
+    // is nothing for a model to describe.
+    const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
+    if (!model || !previous || previous.agentType !== agentType) {
+      return null
+    }
+    return normalizeAgentStatusPayload({ ...previous, model, modelSwitchCommand })
   }
 
   // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
@@ -76,6 +94,8 @@ export function normalizePiCompatibleEvent(
       resetOnNewTurn: isNewTurnEvent(agentType, eventName)
     }),
     agentType,
+    model,
+    modelSwitchCommand,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
