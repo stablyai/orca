@@ -4,6 +4,11 @@ import { spawnSync } from 'node:child_process'
 import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import {
+  getDevProfileBaseDir,
+  isPrimaryWorktreePath,
+  resolveAndClaimDevUserDataProfile
+} from './dev-user-data-profile.mjs'
 
 const scriptPath = realpathSync(import.meta.filename)
 const scriptDir = path.dirname(scriptPath)
@@ -43,20 +48,27 @@ if (result.signal) {
 }
 process.exit(result.status ?? (result.error ? 1 : 0))
 
+// Why the same resolution as the dev runner: `orca-dev status` run from a worktree must address that
+// worktree's instance, not whichever instance last claimed the shared profile.
 function getDefaultDevUserDataPath() {
-  if (process.platform === 'darwin') {
-    return path.join(process.env.HOME ?? '', 'Library', 'Application Support', 'orca-dev')
-  }
-  if (process.platform === 'win32') {
-    return path.join(
-      process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
-      'orca-dev'
-    )
-  }
-  return path.join(
-    process.env.XDG_CONFIG_HOME ?? path.join(process.env.HOME ?? '', '.config'),
-    'orca-dev'
-  )
+  return resolveAndClaimDevUserDataProfile({
+    repoRoot,
+    baseDir: getDevProfileBaseDir(),
+    isPrimaryWorktree: isPrimaryWorktreePath(
+      readGitValue(['rev-parse', '--git-dir']),
+      readGitValue(['rev-parse', '--git-common-dir']),
+      repoRoot
+    ),
+    worktreeName: path.basename(repoRoot)
+  }).path
+}
+
+function readGitValue(args) {
+  const result = spawnSync('git', ['-C', repoRoot, ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore']
+  })
+  return result.status === 0 ? result.stdout.trim() || null : null
 }
 
 function getElectronExecutable() {
