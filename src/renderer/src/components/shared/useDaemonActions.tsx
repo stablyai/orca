@@ -292,7 +292,12 @@ export function DaemonActionDialog({
       }}
     >
       <DialogContent
-        className="max-w-md"
+        // Why: this confirm is opened from the resource-manager popover, which
+        // stays open behind it. At the default dialog z-50 the popover (z-60)
+        // paints on top: the dialog is unreadable, its buttons aren't
+        // clickable, and clicking through to the popover dismisses the confirm.
+        overlayClassName="z-[110]"
+        className="z-[120] max-w-md"
         showCloseButton={!isBusy}
         onPointerDownOutside={(e) => {
           if (isBusy) {
