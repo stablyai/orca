@@ -1,5 +1,9 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatPendingSend } from './native-chat-pending'
+import { ANCHORED_PENDING_ID_PREFIX, type NativeChatPendingSend } from './native-chat-pending'
+
+/** Places the echo strictly after its anchor without reaching the next row: the
+ *  list re-sorts by timestamp, and transcript rows carry whole milliseconds. */
+const ANCHOR_NUDGE_MS = 0.5
 
 /**
  * Render an optimistic echo after the row it was sent against, not at the tail.
@@ -11,9 +15,15 @@ import type { NativeChatPendingSend } from './native-chat-pending'
  * reason (`baselineTailMessageId`); desktop already records the boundary as
  * `afterMessageId` and only ever used it for matching.
  *
- * A send still at the tail keeps today's order — after the streaming bubble — so
- * only an echo the transcript has since moved past is repositioned. A boundary
- * paged out by a bounded read falls back to the tail rather than guessing.
+ * Position has to survive `orderNativeChatMessages`, which sorts by rank before
+ * timestamp and pins every tail echo to rank 2 — array order alone never reaches
+ * the DOM. So an anchored echo is re-minted under `pending-at:`, which the
+ * assembler ranks as content, and takes its anchor's timestamp plus a nudge.
+ *
+ * "Still at the tail" is NOT a reason to leave an echo trailing: a folded turn
+ * grows in place under the id that opened it, so a mid-turn send names a
+ * boundary that is still the tail when the reply is complete. Only a boundary
+ * that is absent, or carries no timestamp to sort against, falls back.
  */
 export function anchorPendingMessagesToSendBoundary(
   messages: readonly NativeChatMessage[],
@@ -23,25 +33,26 @@ export function anchorPendingMessagesToSendBoundary(
   if (pendingMessages.length === 0) {
     return { messages, trailing: pendingMessages }
   }
-  const tailId = messages.at(-1)?.id ?? null
   const boundaryByMessageId = new Map(
     pending.map((entry) => [`pending:${entry.id}`, entry.afterMessageId ?? null])
   )
-  const presentIds = new Set(messages.map((message) => message.id))
+  const anchorById = new Map(messages.map((message) => [message.id, message]))
   const anchored = new Map<string, NativeChatMessage[]>()
   const trailing: NativeChatMessage[] = []
   for (const message of pendingMessages) {
-    const boundary = boundaryByMessageId.get(message.id) ?? null
-    if (boundary === null || boundary === tailId || !presentIds.has(boundary)) {
+    const boundaryId = boundaryByMessageId.get(message.id) ?? null
+    const anchor = boundaryId === null ? undefined : anchorById.get(boundaryId)
+    if (!anchor || anchor.timestamp === null) {
       trailing.push(message)
       continue
     }
-    const sharing = anchored.get(boundary)
-    if (sharing) {
-      sharing.push(message)
-    } else {
-      anchored.set(boundary, [message])
-    }
+    const sharing = anchored.get(anchor.id) ?? []
+    sharing.push({
+      ...message,
+      id: `${ANCHORED_PENDING_ID_PREFIX}${message.id.slice('pending:'.length)}`,
+      timestamp: anchor.timestamp + ANCHOR_NUDGE_MS * (sharing.length + 1)
+    })
+    anchored.set(anchor.id, sharing)
   }
   if (anchored.size === 0) {
     return { messages, trailing }

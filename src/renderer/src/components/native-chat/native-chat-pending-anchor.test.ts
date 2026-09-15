@@ -5,6 +5,7 @@ import {
   nativeChatMessagesWithPending
 } from './native-chat-pending-anchor'
 import { pendingSendsAsMessages, type NativeChatPendingSend } from './native-chat-pending'
+import { orderNativeChatMessages } from './native-chat-message-grouping'
 
 function message(
   id: string,
@@ -38,25 +39,30 @@ describe('anchorPendingMessagesToSendBoundary', () => {
   it('keeps an unmatchable echo where it was sent as the turn keeps going', () => {
     const atSendTime = [message('u1', 'user', 'first'), message('a1', 'assistant', 'working')]
     const pending = [send('p1', 'second', 'a1')]
-    expect(placed(atSendTime, pending)).toEqual(['u1', 'a1', 'pending:p1'])
+    expect(placed(atSendTime, pending)).toEqual(['u1', 'a1', 'pending-at:p1'])
 
     const laterTurns = [
       ...atSendTime,
       message('a2', 'assistant', 'still working', 2),
       message('a3', 'assistant', 'done', 3)
     ]
-    expect(placed(laterTurns, pending)).toEqual(['u1', 'a1', 'pending:p1', 'a2', 'a3'])
+    expect(placed(laterTurns, pending)).toEqual(['u1', 'a1', 'pending-at:p1', 'a2', 'a3'])
   })
 
-  it('leaves an echo still at the tail trailing, so the streaming bubble keeps its place', () => {
-    const messages = [message('u1', 'user', 'first'), message('a1', 'assistant', 'working')]
-    const anchored = anchorPendingMessagesToSendBoundary(
-      messages,
-      [send('p1', 'second', 'a1')],
-      pendingSendsAsMessages([send('p1', 'second', 'a1')], messages)
-    )
-    expect(anchored.messages).toBe(messages)
-    expect(anchored.trailing.map((entry) => entry.id)).toEqual(['pending:p1'])
+  // The case the first attempt at this fix missed: `foldToolMessages` folds a
+  // whole turn into the assistant message that opened it, so that message keeps
+  // its id and grows in place. A mid-turn send therefore names a boundary that is
+  // STILL the tail once the reply is complete — treating "at the tail" as "nothing
+  // came after" left the echo below the entire answer, exactly the reported bug.
+  it('anchors even when the boundary is still the tail, because a folded turn grows in place', () => {
+    const atSendTime = [message('u1', 'user', 'first'), message('a1', 'assistant', 'working')]
+    const pending = [send('p1', 'second', 'a1')]
+    const grownInPlace = [
+      message('u1', 'user', 'first'),
+      message('a1', 'assistant', 'working, ran 3 commands, done')
+    ]
+    expect(placed(atSendTime, pending)).toEqual(['u1', 'a1', 'pending-at:p1'])
+    expect(placed(grownInPlace, pending)).toEqual(['u1', 'a1', 'pending-at:p1'])
   })
 
   it('trails an echo whose boundary a bounded read paged out instead of guessing', () => {
@@ -72,7 +78,7 @@ describe('anchorPendingMessagesToSendBoundary', () => {
   it('keeps send order among echoes sharing one boundary', () => {
     const messages = [message('a1', 'assistant', 'working'), message('a2', 'assistant', 'done', 2)]
     const pending = [send('p1', 'second', 'a1'), send('p2', 'third', 'a1')]
-    expect(placed(messages, pending)).toEqual(['a1', 'pending:p1', 'pending:p2', 'a2'])
+    expect(placed(messages, pending)).toEqual(['a1', 'pending-at:p1', 'pending-at:p2', 'a2'])
   })
 
   it('returns the input untouched when there is nothing pending', () => {
@@ -90,7 +96,7 @@ describe('nativeChatMessagesWithPending', () => {
       message('a1', 'assistant', 'working'),
       message('a2', 'assistant', 'done', 2)
     ]
-    const pending = [send('p1', 'sent mid-turn', 'a1'), send('p2', 'sent at the tail', 'a2')]
+    const pending = [send('p1', 'sent mid-turn', 'a1'), send('p2', 'boundary paged out', 'gone')]
     const combined = nativeChatMessagesWithPending(
       messages,
       pending,
@@ -101,11 +107,41 @@ describe('nativeChatMessagesWithPending', () => {
     expect(combined.map((entry) => entry.id)).toEqual([
       'u1',
       'a1',
-      'pending:p1',
+      'pending-at:p1',
       'a2',
       'marker',
       'streaming',
       'pending:p2'
+    ])
+  })
+})
+
+// Review note from @pullfrog on #20847: the anchored array never reaches the
+// DOM, because `NativeChatMessageList` re-sorts it through
+// `orderNativeChatMessages`, whose `messageSortRank` pins every `pending:*` row
+// to rank 2 — the tail. Asserting the array alone therefore proves nothing.
+describe('anchored order survives the list projection', () => {
+  it('keeps the anchored echo in place after orderNativeChatMessages', () => {
+    const messages = [
+      message('u1', 'user', 'first', 10),
+      message('a1', 'assistant', 'opened the turn', 20),
+      message('a2', 'assistant', 'kept working', 30),
+      message('a3', 'assistant', 'finished', 40)
+    ]
+    const pending = [send('p1', 'sent mid-turn', 'a1')]
+    const anchoredThenSorted = orderNativeChatMessages([
+      ...anchorPendingMessagesToSendBoundary(
+        messages,
+        pending,
+        pendingSendsAsMessages(pending, messages)
+      ).messages
+    ])
+    expect(anchoredThenSorted.map((entry) => entry.id)).toEqual([
+      'u1',
+      'a1',
+      'pending-at:p1',
+      'a2',
+      'a3'
     ])
   })
 })
