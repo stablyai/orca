@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { constants, type Stats } from 'node:fs'
 import { access, lstat, realpath, stat } from 'node:fs/promises'
-import { dirname, normalize, resolve } from 'node:path'
+import { basename, dirname, normalize, resolve } from 'node:path'
 import type { SkillInstallationTopology } from '../../shared/skill-freshness'
 import type { SkillScanRoot } from './skill-discovery-sources'
 
@@ -125,9 +125,15 @@ export async function classifyHomeSkillTopology(
   const canonicalRoot = await realpath(canonicalRootPath).catch(() => resolve(canonicalRootPath))
   const homeBoundary = dirname(dirname(canonicalRootPath))
   const rootOrProviderParentLinked = await hasSymlinkedAncestor(root.path, homeBoundary)
+  const canonicalSkillPath = resolve(canonicalRootPath, basename(unresolvedPath))
+  const resolvedCanonicalSkillPath = await realpath(canonicalSkillPath).catch(
+    () => canonicalSkillPath
+  )
   const isCanonicalTarget =
     normalizedSkillIdentityPath(dirname(resolvedPath)) ===
-    normalizedSkillIdentityPath(canonicalRoot)
+      normalizedSkillIdentityPath(canonicalRoot) ||
+    normalizedSkillIdentityPath(resolvedPath) ===
+      normalizedSkillIdentityPath(resolvedCanonicalSkillPath)
   let topology: SkillInstallationTopology
   if (linked) {
     topology = isCanonicalTarget ? 'provider-alias' : 'external-link'
