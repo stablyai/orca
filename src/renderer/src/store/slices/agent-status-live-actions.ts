@@ -113,22 +113,32 @@ export function createAgentStatusLiveActions(
     )
     const shouldReplaceGeneratedTitle =
       hasMatchingOrchestrationLabels || isNewDispatchAgainstStickyOrchestration
+    // Why: identifies which session owns the title, so a later `/clear` (new session
+    // id, same pane) can retire it instead of labeling the new conversation.
+    const titleSessionId = entry.providerSession?.id
+    // Why: a forced replace already answers that question, so the short-circuit skipping
+    // the session-aware check below is the conclusion, not a missed case.
     const mayWriteGeneratedTitle =
       get().settings?.tabAutoGenerateTitle === true &&
       (shouldReplaceGeneratedTitle ||
         !agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
           get(),
           entry.tabId ?? getTabIdFromPaneKey(paneKey),
-          entry.worktreeId
+          entry.worktreeId,
+          titleSessionId
         ))
     const generatedTitlePrompt =
       liveIsDispatchPrompt && mayWriteGeneratedTitle
         ? getAgentRowGeneratedTitleText(entry)
         : entry.prompt
+    // Why: setAgentStatus is high-frequency — one flat literal, not conditional spreads.
     applyGeneratedTabTitleUpdate({
       paneKey,
       prompt: generatedTitlePrompt,
-      ...(shouldReplaceGeneratedTitle ? { options: { replaceExistingGeneratedTitle: true } } : {})
+      options: {
+        replaceExistingGeneratedTitle: shouldReplaceGeneratedTitle,
+        sessionId: titleSessionId
+      }
     })
     requestFreshness(true)
     if (builtResult.completionRefreshWorktreeId) {
