@@ -1,0 +1,14 @@
+diff --git a/lib/sender.js b/lib/sender.js
+index 2c767e2c62a7fb50a987454f0c148ec5b4a0a523..bc7abc30c8cbf2b104d1978f44f5183f2ab3952d 100644
+--- a/lib/sender.js
++++ b/lib/sender.js
+@@ -561,7 +561,8 @@ class Sender {
+    * @private
+    */
+   sendFrame(list, cb) {
+-    if (list.length === 2) {
++    // Empty backing stores can make writev fail with EFAULT on Electron/Linux ARM64.
++    if (list.length === 2 && list[1].length !== 0) {
+       this._socket.cork();
+       this._socket.write(list[0]);
+       this._socket.write(list[1], cb);
