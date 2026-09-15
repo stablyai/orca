@@ -35,6 +35,7 @@ import { CLIENT_EVENT_METHODS } from './client-events'
 import { WORKSPACE_PORT_METHODS } from './workspace-ports'
 import { PLUGIN_METHODS } from './plugins'
 import { SKILL_METHODS } from './skills'
+import { QUICK_COMMAND_METHODS } from './quick-commands'
 import { CLIPBOARD_METHODS } from './clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './runtime-client-capabilities'
@@ -89,6 +90,7 @@ export const ALL_RPC_METHODS = [
   ...WORKSPACE_PORT_METHODS,
   ...PLUGIN_METHODS,
   ...SKILL_METHODS,
+  ...QUICK_COMMAND_METHODS,
   ...CLIPBOARD_METHODS,
   ...HOST_CAPABILITY_METHODS,
   ...RUNTIME_CLIENT_CAPABILITY_METHODS,

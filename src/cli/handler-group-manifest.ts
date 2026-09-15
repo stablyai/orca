@@ -251,5 +251,16 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'skills',
     keys: ['skills list', 'skills get', 'skills install', 'skills update'],
     load: async () => (await import('./handlers/skills.js')).SKILL_HANDLERS
+  },
+  {
+    name: 'quick-command',
+    keys: [
+      'quick-command list',
+      'quick-command show',
+      'quick-command create',
+      'quick-command set',
+      'quick-command rm'
+    ],
+    load: async () => (await import('./handlers/quick-commands.js')).QUICK_COMMAND_HANDLERS
   }
 ]

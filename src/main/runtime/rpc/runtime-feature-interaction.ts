@@ -35,6 +35,15 @@ export function getRuntimeFeatureInteractionId(
   ) {
     return 'computer-use'
   }
+  // Why: the settings pane and tab-bar menu both record this, so CLI-driven
+  // edits must too or feature education keeps prompting for a feature in use.
+  if (
+    method === 'quickCommand.create' ||
+    method === 'quickCommand.update' ||
+    method === 'quickCommand.rm'
+  ) {
+    return 'quick-commands'
+  }
   return method.startsWith('orchestration.') ? 'agent-orchestration' : null
 }
 
