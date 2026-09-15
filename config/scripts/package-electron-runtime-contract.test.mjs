@@ -25,7 +25,14 @@ describe('Electron runtime package contract', () => {
   }
 
   it('keeps root postinstall as the single Electron binary install owner', () => {
-    expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
+    // Why not an exact match: the invariant is that the root postinstall owns the Electron
+    // binary install, not that nothing else may run after it. Pinning the whole string made
+    // any unrelated chained step (a lint-plugin sync, say) a CI failure for every open PR.
+    const postinstall = packageJson.scripts.postinstall
+    const steps = postinstall.split('&&').map((step) => step.trim())
+    expect(steps[0]).toBe('node config/scripts/rebuild-native-deps.mjs')
+    // No later step may take over the Electron install the first step owns.
+    expect(steps.slice(1).join(' ')).not.toMatch(/electron/i)
     expect(pnpmWorkspace.allowBuilds).not.toHaveProperty('electron')
   })
 
