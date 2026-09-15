@@ -1,0 +1,161 @@
+{
+  "name": "OCaml Interface",
+  "scopeName": "source.ocaml.interface",
+  "fileTypes": ["mli", "eliomi"],
+  "patterns": [
+    { "include": "source.ocaml#directives" },
+    { "include": "source.ocaml#comments" },
+    { "include": "source.ocaml#attributes" },
+    { "include": "source.ocaml#extensions" },
+    { "include": "#bindings" },
+    { "include": "source.ocaml#operators" },
+    { "include": "#keywords" },
+    { "include": "source.ocaml#types" },
+    { "include": "source.ocaml#identifiers" }
+  ],
+  "repository": {
+    "bindings": {
+      "comment": "bindings that are shared between .ml and .mli syntaxes",
+      "patterns": [
+        {
+          "comment": "optional labeled argument",
+          "name": "variable.parameter.optional.ocaml",
+          "match": "\\?([[:lower:]_][[:word:]']*)?"
+        },
+        {
+          "comment": "labeled argument",
+          "name": "variable.parameter.labeled.ocaml",
+          "match": "~([[:lower:]_][[:word:]']*)?"
+        },
+        {
+          "comment": "type declaration",
+          "match": "\\b(type)[[:space:]]+(nonrec[[:space:]]+)?(_[[:space:]]+|[+-]?'[[:alpha:]][[:word:]']*[[:space:]]+|\\(.*\\)[[:space:]]+)?([[:lower:]_][[:word:]']*)",
+          "captures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "keyword.ocaml" },
+            "3": { "patterns": [{ "include": "$base" }] },
+            "4": { "name": "entity.name.function.binding.ocaml" }
+          }
+        },
+        {
+          "comment": "and declaration for let bindings, type declarations, class bindings, class type definitions, or module constraints",
+          "match": "\\b(and)[[:space:]]+(?!(?:module|type|lazy)\\b(?!'))(virtual[[:space:]]+)?(_[[:space:]]+|'[[:alpha:]][[:word:]']*[[:space:]]+|\\(.*\\)[[:space:]]+)?([[:lower:]_][[:word:]']*)(?![[:word:]'])[[:space:]]*(?!,|::|[[:space:]])",
+          "captures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "keyword.ocaml" },
+            "3": { "patterns": [{ "include": "$base" }] },
+            "4": { "name": "entity.name.function.binding.ocaml" }
+          }
+        },
+        {
+          "comment": "external declaration",
+          "begin": "\\b(external)[[:space:]]+([[:lower:]_][[:word:]']*)?",
+          "beginCaptures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "entity.name.function.binding.ocaml" }
+          },
+          "end": "(?<=]|\")[[:space:]]*(?:$|(?=]))",
+          "patterns": [
+            {
+              "comment": "string literal",
+              "name": "string.quoted.double.ocaml",
+              "begin": "\"",
+              "end": "\""
+            },
+            { "include": "$base" }
+          ]
+        },
+        {
+          "comment": "val declaration for class instance variables",
+          "match": "\\b(val)[[:space:]]+(virtual)[[:space:]]+(mutable)[[:space:]]+([[:lower:]_][[:word:]']*)",
+          "captures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "keyword.ocaml" },
+            "3": { "name": "keyword.ocaml" },
+            "4": { "name": "entity.name.function.binding.ocaml" }
+          }
+        },
+        {
+          "comment": "val declaration for let bindings or class instance variables",
+          "match": "\\b(val|val!)[[:space:]]+(mutable[[:space:]]+)?(virtual[[:space:]]+)?([[:lower:]_][[:word:]']*)",
+          "captures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "keyword.ocaml" },
+            "3": { "name": "keyword.ocaml" },
+            "4": { "name": "entity.name.function.binding.ocaml" }
+          }
+        },
+        {
+          "comment": "class method declaration",
+          "match": "\\b(method)[[:space:]]+(virtual)[[:space:]]+(private)[[:space:]]+([[:lower:]_][[:word:]']*)",
+          "captures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "keyword.ocaml" },
+            "3": { "name": "keyword.ocaml" },
+            "4": { "name": "entity.name.function.binding.ocaml" }
+          }
+        },
+        {
+          "comment": "class method declaration",
+          "match": "\\b(method|method!)[[:space:]]+(private[[:space:]]+)?(virtual[[:space:]]+)?([[:lower:]_][[:word:]']*)",
+          "captures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "keyword.ocaml" },
+            "3": { "name": "keyword.ocaml" },
+            "4": { "name": "entity.name.function.binding.ocaml" }
+          }
+        },
+        {
+          "comment": "class specification or class type definition with type parameters",
+          "match": "\\b(class)[[:space:]]*([[:space:]]+type)?([[:space:]]+virtual)?[[:space:]]*(\\[.*\\])[[:space:]]*([[:lower:]_][[:word:]']*)",
+          "captures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "keyword.ocaml" },
+            "3": { "name": "keyword.ocaml" },
+            "4": { "patterns": [{ "include": "$base" }] },
+            "5": { "name": "entity.name.function.binding.ocaml" }
+          }
+        },
+        {
+          "comment": "class specification or class type definition",
+          "match": "\\b(class)[[:space:]]+(type[[:space:]]+)?(virtual[[:space:]]+)?([[:lower:]_][[:word:]']*)",
+          "captures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "keyword.ocaml" },
+            "3": { "name": "keyword.ocaml" },
+            "4": { "name": "entity.name.function.binding.ocaml" }
+          }
+        },
+        {
+          "comment": "named self in object",
+          "match": "\\b(object)[[:space:]]*\\([[:space:]]*([[:lower:]_][[:word:]']*)",
+          "captures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "entity.name.function.binding.ocaml" }
+          }
+        },
+        {
+          "comment": "module type of",
+          "begin": "\\b(module)[[:space:]]+(type)[[:space:]]+(of)\\b",
+          "beginCaptures": {
+            "1": { "name": "keyword.ocaml" },
+            "2": { "name": "keyword.ocaml" },
+            "3": { "name": "keyword.ocaml" }
+          },
+          "end": "(?=val|external|type|exception|class|module|open|include|=)",
+          "patterns": [{ "include": "source.ocaml" }]
+        }
+      ]
+    },
+
+    "keywords": {
+      "patterns": [
+        {
+          "comment": "reserved ocaml keyword (in interfaces)",
+          "name": "keyword.other.ocaml.interface",
+          "match": "\\b(and|as|class|constraint|end|exception|external|functor|in|include|inherit|let[[:space:]]+open|method|module|mutable|nonrec|object|of|open|private|rec|sig|type|val|virtual|with)\\b(?!')"
+        }
+      ]
+    }
+  }
+}

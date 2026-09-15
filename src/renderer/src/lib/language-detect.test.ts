@@ -14,6 +14,24 @@ describe('detectLanguage', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
 
+  it('maps OCaml implementation, interface and toplevel files to the ocaml language id', () => {
+    expect(detectLanguage('src/parser.ml')).toBe('ocaml')
+    expect(detectLanguage('src/parser.mli')).toBe('ocaml')
+    expect(detectLanguage('/home/alice/.ocamlinit')).toBe('ocaml')
+  })
+
+  it('maps MLX files to their own language id, not plain ocaml', () => {
+    // Why: MLX is OCaml with JSX expressions and has a separate grammar.
+    expect(detectLanguage('src/app.mlx')).toBe('ocaml.mlx')
+  })
+
+  it('leaves ocamllex and Menhir sources as plaintext', () => {
+    // Why: .mll and .mly are separate grammars that only embed OCaml, so
+    // colouring them as OCaml would mis-highlight their rule sections.
+    expect(detectLanguage('src/lexer.mll')).toBe('plaintext')
+    expect(detectLanguage('src/parser.mly')).toBe('plaintext')
+  })
+
   it('maps Nim files to the nim language id', () => {
     expect(detectLanguage('src/main.nim')).toBe('nim')
     expect(detectLanguage('tasks/build.nims')).toBe('nim')

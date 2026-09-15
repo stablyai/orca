@@ -1,29 +1,8 @@
-import { createRequire } from 'node:module'
-import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
-import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
+import type { IRawGrammar } from 'vscode-textmate'
 import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
 import { createTextMateTokensProvider } from './textmate-token-provider'
-
-const require = createRequire(import.meta.url)
-
-let nodeOnigurumaPromise: Promise<IOnigLib> | undefined
-
-async function loadNodeOniguruma(): Promise<IOnigLib> {
-  nodeOnigurumaPromise ??= (async () => {
-    const wasmPath = require.resolve('vscode-oniguruma/release/onig.wasm')
-    const wasmBytes = await readFile(wasmPath)
-    const wasmBuffer = wasmBytes.buffer.slice(
-      wasmBytes.byteOffset,
-      wasmBytes.byteOffset + wasmBytes.byteLength
-    )
-    await loadWASM(wasmBuffer)
-    return { createOnigScanner, createOnigString }
-  })()
-
-  return nodeOnigurumaPromise
-}
+import { loadNodeOniguruma } from './textmate-fixture-tokenizer'
 
 describe('createTextMateTokensProvider', () => {
   it('tokenizes Nim with the vendored TextMate grammar', async () => {
