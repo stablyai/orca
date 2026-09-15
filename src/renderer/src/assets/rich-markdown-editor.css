@@ -802,9 +802,16 @@
   background: color-mix(in srgb, var(--foreground) 2%, transparent);
 }
 
+.rich-markdown-editor .tableWrapper {
+  width: 100%;
+  max-width: 100%;
+  margin: 1em 0;
+  overflow-x: auto;
+}
+
 .rich-markdown-editor table {
   width: 100%;
-  margin: 1em 0;
+  margin: 0;
   border-collapse: collapse;
   font-size: 0.95em;
   table-layout: auto;
@@ -812,11 +819,28 @@
 
 .rich-markdown-editor th,
 .rich-markdown-editor td {
+  position: relative;
   padding: 8px 14px;
   border: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
   overflow-wrap: break-word;
+}
+
+.rich-markdown-editor .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -1px;
+  z-index: 1;
+  width: 4px;
+  background: var(--ring);
+  cursor: col-resize;
+}
+
+.rich-markdown-editor.resize-cursor,
+.rich-markdown-editor.resize-cursor * {
+  cursor: col-resize;
 }
 
 .rich-markdown-editor th {
