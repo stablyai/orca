@@ -1,3 +1,7 @@
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { safeStorage } from 'electron'
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import type { Store } from '../persistence'
 import {
   getSelectedClaudeAccountIdForTarget,
@@ -87,5 +91,53 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
       this.lastWrittenCredentialsJson = null
     }
     this.skipNextReadBackForAccountId = accountId
+  }
+
+  private getConsoleCredentialPath(): string {
+    return join(this.getRuntimeMetadataDir(), 'console-api-key.enc')
+  }
+
+  async getConsoleCredential(): Promise<string | null> {
+    try {
+      if (!safeStorage.isEncryptionAvailable()) {
+        return null
+      }
+      const credentialPath = this.getConsoleCredentialPath()
+      if (!existsSync(credentialPath)) {
+        return null
+      }
+      const encrypted = readFileSync(credentialPath, 'utf-8')
+      return safeStorage.decryptString(Buffer.from(encrypted, 'hex'))
+    } catch (error) {
+      console.warn('Failed to retrieve console credential:', error)
+      return null
+    }
+  }
+
+  async setConsoleCredential(apiKey: string): Promise<void> {
+    if (!apiKey) {
+      throw new Error('API key cannot be empty')
+    }
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('System credential storage unavailable')
+    }
+    try {
+      const encrypted = safeStorage.encryptString(apiKey)
+      const credentialPath = this.getConsoleCredentialPath()
+      mkdirSync(dirname(credentialPath), { recursive: true })
+      // Why: writeFileSync's mode only applies when creating, so an existing 0o644
+      // credential would keep it; the atomic rename always lands a fresh 0o600 file.
+      writeFileAtomically(credentialPath, encrypted.toString('hex'), { mode: 0o600 })
+    } catch (error) {
+      throw new Error(`Failed to store console credential: ${(error as Error).message}`)
+    }
+  }
+
+  async clearConsoleCredential(): Promise<void> {
+    try {
+      rmSync(this.getConsoleCredentialPath(), { force: true })
+    } catch (error) {
+      console.warn('Failed to clear console credential:', error)
+    }
   }
 }

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
-import { fetchClaudeRateLimits } from './claude-fetcher'
+import { fetchClaudeRateLimits, fetchConsoleBalance } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import {
   asRateLimitWindow,
@@ -16,6 +16,7 @@ import {
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
+  fetchConsoleBalance: vi.fn(),
   fetchManagedAccountUsage: vi.fn()
 }))
 
@@ -65,8 +66,14 @@ describe('RateLimitService', () => {
         usageMetadata: { failureKind: 'rate-limited' }
       }))
       mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchConsoleBalance).mockResolvedValue({
+        organization_id: 'org-123',
+        balance_in_cents: 10000,
+        last_fetched_at: Date.now()
+      })
 
       const service = new RateLimitService()
+      service.setConsoleCredentialResolver(() => Promise.resolve('sk-test-key'))
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
       service.start({ fetchImmediately: false })
@@ -82,6 +89,7 @@ describe('RateLimitService', () => {
         fiveHour: { used_percentage: 23.5, resets_at: Math.floor(Date.now() / 1000) + 3600 },
         sevenDay: { used_percentage: 41.2 }
       })
+      vi.mocked(fetchConsoleBalance).mockClear()
 
       const claude = service.getState().claude
       expect(claude?.status).toBe('ok')
@@ -96,6 +104,24 @@ describe('RateLimitService', () => {
       expect(vi.mocked(fetchCodexRateLimits).mock.calls.length).toBeGreaterThan(
         codexCallsBeforePoll
       )
+      expect(fetchConsoleBalance).toHaveBeenCalledWith(
+        'sk-test-key',
+        undefined,
+        expect.any(AbortSignal)
+      )
+      expect(service.getState().claude?.consoleBalance).toMatchObject({
+        organization_id: 'org-123',
+        balance_in_cents: 10000
+      })
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 24 },
+        sevenDay: { used_percentage: 41.2 }
+      })
+      expect(service.getState().claude?.consoleBalance).toMatchObject({
+        organization_id: 'org-123',
+        balance_in_cents: 10000
+      })
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
       // Once the live feed goes stale, automated refetches resume.
