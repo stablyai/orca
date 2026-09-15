@@ -14,7 +14,8 @@ const {
   connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTargetMock,
   removeRuntimeOwnedSshTargetMock,
-  invalidateRuntimeEnvironmentTransportMock
+  invalidateRuntimeEnvironmentTransportMock,
+  ensureRuntimeOwnedSshTargetAttachedMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -22,7 +23,8 @@ const {
   connectRuntimeOwnedSshTargetMock: vi.fn(),
   disconnectRuntimeOwnedSshTargetMock: vi.fn(),
   removeRuntimeOwnedSshTargetMock: vi.fn(),
-  invalidateRuntimeEnvironmentTransportMock: vi.fn()
+  invalidateRuntimeEnvironmentTransportMock: vi.fn(),
+  ensureRuntimeOwnedSshTargetAttachedMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -43,6 +45,9 @@ vi.mock('../ephemeral-vm-runtime-ssh', () => ({
 
 vi.mock('./runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: invalidateRuntimeEnvironmentTransportMock
+}))
+vi.mock('../ephemeral-vm-runtime-ssh-reattach', () => ({
+  ensureRuntimeOwnedSshTargetAttached: ensureRuntimeOwnedSshTargetAttachedMock
 }))
 
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
@@ -115,6 +120,7 @@ describe('registerEphemeralVmHandlers', () => {
     disconnectRuntimeOwnedSshTargetMock.mockReset()
     removeRuntimeOwnedSshTargetMock.mockReset()
     invalidateRuntimeEnvironmentTransportMock.mockReset()
+    ensureRuntimeOwnedSshTargetAttachedMock.mockReset().mockResolvedValue(undefined)
     connectRuntimeOwnedSshTargetMock.mockResolvedValue({
       targetId: 'runtime-ssh-orca-instance-1',
       target: {
@@ -678,6 +684,8 @@ describe('registerEphemeralVmHandlers', () => {
     } as never)
     expect(runningResume).toEqual(expect.objectContaining({ status: 'running' }))
     expect(existsSync(join(repoPath, 'resume-mode.txt'))).toBe(false)
+    // Why: an orca-server runtime has no runtime-owned SSH relay to re-attach on activation.
+    expect(ensureRuntimeOwnedSshTargetAttachedMock).not.toHaveBeenCalled()
 
     const suspended = await handlers.get('ephemeralVm:suspendWorkspace')?.(null, {
       workspaceId: 'workspace-1'
