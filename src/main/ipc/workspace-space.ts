@@ -33,6 +33,11 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
   ipcMain.handle('workspaceSpace:analyze', async (event): Promise<WorkspaceSpaceAnalyzeResult> => {
     if (!inFlightScan) {
       const controller = new AbortController()
+      const owner = event.sender
+      // Why: this scan is process-global, so a destroyed owner must release it
+      // or a later renderer can inherit an unreachable pending request.
+      const onOwnerDestroyed = (): void => controller.abort()
+      owner.once('destroyed', onOwnerDestroyed)
       const scanId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
       let latestProgress: WorkspaceSpaceScanProgress = {
         scanId,
@@ -108,6 +113,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
           throw error
         })
         .finally(() => {
+          owner.removeListener('destroyed', onOwnerDestroyed)
           inFlightScan = null
         })
     }

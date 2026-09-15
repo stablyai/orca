@@ -1,4 +1,5 @@
 import type { WorkspaceSpaceScanStatus } from '../shared/workspace-space-types'
+import { WorkspaceSpaceDuTimeoutError } from '../shared/workspace-space-du-stream'
 import { WorkspaceSpaceScanCapacityError } from '../shared/workspace-space-scan-budget'
 
 export type AsyncLimiter = <T>(task: () => Promise<T>) => Promise<T>
@@ -37,7 +38,10 @@ export function classifyWorkspaceSpaceError(error: unknown): {
       ? String((error as { code?: unknown }).code)
       : ''
   const message = error instanceof Error ? error.message : String(error)
-  if (error instanceof WorkspaceSpaceScanCapacityError) {
+  if (
+    error instanceof WorkspaceSpaceScanCapacityError ||
+    error instanceof WorkspaceSpaceDuTimeoutError
+  ) {
     return { status: 'unavailable', message }
   }
   if (code === 'ENOENT' || code === 'ENOTDIR') {
