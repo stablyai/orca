@@ -2,6 +2,10 @@ import { useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import {
+  isImeCompositionKeyDown,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
 
 export type NativeChatQuestionCardProps = {
@@ -38,6 +42,7 @@ export function NativeChatQuestionCard({
   // unique, while Claude's selector commits the numbered row (STA-1860).
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
+  const imeEnter = useImeEnterGestureOwnership()
 
   const total = prompt.questions.length
   const isLast = index === total - 1
@@ -198,11 +203,20 @@ export function NativeChatQuestionCard({
                     value={otherText[index]}
                     onChange={(e) => setOther(index, e.target.value)}
                     onKeyDown={(e) => {
+                      // Why: a CJK confirm Enter arrives twice and only the first is marked, so
+                      // pair the marked check with the gesture carry (#17820).
+                      if (imeEnter.ownsKeyDown(e) || isImeCompositionKeyDown(e)) {
+                        return
+                      }
                       if (e.key === 'Enter') {
                         e.preventDefault()
                         confirm(true)
                       }
                     }}
+                    onKeyUp={imeEnter.onKeyUp}
+                    onBlur={imeEnter.reset}
+                    onCompositionStart={() => imeEnter.setComposing(true)}
+                    onCompositionEnd={() => imeEnter.setComposing(false)}
                     placeholder={translate(
                       'components.native-chat.question.otherPlaceholder',
                       'Type your answer'
