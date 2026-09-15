@@ -17,6 +17,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { resolveManagedHookInstallDecision } from '../agent-hooks/managed-hook-install-policy'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type RuntimeClientSettings = Pick<
@@ -140,11 +141,14 @@ export class RuntimeClientSettingsController {
     if (updates.worktreeVisibilityDefaults !== undefined) {
       this.notifyReposChanged?.()
     }
+    // Why suppressed rather than reconciled: a deferred installation must write nothing, and a
+    // reconcile with the off switch set would remove hooks another Orca profile owns (STA-5679).
     if (
-      (typeof updates.agentStatusHooksEnabled === 'boolean' &&
+      resolveManagedHookInstallDecision(settings).kind !== 'defer' &&
+      ((typeof updates.agentStatusHooksEnabled === 'boolean' &&
         before !== updates.agentStatusHooksEnabled) ||
-      (updates.disabledTuiAgents !== undefined &&
-        !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents))
+        (updates.disabledTuiAgents !== undefined &&
+          !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents)))
     ) {
       await this.reconcileManagedAgentHooks()
     }

@@ -8,6 +8,10 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { probeClaudeCliVersion } from '../claude/claude-session-end-hook-capability'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
+  authorizeManagedHookInstall,
+  type ManagedHookInstallDecision
+} from './managed-hook-install-policy'
+import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS,
@@ -18,6 +22,13 @@ import {
 } from './managed-agent-hook-registry'
 
 export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
+export {
+  isAgentStatusHooksEnabled,
+  resolveStartupManagedHookAction,
+  shouldContinueManagedHookStartup,
+  shouldInstallStartupManagedAgentHook,
+  type StartupManagedHookAction
+} from './agent-status-hooks-enablement'
 export { prepareManagedCodexHomeBeforeShellLaunch } from '../codex/managed-home-shell-preflight'
 
 type ManagedHookSettings = Partial<
@@ -27,6 +38,9 @@ type ManagedHookSettings = Partial<
 type InstallOptions = {
   /** Set only for an explicit user action, never for startup reconciliation. */
   userInitiated?: boolean
+  /** The authorization for this write. Omitted means "ask the host", which installs when no host
+   *  has answered — the CLI's own process and every pre-bootstrap caller. */
+  installDecision?: ManagedHookInstallDecision
   shouldHydrateShellPath?: boolean
   onInstallError?: (agent: AgentHookTarget, error: unknown) => void
   shouldContinue?: (agent: AgentHookTarget) => boolean
@@ -35,47 +49,6 @@ type InstallOptions = {
 
 type RemoveOptions = {
   agents?: readonly AgentHookTarget[]
-}
-
-export function isAgentStatusHooksEnabled(
-  settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
-): boolean {
-  return settings?.agentStatusHooksEnabled !== false
-}
-
-export type StartupManagedHookAction = 'install' | 'skip'
-
-// Why never 'remove': this reads THIS instance's settings, but the managed hook files are
-// user-global (~/.claude/settings.json, ~/.cursor/hooks.json). A second Orca profile with the off
-// switch set would delete the hooks every other instance depends on, and Cursor — the one agent
-// with no title-derived status fallback — then goes silently idle (STA-5679). Honoring the off
-// switch only requires skipping the install; explicit removal stays on the Settings toggle.
-export function resolveStartupManagedHookAction(
-  settings: ManagedHookSettings
-): StartupManagedHookAction {
-  return isAgentStatusHooksEnabled(settings) ? 'install' : 'skip'
-}
-
-export function shouldInstallStartupManagedAgentHook(
-  settings: ManagedHookSettings,
-  agent: AgentHookTarget
-): boolean {
-  return (
-    resolveStartupManagedHookAction(settings) === 'install' &&
-    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
-  )
-}
-
-export function shouldContinueManagedHookStartup(
-  isQuitting: boolean,
-  settings: ManagedHookSettings,
-  agent: AgentHookTarget
-): boolean {
-  return (
-    !isQuitting &&
-    isAgentStatusHooksEnabled(settings) &&
-    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
-  )
 }
 
 function errorStatus(agent: AgentHookTarget, error: unknown): AgentHookInstallStatus {
@@ -133,7 +106,9 @@ async function runInstaller(
 // Why (#11549 aftermath): a CLI that falls off PATH keeps its user-wide config invoking
 // Orca's script, but the presence gate below then skips install() forever, freezing the
 // script at whatever Orca generated last. Existing scripts are Orca-owned, so bring them
-// current before any gating; creating new ones remains install()'s presence-gated job.
+// current before the presence gate; creating new ones remains install()'s presence-gated job.
+// The hooks-off guard above is the one gate that still wins: ~/.orca/agent-hooks/ is user-global,
+// so a profile that declined writes nothing there either, and a consenting profile refreshes it.
 async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
   const allowed = options.agents ? new Set(options.agents) : null
   for (const [agent, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {
@@ -152,6 +127,17 @@ export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  // Why here and not only at the call sites: authorization has to hold for every caller and every
+  // launch, including ones added later. Never mirrored with a remove — neither "declined" nor
+  // "not asked yet" may delete user-global files another Orca profile owns (STA-5679).
+  const decision = authorizeManagedHookInstall(settings, options.installDecision)
+  if (decision.kind !== 'allow') {
+    const [skipReason, detail] =
+      decision.kind === 'deny'
+        ? (['hooks_disabled', 'Agent status hooks are turned off.'] as const)
+        : (['onboarding_pending', 'Waiting for the first-run agent status question.'] as const)
+    return selectedInstallers(options).map(([agent]) => skippedStatus(agent, skipReason, detail))
+  }
   await refreshExistingManagedScripts(options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))

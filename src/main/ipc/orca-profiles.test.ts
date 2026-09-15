@@ -9,7 +9,7 @@ const {
   destroySystemTrayMock,
   createLocalOrcaProfileMock,
   getOrcaProfileListStateMock,
-  seedNewOrcaProfileTelemetryConsentMock,
+  seedNewOrcaProfileInheritedConsentMock,
   setActiveOrcaProfileMock,
   transferOrcaProfileProjectMock
 } = vi.hoisted(() => ({
@@ -21,7 +21,7 @@ const {
   destroySystemTrayMock: vi.fn(),
   createLocalOrcaProfileMock: vi.fn(),
   getOrcaProfileListStateMock: vi.fn(),
-  seedNewOrcaProfileTelemetryConsentMock: vi.fn(),
+  seedNewOrcaProfileInheritedConsentMock: vi.fn(),
   setActiveOrcaProfileMock: vi.fn(),
   transferOrcaProfileProjectMock: vi.fn()
 }))
@@ -50,7 +50,7 @@ vi.mock('../app-relaunch', () => ({
 vi.mock('../orca-profiles/profile-index-store', () => ({
   createLocalOrcaProfile: createLocalOrcaProfileMock,
   getOrcaProfileListState: getOrcaProfileListStateMock,
-  seedNewOrcaProfileTelemetryConsent: seedNewOrcaProfileTelemetryConsentMock,
+  seedNewOrcaProfileInheritedConsent: seedNewOrcaProfileInheritedConsentMock,
   setActiveOrcaProfile: setActiveOrcaProfileMock
 }))
 
@@ -84,7 +84,7 @@ describe('registerOrcaProfileHandlers', () => {
     destroySystemTrayMock.mockReset()
     createLocalOrcaProfileMock.mockReset()
     getOrcaProfileListStateMock.mockReset()
-    seedNewOrcaProfileTelemetryConsentMock.mockReset()
+    seedNewOrcaProfileInheritedConsentMock.mockReset()
     setActiveOrcaProfileMock.mockReset()
     transferOrcaProfileProjectMock.mockReset()
   })

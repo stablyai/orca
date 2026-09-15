@@ -64,6 +64,11 @@ import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem-watcher'
 import { setDefaultProxySessionResolver } from '../network/proxy-settings'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence'
+import { establishManagedHookInstallationMarker } from '../persistence/managed-hook-installation-marker'
+import {
+  getManagedHookInstallDecision,
+  setManagedHookInstallDecisionResolver
+} from '../agent-hooks/managed-hook-install-policy'
 import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
 import { initSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
@@ -261,6 +266,17 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Safe to defer, and must stay synchronous: no 'disconnect' can be delivered until this module
   // finishes evaluating, so moving this behind an await would open a real orphan window.
   installServeSupervisorDisconnectQuit(state.isServeMode)
+  // Why here and not in the ready phase: this decides whether this installation predates the
+  // first-run hook question, and it must be settled before ensureActiveOrcaProfile() or any Store
+  // can create the very state it looks at. Serve hosts resolve to 'headless' and install as today.
+  const managedHookInstallation = establishManagedHookInstallationMarker(getCanonicalUserDataPath())
+  setManagedHookInstallDecisionResolver((settings) =>
+    getManagedHookInstallDecision({
+      settings,
+      installation: managedHookInstallation,
+      mode: state.isServeMode ? 'serve' : 'desktop'
+    })
+  )
   // Why here: initDataPath above gives the canonical userData path for the record file; the write
   // itself lands for the next launch (see macos-press-and-hold-default.ts).
   applyMacPressAndHoldDefaultAtStartup(getCanonicalUserDataPath())

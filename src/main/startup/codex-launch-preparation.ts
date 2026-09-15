@@ -4,7 +4,7 @@ import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-sele
 import { markCodexProjectTrusted } from '../agent-trust-presets'
 import { codexHookService } from '../codex/hook-service'
 import { getDefaultWslDistro } from '../wsl'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { resolveManagedHookInstallDecision } from '../agent-hooks/managed-hook-install-policy'
 import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
 import { mainProcessState as state } from './main-process-state'
 
@@ -29,8 +29,15 @@ export async function prepareCodexRuntimeHomeForLaunch(
       console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
     }
   }
+  // Why resolved once per launch: every branch below writes with the same authorization, and
+  // `deny` and `defer` are not interchangeable here — `deny` sweeps the real home, `defer` must
+  // leave it untouched because the user has not been asked yet.
+  const installDecision = resolveManagedHookInstallDecision(state.store?.getSettings())
   const ensureRealHomeHooksIfSelected = async (): Promise<boolean> => {
     if (target?.runtime === 'wsl' || !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)) {
+      return false
+    }
+    if (installDecision.kind === 'defer') {
       return false
     }
     // Why (flag ON, system default): the hook entry must exist — appended last
@@ -38,7 +45,7 @@ export async function prepareCodexRuntimeHomeForLaunch(
     // the pane spawns. An incapable grant flips the lane gate so the launch
     // below falls back to the managed home instead of a status-blind pane.
     await ensureRealHomeCodexHookState({
-      hooksEnabled: isAgentStatusHooksEnabled(state.store?.getSettings()),
+      hooksEnabled: installDecision.kind === 'allow',
       userDataPath: app.getPath('userData')
     })
     return true
@@ -70,7 +77,9 @@ export async function prepareCodexRuntimeHomeForLaunch(
     target?.runtime === 'wsl'
       ? { runtime: 'wsl' as const, wslDistro: target.wslDistro?.trim() || getDefaultWslDistro() }
       : target
-  const hooksEnabled = isAgentStatusHooksEnabled(state.store?.getSettings())
+  // Deferred behaves like off on Orca's own managed home: user hooks are refreshed, no Orca entry
+  // is added. That home is profile-local, so nothing user-global is written either way.
+  const hooksEnabled = installDecision.kind === 'allow'
   try {
     // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
     const status = await codexHookService.prepareRuntimeHomeForLaunch(

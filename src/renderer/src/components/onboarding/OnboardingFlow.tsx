@@ -316,6 +316,9 @@ export default function OnboardingFlow({
                   isDetecting={flow.isDetectingAgents}
                   yoloPermissions={flow.yoloPermissions}
                   onYoloPermissionsChange={flow.setYoloPermissions}
+                  agentStatusHooksEnabled={flow.agentStatusHooksEnabled}
+                  onAgentStatusHooksEnabledChange={flow.setAgentStatusHooksEnabled}
+                  disabledTuiAgents={flow.settings?.disabledTuiAgents}
                 />
               )}
               {currentStep.id === 'theme' && (

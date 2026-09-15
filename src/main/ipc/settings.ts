@@ -12,6 +12,7 @@ import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../share
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { resolveManagedHookInstallDecision } from '../agent-hooks/managed-hook-install-policy'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
@@ -236,7 +237,10 @@ export function registerSettingsHandlers(
         before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
       ('disabledTuiAgents' in sanitizedArgs &&
         !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
-    if (hookSettingChanged) {
+    // Why only the reconcile is skipped: the preference above already persisted. Reconciling here
+    // would install before the first-run question is answered, or remove user-global hooks a
+    // different Orca profile owns (STA-5679).
+    if (hookSettingChanged && resolveManagedHookInstallDecision(result).kind !== 'defer') {
       try {
         await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
           userInitiated: true,

@@ -7,6 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
+import { AgentStatusHooksControl } from './AgentStatusHooksControl'
 
 const AGENT_GRID_MAX_ROWS = 4
 
@@ -20,6 +21,10 @@ type AgentStepProps = {
   isDetecting: boolean
   yoloPermissions?: boolean
   onYoloPermissionsChange?: (enabled: boolean) => void
+  agentStatusHooksEnabled?: boolean
+  onAgentStatusHooksEnabledChange?: (enabled: boolean) => void
+  // Passed rather than read from the store so the store-free renderToStaticMarkup tests keep working.
+  disabledTuiAgents?: unknown
 }
 
 function useAgentGridScrollMaxHeight(
@@ -65,7 +70,10 @@ export function AgentStep({
   detectedSet,
   isDetecting,
   yoloPermissions = true,
-  onYoloPermissionsChange
+  onYoloPermissionsChange,
+  agentStatusHooksEnabled = true,
+  onAgentStatusHooksEnabledChange,
+  disabledTuiAgents
 }: AgentStepProps) {
   const agentCatalog = getAgentCatalog()
   const detected = agentCatalog.filter((agent) => detectedSet.has(agent.id))
@@ -190,10 +198,19 @@ export function AgentStep({
           </div>
         </div>
       </section>
-      <YoloPermissionsControl
-        yoloPermissions={yoloPermissions}
-        onYoloPermissionsChange={onYoloPermissionsChange}
-      />
+      <div className="mt-auto flex shrink-0 flex-col gap-2.5">
+        <YoloPermissionsControl
+          yoloPermissions={yoloPermissions}
+          onYoloPermissionsChange={onYoloPermissionsChange}
+        />
+        <AgentStatusHooksControl
+          enabled={agentStatusHooksEnabled}
+          onEnabledChange={onAgentStatusHooksEnabledChange}
+          detectedAgentIds={detectedSet}
+          isDetecting={isDetecting}
+          disabledTuiAgents={disabledTuiAgents}
+        />
+      </div>
     </div>
   )
 }
@@ -206,7 +223,7 @@ function YoloPermissionsControl({
   onYoloPermissionsChange?: (enabled: boolean) => void
 }): React.JSX.Element {
   return (
-    <label className="mt-auto flex shrink-0 cursor-pointer items-center justify-between gap-4 rounded-lg border border-border bg-muted/25 px-4 py-3 transition-colors hover:bg-muted/40">
+    <label className="flex shrink-0 cursor-pointer items-center justify-between gap-4 rounded-lg border border-border bg-muted/25 px-4 py-3 transition-colors hover:bg-muted/40">
       <span className="flex min-w-0 items-center gap-3">
         <Checkbox
           checked={yoloPermissions}

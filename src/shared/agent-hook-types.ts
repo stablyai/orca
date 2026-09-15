@@ -28,6 +28,8 @@ export type AgentHookInstallSkipReason =
   | 'cli_not_found'
   | 'cli_presence_unknown'
   | 'hooks_disabled'
+  /** Deferred, not declined: a fresh install has not reached the onboarding question yet. */
+  | 'onboarding_pending'
 
 export type AgentHookInstallStatus = {
   agent: AgentHookTarget

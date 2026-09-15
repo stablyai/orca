@@ -7,7 +7,7 @@ import { prepareLegacySharedCodexSessionResume } from '../codex/codex-legacy-ses
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 import { codexHookService } from '../codex/hook-service'
 import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { resolveManagedHookInstallDecision } from '../agent-hooks/managed-hook-install-policy'
 import { markCodexProjectTrusted } from '../agent-trust-presets'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
@@ -90,8 +90,14 @@ export async function prepareCodexSessionResumeForLaunch(args: {
       const isSystemHome =
         normalizeRuntimePathForComparison(resumeHome) ===
         normalizeRuntimePathForComparison(systemHomePath)
-      const hooksEnabled = isAgentStatusHooksEnabled(store.getSettings())
+      const installDecision = resolveManagedHookInstallDecision(store.getSettings())
+      const hooksEnabled = installDecision.kind === 'allow'
       try {
+        // Why the real home is skipped rather than passed `false` while deferred: `false` sweeps
+        // it, and a user who has not been asked yet must find ~/.codex exactly as they left it.
+        if (isSystemHome && installDecision.kind === 'defer') {
+          return resumeHome
+        }
         if (isSystemHome) {
           await ensureRealHomeCodexHookState({
             hooksEnabled,

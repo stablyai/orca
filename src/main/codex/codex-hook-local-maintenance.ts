@@ -24,6 +24,12 @@ import {
   snapshotCodexRuntimeHookTrustProvenance
 } from './hook-trust-promotion'
 
+/**
+ * Refresh Orca's own profile-local managed Codex home. Deliberately does NOT run the legacy
+ * cleanup: that sweeps the user's real ~/.codex/config.toml, which an ordinary launch of a managed
+ * home has no business touching. `removeCodexHooksExclusively` still calls it on both of its paths,
+ * so an explicit opt-out converges exactly as before.
+ */
 export async function refreshCodexRuntimeUserHooksExclusively(
   runtimeHomePath: string,
   getStatus: (runtimeHomePath: string) => AgentHookInstallStatus
@@ -34,8 +40,6 @@ export async function refreshCodexRuntimeUserHooksExclusively(
   promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
   const config = readHooksJson(configPath)
   if (!config) {
-    // Why: disabled launch prep once called remove(); preserve that legacy cleanup even when runtime hooks.json is malformed.
-    await cleanupLegacyManagedHookRepresentations()
     return {
       agent: 'codex',
       state: 'error',
@@ -84,7 +88,6 @@ export async function refreshCodexRuntimeUserHooksExclusively(
   }
   snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
 
-  await cleanupLegacyManagedHookRepresentations()
   return getStatus(runtimeHomePath)
 }
 

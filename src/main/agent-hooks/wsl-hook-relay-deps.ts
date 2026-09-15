@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
-import { isAgentStatusHooksEnabled } from './managed-agent-hook-controls'
+import { resolveManagedHookInstallDecision } from './managed-hook-install-policy'
 import { agentHookServer } from './server'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
@@ -72,13 +72,21 @@ export type WslHookRelayManagerDeps = {
 }
 
 /** Every relay start — spawn, PTY reattach, crash recovery — funnels through this gate,
- *  so the user's agent-status-hooks switch is read live instead of at each call site. */
+ *  so the install authorization is read live instead of at each call site. */
 export function isWslHookRelayAllowed(deps: WslHookRelayManagerDeps): boolean {
   return (
     deps.platform() === 'win32' &&
     deps.remoteHooksEnabled() &&
-    isAgentStatusHooksEnabled(deps.managedHookSettings())
+    isWslGuestManagedHookInstallAllowed(deps)
   )
+}
+
+/** The guest's ~/.claude, ~/.codex and friends are user-global inside the distro, so the same
+ *  policy that guards the host's writers guards these. */
+export function isWslGuestManagedHookInstallAllowed(
+  deps: Pick<WslHookRelayManagerDeps, 'managedHookSettings'>
+): boolean {
+  return resolveManagedHookInstallDecision(deps.managedHookSettings()).kind === 'allow'
 }
 
 export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {

@@ -167,10 +167,19 @@ describe('RuntimeClient module-graph deferral', () => {
         expect(
           applyAgentStatusHooksEnabledMock,
           `${argv.join(' ')} hook application`
-        ).toHaveBeenCalledExactlyOnceWith(false, {
-          agentCmdOverrides: {},
-          disabledTuiAgents: []
-        })
+        ).toHaveBeenCalledExactlyOnceWith(
+          false,
+          {
+            agentCmdOverrides: {},
+            // Echoed back from the disk write so installManagedAgentHooks' own authorization guard
+            // reads the value the CLI just set instead of falling through to the default.
+            agentStatusHooksEnabled: false,
+            disabledTuiAgents: []
+          },
+          // The CLI resolves its own verdict; `off` must reach the installer as a deny, never as
+          // an ambient allow that a stale settings read could turn into an install.
+          { installDecision: { kind: 'deny', reason: 'hooks-disabled' } }
+        )
       } else {
         expect(
           applyAgentStatusHooksEnabledMock,

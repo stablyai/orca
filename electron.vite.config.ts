@@ -254,6 +254,10 @@ export const electronViteConfig: UserConfig = {
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           ),
+          // Same reason: `orca agent hooks on|off` resolves its own install verdict.
+          'agent-hooks/managed-hook-install-policy': resolve(
+            'src/main/agent-hooks/managed-hook-install-policy.ts'
+          ),
           'codex/managed-home-shell-preflight': resolve(
             'src/main/codex/managed-home-shell-preflight.ts'
           ),

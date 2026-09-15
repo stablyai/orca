@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { applyDocumentTheme } from '@/lib/document-theme'
-import { track } from '@/lib/telemetry'
-import { buildAgentPickedPayload } from './agent-picked-payload'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import { STEPS } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
-import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
+import { useOnboardingSettingsDraft } from './use-onboarding-settings-draft'
 import { translate } from '@/i18n/i18n'
-import { resolveAgentPermissionModeSummary } from '../../../../shared/tui-agent-permissions'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
   isSkippedStepIndex,
@@ -33,11 +28,8 @@ export function useOnboardingFlow(
 ) {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
-  const pathSource = useAppStore((s) => s.pathSource)
-  const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const openModal = useAppStore((s) => s.openModal)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
@@ -61,101 +53,19 @@ export function useOnboardingFlow(
     'forward'
   )
   const [stepIndex, setStepIndex] = useState(initialStep)
-  const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(
-    settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-      ? settings.defaultTuiAgent
-      : null
-  )
-  const [yoloPermissions, setYoloPermissions] = useState(
-    resolveAgentPermissionModeSummary({
-      agentDefaultArgs: settings?.agentDefaultArgs,
-      agentDefaultEnv: settings?.agentDefaultEnv
-    }) !== 'manual'
-  )
-  // Why: hydrate theme from saved settings so users who already chose one see it preselected.
-  const [theme, setTheme] = useState<GlobalSettings['theme']>(settings?.theme ?? 'dark')
+  const {
+    selectedAgent,
+    setSelectedAgent,
+    yoloPermissions,
+    setYoloPermissions,
+    agentStatusHooksEnabled,
+    setAgentStatusHooksEnabled,
+    theme,
+    setThemeFromPersistedSettings,
+    setTheme
+  } = useOnboardingSettingsDraft()
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [, setError] = useState<string | null>(null)
-
-  // Why: settings hydrate async after the lazy initializers run; re-sync once before commit unless the user edited the field.
-  const themeInteractedRef = useRef(false)
-  const agentInteractedRef = useRef(false)
-  const yoloPermissionsInteractedRef = useRef(false)
-  const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
-  const settingsHydration = resolveOnboardingSettingsHydration({
-    settings,
-    settingsHydrated,
-    themeInteracted: themeInteractedRef.current,
-    agentInteracted: agentInteractedRef.current,
-    currentTheme: theme,
-    currentAgent: selectedAgent
-  })
-  if (settingsHydration) {
-    setSettingsHydrated(settingsHydration.settingsHydrated)
-    if (settingsHydration.theme !== undefined) {
-      setTheme(settingsHydration.theme)
-    }
-    if (settingsHydration.selectedAgent !== undefined) {
-      setSelectedAgent(settingsHydration.selectedAgent)
-    }
-  }
-  if (settings && !yoloPermissionsInteractedRef.current) {
-    const nextYoloPermissions =
-      resolveAgentPermissionModeSummary({
-        agentDefaultArgs: settings.agentDefaultArgs,
-        agentDefaultEnv: settings.agentDefaultEnv
-      }) !== 'manual'
-    if (nextYoloPermissions !== yoloPermissions) {
-      setYoloPermissions(nextYoloPermissions)
-    }
-  }
-
-  // Why: track interaction so async settings hydration doesn't overwrite a value the user chose.
-  const setThemeInteractive = useCallback((value: GlobalSettings['theme']) => {
-    themeInteractedRef.current = true
-    setTheme(value)
-  }, [])
-  // `fromCollapsedSection`: whether the picked agent lived under AgentStep's `<details>` disclosure — only that call site knows.
-  const detectedAgentIdsRef = useRef<readonly TuiAgent[]>(detectedAgentIds ?? [])
-  const isDetectingRef = useRef<boolean>(isDetectingAgents)
-  const selectedAgentRef = useRef(selectedAgent)
-  // Why: refs let the stable `setSelectedAgentInteractive` read the freshest hydration classification at click time.
-  const pathSourceRef = useRef(pathSource)
-  const pathFailureReasonRef = useRef(pathFailureReason)
-  // Why: keep these mirrors fresh so stable handlers read current values at click/async time.
-  selectedAgentRef.current = selectedAgent
-  detectedAgentIdsRef.current = detectedAgentIds ?? []
-  isDetectingRef.current = isDetectingAgents
-  pathSourceRef.current = pathSource
-  pathFailureReasonRef.current = pathFailureReason
-  const setSelectedAgentInteractive = useCallback(
-    (value: TuiAgent | null, fromCollapsedSection = false) => {
-      agentInteractedRef.current = true
-      // Why: de-dup re-clicks on the current agent so telemetry counts mind-changes, not idle reselection.
-      const prev = selectedAgentRef.current
-      setSelectedAgent(value)
-      if (value === null || value === prev) {
-        return
-      }
-      // Why: emit at click time (not step completion) to capture mind-changes; payload builder extracted for coverage — see agent-picked-payload.test.ts.
-      track(
-        'onboarding_agent_picked',
-        buildAgentPickedPayload({
-          agent: value,
-          detectedAgentIds: detectedAgentIdsRef.current,
-          isDetecting: isDetectingRef.current,
-          fromCollapsedSection,
-          pathSource: pathSourceRef.current,
-          pathFailureReason: pathFailureReasonRef.current
-        })
-      )
-    },
-    []
-  )
-  const setYoloPermissionsInteractive = useCallback((enabled: boolean) => {
-    yoloPermissionsInteractedRef.current = true
-    setYoloPermissions(enabled)
-  }, [])
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
@@ -252,33 +162,24 @@ export function useOnboardingFlow(
       linearStatusChecked
     })
 
-  // Why: auto-pick only on first mount; otherwise re-running would clobber/race the user's own agent selection.
-  const didAutoSelectRef = useRef(false)
-  useEffect(() => {
-    if (didAutoSelectRef.current) {
-      return
-    }
-    didAutoSelectRef.current = true
-    // Why: re-read PATH on mount; the session cache can be poisoned by callers that ran before shell PATH hydration, giving a false "no agents" state.
-    void refreshDetectedAgents().then((ids) => {
-      if (selectedAgentRef.current !== null) {
-        return
-      }
-      const preferred = getAgentCatalog().find((agent) => ids.includes(agent.id))?.id ?? null
-      setSelectedAgent(preferred)
-    })
-  }, [refreshDetectedAgents])
+  // Why memoized on the value: closing lifts the first-run hook deferral, so closeWith must carry
+  // the consent the user actually left set. Keying identity to the boolean re-creates closeWith
+  // only when the answer changes, which is what makes the Escape path carry the fresh value
+  // without a render-phase ref write.
+  const onboardingConsent = useMemo(() => ({ agentStatusHooksEnabled }), [agentStatusHooksEnabled])
 
   const closeWith = useCloseWith({
     onOnboardingChange,
     startTimeRef,
-    setError
+    setError,
+    consent: onboardingConsent
   })
 
   const persistCurrentStep = usePersistCurrentStep({
     currentStepId: currentStep.id,
     selectedAgent,
     yoloPermissions,
+    agentStatusHooksEnabled,
     theme,
     settings,
     updateSettings,
@@ -304,7 +205,7 @@ export function useOnboardingFlow(
     setStepIndex,
     selectedAgent,
     themeStepEntryThemeRef,
-    setTheme,
+    setTheme: setThemeFromPersistedSettings,
     updateSettings,
     skipOptions
   })
@@ -317,11 +218,13 @@ export function useOnboardingFlow(
     progressStepIndex,
     currentStep,
     selectedAgent,
-    setSelectedAgent: setSelectedAgentInteractive,
+    setSelectedAgent,
     yoloPermissions,
-    setYoloPermissions: setYoloPermissionsInteractive,
+    setYoloPermissions,
+    agentStatusHooksEnabled,
+    setAgentStatusHooksEnabled,
     theme,
-    setTheme: setThemeInteractive,
+    setTheme,
     busyLabel,
     detectedSet,
     isDetectingAgents,

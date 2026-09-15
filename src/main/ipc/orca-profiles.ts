@@ -23,7 +23,7 @@ import type {
 import {
   createLocalOrcaProfile,
   getOrcaProfileListState,
-  seedNewOrcaProfileTelemetryConsent,
+  seedNewOrcaProfileInheritedConsent,
   setActiveOrcaProfile
 } from '../orca-profiles/profile-index-store'
 import {
@@ -190,7 +190,7 @@ export function registerOrcaProfileHandlers(
     'orcaProfiles:createLocal',
     (_event, args?: CreateLocalOrcaProfileArgs): CreateLocalOrcaProfileResult => {
       const result = createLocalOrcaProfile(args)
-      seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+      seedNewOrcaProfileInheritedConsent(result.profile.id, store.getSettings())
       return result
     }
   )
@@ -288,7 +288,7 @@ export function registerOrcaProfileHandlers(
         createCloudLinkedProfileArgsFromUnknown(rawArgs)
       )
       if (result.status === 'created') {
-        seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+        seedNewOrcaProfileInheritedConsent(result.profile.id, store.getSettings())
         options.onAuthMutation?.()
       }
       return result

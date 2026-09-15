@@ -23,7 +23,7 @@ import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { isMethodNotFoundError } from './ssh-filesystem-stream-reader'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { resolveManagedHookInstallDecision } from '../agent-hooks/managed-hook-install-policy'
 import {
   buildManagedHookDetectionCommands,
   readManagedHookDetectionResult
@@ -1363,7 +1363,7 @@ export class SshRelaySession {
   ): Promise<void> {
     if (
       !isRemoteAgentHooksEnabled() ||
-      !this.areAgentStatusHooksEnabled() ||
+      !this.isManagedHookInstallAllowedHere() ||
       (shouldContinue && !shouldContinue())
     ) {
       return
@@ -1518,7 +1518,7 @@ export class SshRelaySession {
 
   // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy — the relay is versioned independently. Best-effort: failure only costs agent status on this host.
   private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
-    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
+    if (!isRemoteAgentHooksEnabled() || !this.isManagedHookInstallAllowedHere()) {
       return
     }
     try {
@@ -1545,9 +1545,12 @@ export class SshRelaySession {
     }
   }
 
-  private areAgentStatusHooksEnabled(): boolean {
+  // Why the policy and not the plain off switch: these write the REMOTE host's user-global agent
+  // configs, so a deferred first run must reach them too — and a `false` here would only skip,
+  // never sweep, exactly as the local chokepoint does (STA-5679).
+  private isManagedHookInstallAllowedHere(): boolean {
     const store = this.store as { getSettings?: Store['getSettings'] }
-    return isAgentStatusHooksEnabled(store.getSettings?.())
+    return resolveManagedHookInstallDecision(store.getSettings?.()).kind === 'allow'
   }
 
   private wireUpRemoteWorkspaceEvents(mux: SshChannelMultiplexer): void {

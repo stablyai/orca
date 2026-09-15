@@ -9,7 +9,6 @@ import {
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../shared/secure-file'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -34,6 +33,10 @@ import {
   profileBackupPath
 } from './profile-storage-paths'
 
+export {
+  seedNewOrcaProfileInheritedConsent,
+  type InheritableOrcaProfileConsent
+} from './profile-consent-seeding'
 export {
   getOrcaProfileBrowserSessionMetaFile,
   getOrcaProfileDataFile,
@@ -158,28 +161,6 @@ function copyLegacyStateToProfile(userDataPath: string, profileId: string): void
   for (let i = 0; i < LEGACY_BACKUP_COUNT; i++) {
     copyIfPresent(legacyBackupPath(userDataPath, i), profileBackupPath(profileDataFile, i))
   }
-}
-
-// Why: a brand-new profile has no data file, which the telemetry cohort
-// migration reads as a fresh install and defaults to opted-in. Copying the
-// active profile's consent block keeps an opted-out user opted out (and keeps
-// one installId per install) when they create additional profiles.
-export function seedNewOrcaProfileTelemetryConsent(
-  profileId: string,
-  telemetry: GlobalSettings['telemetry'],
-  userDataPath = getProfileUserDataPath()
-): void {
-  if (!telemetry) {
-    return
-  }
-  const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
-  if (existsSync(dataFile)) {
-    return
-  }
-  mkdirSync(dirname(dataFile), { recursive: true })
-  const tmpPath = `${dataFile}.tmp`
-  writeFileSync(tmpPath, JSON.stringify({ settings: { telemetry } }, null, 2), 'utf-8')
-  renameSync(tmpPath, dataFile)
 }
 
 function createInitialProfileIndex(now = Date.now()): OrcaProfileIndex {

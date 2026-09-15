@@ -84,6 +84,7 @@ vi.mock('../../shared/runtime-environment-store', () => ({
 }))
 
 import { registerSettingsHandlers } from './settings'
+import { setManagedHookInstallDecisionResolver } from '../agent-hooks/managed-hook-install-policy'
 
 const settingsInvokeEvent = { sender: { id: 1 } }
 type SettingsChangedListener = (
@@ -95,6 +96,7 @@ type SettingsChangedListener = (
 const store = {
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
+  getOnboarding: vi.fn(),
   getGitHubCache: vi.fn(),
   setGitHubCache: vi.fn(),
   onSettingsChanged: vi.fn(() => () => {})
@@ -124,6 +126,9 @@ describe('registerSettingsHandlers', () => {
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
+    store.getOnboarding.mockReset().mockReturnValue({ closedAt: null, lastCompletedStep: 5 })
+    // Default: an installation that never defers, so the hook reconcile runs as it always has.
+    setManagedHookInstallDecisionResolver(null)
     store.onSettingsChanged.mockClear()
   })
 
@@ -194,6 +199,49 @@ describe('registerSettingsHandlers', () => {
       updated,
       expect.objectContaining({ shouldContinue: expect.any(Function) })
     )
+  })
+
+  it('skips the hook reconcile while the install is deferred, but still persists the choice', async () => {
+    const before = { agentStatusHooksEnabled: true, disabledTuiAgents: [] }
+    const updated = { ...before, agentStatusHooksEnabled: false }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockReturnValue(updated)
+    setManagedHookInstallDecisionResolver(() => ({
+      kind: 'defer',
+      reason: 'onboarding-pending'
+    }))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { agentStatusHooksEnabled: boolean }
+    ) => Promise<unknown>
+
+    const result = await handler(settingsInvokeEvent, { agentStatusHooksEnabled: false })
+
+    // Reconciling here would delete user-global hooks this fresh profile never wrote (STA-5679).
+    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ agentStatusHooksEnabled: false }),
+      expect.anything()
+    )
+    expect(result).toBe(updated)
+  })
+
+  it('reconciles hooks once the install is no longer deferred', async () => {
+    const before = { agentStatusHooksEnabled: true, disabledTuiAgents: [] }
+    const updated = { ...before, agentStatusHooksEnabled: false }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockReturnValue(updated)
+    setManagedHookInstallDecisionResolver(() => ({ kind: 'deny', reason: 'hooks-disabled' }))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { agentStatusHooksEnabled: boolean }
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { agentStatusHooksEnabled: false })
+
+    expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects durable Active Server writes through generic settings:set', async () => {

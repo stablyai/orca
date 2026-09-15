@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   detect: vi.fn(),
@@ -54,6 +54,7 @@ import {
   shouldInstallStartupManagedAgentHook,
   shouldContinueManagedHookStartup
 } from './managed-agent-hook-controls'
+import { setManagedHookInstallDecisionResolver } from './managed-hook-install-policy'
 
 function status(agent: 'claude' | 'codex', state: 'installed' | 'not_installed') {
   return {
@@ -357,5 +358,138 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
 
     expect(mocks.removeClaude).toHaveBeenCalledTimes(1)
     expect(mocks.removeCodex).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('installManagedAgentHooks caller-independent off switch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.installClaude.mockReturnValue(status('claude', 'installed'))
+    mocks.installCodex.mockReturnValue(status('codex', 'installed'))
+    mocks.refreshClaude.mockResolvedValue(undefined)
+    mocks.refreshCodex.mockResolvedValue(undefined)
+    mocks.detect.mockResolvedValue({
+      claude: { state: 'found' },
+      codex: { state: 'found' }
+    })
+  })
+
+  it('writes nothing for any agent when hooks are turned off', async () => {
+    const results = await installManagedAgentHooks({ agentStatusHooksEnabled: false })
+
+    expect(mocks.installClaude).not.toHaveBeenCalled()
+    expect(mocks.installCodex).not.toHaveBeenCalled()
+    // Not even the Orca-owned launcher scripts, and no PATH probing.
+    expect(mocks.refreshClaude).not.toHaveBeenCalled()
+    expect(mocks.detect).not.toHaveBeenCalled()
+    expect(results).toEqual([
+      expect.objectContaining({ agent: 'claude', state: 'skipped', skipReason: 'hooks_disabled' }),
+      expect.objectContaining({ agent: 'codex', state: 'skipped', skipReason: 'hooks_disabled' })
+    ])
+  })
+
+  it('never removes anything on the declined path', async () => {
+    // Removal would delete user-global entries another Orca profile owns (STA-5679).
+    await installManagedAgentHooks({ agentStatusHooksEnabled: false })
+
+    expect(mocks.removeClaude).not.toHaveBeenCalled()
+    expect(mocks.removeCodex).not.toHaveBeenCalled()
+    expect(mocks.removeClaudeAsync).not.toHaveBeenCalled()
+  })
+
+  it('reports only the requested agents when the caller scoped the install', async () => {
+    const results = await installManagedAgentHooks(
+      { agentStatusHooksEnabled: false },
+      { agents: ['codex'] }
+    )
+
+    expect(results.map((entry) => entry.agent)).toEqual(['codex'])
+  })
+
+  it('still installs on the turn-it-back-on path, which passes post-write settings', async () => {
+    await applyAgentStatusHooksEnabled(true, {
+      agentStatusHooksEnabled: true,
+      disabledTuiAgents: []
+    })
+
+    expect(mocks.installClaude).toHaveBeenCalledTimes(1)
+    expect(mocks.installCodex).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('installManagedAgentHooks caller-independent deferral', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setManagedHookInstallDecisionResolver(null)
+    mocks.installClaude.mockReturnValue(status('claude', 'installed'))
+    mocks.installCodex.mockReturnValue(status('codex', 'installed'))
+    mocks.refreshClaude.mockResolvedValue(undefined)
+    mocks.refreshCodex.mockResolvedValue(undefined)
+    mocks.detect.mockResolvedValue({
+      claude: { state: 'found' },
+      codex: { state: 'found' }
+    })
+  })
+
+  afterEach(() => setManagedHookInstallDecisionResolver(null))
+
+  it('writes nothing when the caller passes a deferred decision', async () => {
+    const results = await installManagedAgentHooks(
+      { agentStatusHooksEnabled: true },
+      { installDecision: { kind: 'defer', reason: 'onboarding-pending' } }
+    )
+
+    expect(mocks.installClaude).not.toHaveBeenCalled()
+    // Not even the Orca-owned launcher scripts, and no PATH probing.
+    expect(mocks.refreshClaude).not.toHaveBeenCalled()
+    expect(mocks.detect).not.toHaveBeenCalled()
+    expect(results).toEqual([
+      expect.objectContaining({
+        agent: 'claude',
+        state: 'skipped',
+        skipReason: 'onboarding_pending'
+      }),
+      expect.objectContaining({
+        agent: 'codex',
+        state: 'skipped',
+        skipReason: 'onboarding_pending'
+      })
+    ])
+  })
+
+  it('removes nothing on the deferred path — not asked is not declined (STA-5679)', async () => {
+    await installManagedAgentHooks(
+      { agentStatusHooksEnabled: true },
+      { installDecision: { kind: 'defer', reason: 'onboarding-pending' } }
+    )
+
+    expect(mocks.removeClaude).not.toHaveBeenCalled()
+    expect(mocks.removeCodex).not.toHaveBeenCalled()
+    expect(mocks.removeClaudeAsync).not.toHaveBeenCalled()
+  })
+
+  it('defers for a caller that passes no decision, when the host says defer', async () => {
+    // The guard has to hold for callers added later, which is the whole point of the chokepoint.
+    setManagedHookInstallDecisionResolver(() => ({ kind: 'defer', reason: 'onboarding-pending' }))
+
+    await installManagedAgentHooks({ agentStatusHooksEnabled: true })
+
+    expect(mocks.installClaude).not.toHaveBeenCalled()
+  })
+
+  it('installs for a caller that passes no decision when no host has answered', async () => {
+    await installManagedAgentHooks({ agentStatusHooksEnabled: true })
+
+    expect(mocks.installClaude).toHaveBeenCalledTimes(1)
+  })
+
+  it('denies an explicit off switch even against an allowing decision', async () => {
+    const results = await installManagedAgentHooks(
+      { agentStatusHooksEnabled: false },
+      { installDecision: { kind: 'allow', reason: 'pre-change' } }
+    )
+
+    expect(mocks.installClaude).not.toHaveBeenCalled()
+    expect(results[0]).toMatchObject({ skipReason: 'hooks_disabled' })
   })
 })

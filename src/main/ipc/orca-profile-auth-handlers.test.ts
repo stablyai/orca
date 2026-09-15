@@ -37,7 +37,7 @@ vi.mock('../tray/system-tray', () => ({
 vi.mock('../orca-profiles/profile-index-store', () => ({
   createLocalOrcaProfile: vi.fn(),
   getOrcaProfileListState: vi.fn(),
-  seedNewOrcaProfileTelemetryConsent: vi.fn(),
+  seedNewOrcaProfileInheritedConsent: vi.fn(),
   setActiveOrcaProfile: vi.fn()
 }))
 

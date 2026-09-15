@@ -4,7 +4,7 @@ import { createElement, useEffect, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultOnboardingState } from '../../../../shared/constants'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { OnboardingConsent, OnboardingState } from '../../../../shared/onboarding-state-types'
 
 const trackMock = vi.hoisted(() => vi.fn())
 
@@ -15,7 +15,9 @@ vi.mock('@/lib/telemetry', () => ({
 import {
   buildCompletedOnboardingNotificationSettings,
   buildOnboardingDismissedPayload,
+  persistStep,
   useCloseWith,
+  usePersistCurrentStep,
   type DismissedExtras,
   trackOnboardingDismissed
 } from './use-onboarding-flow-persistence'
@@ -46,24 +48,31 @@ function setApi(api: {
   ;(window as unknown as { api: typeof api }).api = api
 }
 
-function CloseWithProbe(props: { onReady: (closeWith: CloseWithCallback) => void }): null {
+function CloseWithProbe(props: {
+  onReady: (closeWith: CloseWithCallback) => void
+  consent?: OnboardingConsent
+}): null {
   const closeWith = useCloseWith({
     onOnboardingChange: vi.fn(),
     startTimeRef: { current: probeStartTime },
-    setError: vi.fn()
+    setError: vi.fn(),
+    consent: props.consent ?? {}
   })
   useEffect(() => props.onReady(closeWith), [closeWith, props])
   return null
 }
 
-function renderCloseWithProbe(onReady: (closeWith: CloseWithCallback) => void): {
+function renderCloseWithProbe(
+  onReady: (closeWith: CloseWithCallback) => void,
+  consent?: OnboardingConsent
+): {
   root: Root
   container: HTMLDivElement
 } {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
-  act(() => root.render(createElement(CloseWithProbe, { onReady })))
+  act(() => root.render(createElement(CloseWithProbe, { onReady, consent })))
   return { root, container }
 }
 
@@ -162,5 +171,71 @@ describe('onboarding flow persistence', () => {
     })
 
     expect(api.starNag.onboardingCompleted).toHaveBeenCalledTimes(1)
+  })
+
+  it('carries the hook consent on the close that lifts the first-run deferral', async () => {
+    // Closing the wizard also ends the deferral, so main must authorize from the same value the
+    // checkbox holds — not from whatever the fire-and-forget on-change write left behind.
+    let closeWith: CloseWithCallback | null = null
+    ;({ root, container } = renderCloseWithProbe(
+      (callback) => {
+        closeWith = callback
+      },
+      { agentStatusHooksEnabled: false }
+    ))
+
+    await act(async () => {
+      await closeWith?.('dismissed', 1)
+    })
+
+    const update = (
+      window as unknown as { api: { onboarding: { update: ReturnType<typeof vi.fn> } } }
+    ).api.onboarding.update
+    expect(update.mock.calls[0][1]).toEqual({ agentStatusHooksEnabled: false })
+  })
+
+  it('carries the hook consent alongside the step 1 advance', async () => {
+    await persistStep(1, { checklist: undefined }, { agentStatusHooksEnabled: false })
+
+    const update = (
+      window as unknown as { api: { onboarding: { update: ReturnType<typeof vi.fn> } } }
+    ).api.onboarding.update
+    expect(update.mock.calls[0][0]).toMatchObject({ lastCompletedStep: 1 })
+    expect(update.mock.calls[0][1]).toEqual({ agentStatusHooksEnabled: false })
+  })
+
+  it('sends the unchecked box with the agent step commit', async () => {
+    let commit: (() => Promise<unknown>) | null = null
+    function PersistProbe(): null {
+      const persistCurrentStep = usePersistCurrentStep({
+        currentStepId: 'agent',
+        selectedAgent: 'claude',
+        yoloPermissions: false,
+        agentStatusHooksEnabled: false,
+        theme: 'dark',
+        settings: { agentDefaultArgs: {}, agentDefaultEnv: {} } as never,
+        updateSettings: vi.fn(),
+        onboardingChecklist: getDefaultOnboardingState().checklist,
+        onOnboardingChange: vi.fn(),
+        setError: vi.fn()
+      })
+      useEffect(() => {
+        commit = persistCurrentStep
+      }, [persistCurrentStep])
+      return null
+    }
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => root?.render(createElement(PersistProbe)))
+
+    await act(async () => {
+      await commit?.()
+    })
+
+    const update = (
+      window as unknown as { api: { onboarding: { update: ReturnType<typeof vi.fn> } } }
+    ).api.onboarding.update
+    expect(update.mock.calls[0][1]).toEqual({ agentStatusHooksEnabled: false })
   })
 })
