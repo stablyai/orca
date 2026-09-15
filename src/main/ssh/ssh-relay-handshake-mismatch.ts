@@ -24,11 +24,13 @@ export function buildRelayHandshakeRefusalError(
 
 // Why: extract the expected/got version pair from --connect's stderr line
 // "Handshake mismatch: expected=<x>, daemon=<y>" so diagnostics name both versions.
+// Why a comma is excluded from `daemon`: the line grew trailing `daemonProtocol=`/`ours=`
+// fields, so the version is no longer the last thing before the `;`.
 function parseHandshakeMismatchStderr(stderr: string): {
   expected: string | undefined
   got: string | undefined
 } {
-  const match = /expected=([^,\s]+),\s*daemon=([^\s;]+)/.exec(stderr)
+  const match = /expected=([^,\s]+),\s*daemon=([^\s;,]+)/.exec(stderr)
   if (!match) {
     return { expected: undefined, got: undefined }
   }
