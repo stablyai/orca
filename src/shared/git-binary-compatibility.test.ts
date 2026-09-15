@@ -9,6 +9,8 @@ import {
   isUnsupportedMergeTreeWriteTreeError
 } from './git-merge-tree-capability'
 import { isBranchCheckedOutInWorktreeError } from './git-branch-delete-refusal'
+import { branchHasNoUnmergedChangesOnAnyTarget } from './git-branch-cleanup'
+import { GitCapabilityCache } from './git-capability-cache'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
 import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
 import {
@@ -404,6 +406,43 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await expect(
       runGit(['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/compat-parent'])
     ).rejects.toMatchObject({ code: 1 })
+  })
+
+  it('proves a captured branch commit merged without relying on its tracking branch', async () => {
+    const base = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await writeFile(join(repoPath, 'retention.txt'), 'unmerged change\n')
+    await runGit(['add', 'retention.txt'])
+    const tree = (await runGit(['write-tree'])).stdout.trim()
+    const feature = (
+      await runGit(['commit-tree', tree, '-p', base, '-m', 'retention'])
+    ).stdout.trim()
+    await runGit(['reset', '--hard', 'HEAD'])
+    await runGit(['update-ref', 'refs/heads/compat-retention', feature])
+    await runGit(['update-ref', 'refs/remotes/origin/compat-retention', feature])
+    await runGit(['config', 'branch.compat-retention.remote', 'origin'])
+    await runGit(['config', 'branch.compat-retention.merge', 'refs/heads/compat-retention'])
+    const capabilities = new GitCapabilityCache()
+
+    expect(
+      await branchHasNoUnmergedChangesOnAnyTarget(
+        runGit,
+        'compat-retention',
+        [base],
+        capabilities,
+        feature
+      )
+    ).toBe(false)
+    expect(
+      await branchHasNoUnmergedChangesOnAnyTarget(
+        runGit,
+        'compat-retention',
+        [feature],
+        capabilities,
+        feature
+      )
+    ).toBe(true)
+    await runGit(['update-ref', '-d', 'refs/heads/compat-retention', feature])
+    await runGit(['config', '--remove-section', 'branch.compat-retention'])
   })
 
   it('packs loose refs and reads the maintenance opt-out at the baseline', async () => {
