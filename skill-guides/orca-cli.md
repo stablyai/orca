@@ -219,3 +219,10 @@ This guide covers worktrees, terminals, and handoffs on its own. At a gate below
 | Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
 | Publishing or revoking an artifact link, or publishing installed skills                                         | `references/publishing.md`       |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |
+
+On cmd.exe, replace a POSIX/PowerShell single-quoted `ORCA emulator gesture '<json>'` with
+double quotes and escaped inner quotes:
+
+```text
+ORCA emulator gesture "[{\"type\":\"begin\",\"x\":0.5,\"y\":0.8},{\"type\":\"move\",\"x\":0.5,\"y\":0.4},{\"type\":\"end\",\"x\":0.5,\"y\":0.2}]" --json
+```
