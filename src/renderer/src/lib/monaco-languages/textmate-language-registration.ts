@@ -15,6 +15,7 @@ export type TextMateLanguageRegistration = {
   configuration?: Monaco.languages.LanguageConfiguration
   scopeName: string
   loadGrammar: TextMateGrammarLoader
+  onError?: (error: unknown) => void
   loadProviderModule?: () => Promise<TextMateTokenProviderModule>
 }
 
@@ -38,7 +39,7 @@ export function registerTextMateLanguage(
     monaco.languages.setLanguageConfiguration(registration.language.id, registration.configuration)
   }
 
-  let tokensProviderPromise: Promise<TextMateTokensProvider> | undefined
+  let tokensProviderPromise: Promise<TextMateTokensProvider | null> | undefined
   monaco.languages.registerTokensProviderFactory(registration.language.id, {
     create: () => {
       // Why: plain Monaco tokenization requests basic language features; onLanguage
@@ -48,9 +49,16 @@ export function registerTextMateLanguage(
       )().then(({ createTextMateTokensProvider }) =>
         createTextMateTokensProvider({
           scopeName: registration.scopeName,
-          loadGrammar: registration.loadGrammar
+          loadGrammar: registration.loadGrammar,
+          ...(registration.onError ? { onError: registration.onError } : {})
         })
       )
+      if (registration.onError) {
+        tokensProviderPromise = tokensProviderPromise.catch((error) => {
+          registration.onError?.(error)
+          return null
+        })
+      }
       return tokensProviderPromise
     }
   })

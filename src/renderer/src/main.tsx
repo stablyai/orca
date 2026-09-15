@@ -9,6 +9,7 @@ import './assets/main.css'
 import { StrictMode } from 'react'
 import { useTranslation } from 'react-i18next'
 import App from './App'
+import { loadCustomLanguageSnapshot } from './lib/custom-language-snapshot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   installRendererCrashDiagnostics,
@@ -69,14 +70,17 @@ function RendererRoot(): React.JSX.Element {
   )
 }
 
-getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
-  <StrictMode>
-    <I18nProvider>
-      <RendererRoot />
-    </I18nProvider>
-  </StrictMode>
-)
-recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
+// Resolve file associations before restored editors compute their language.
+void loadCustomLanguageSnapshot().then(() => {
+  getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
+    <StrictMode>
+      <I18nProvider>
+        <RendererRoot />
+      </I18nProvider>
+    </StrictMode>
+  )
+  recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
+})
 
 // Why here: the xterm WebGL addon is 243 KB, is only ever constructed once a
 // terminal attaches (many frames away), and is needed by nothing during boot.

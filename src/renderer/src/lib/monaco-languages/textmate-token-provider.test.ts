@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
 import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
@@ -54,5 +54,36 @@ describe('createTextMateTokensProvider', () => {
         loadOniguruma: loadNodeOniguruma
       })
     ).rejects.toThrow('No TextMate grammar registered for scope source.unknown')
+  })
+  it('reports a lazy regex failure once and keeps later lines usable as plain text', async () => {
+    const onError = vi.fn()
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.invalid',
+      loadGrammar: async () => ({
+        scopeName: 'source.invalid',
+        repository: { $self: {}, $base: {} },
+        patterns: [{ name: 'keyword', match: '[' }]
+      }),
+      loadOniguruma: loadNodeOniguruma,
+      onError
+    })
+    const first = provider.tokenize('hello', provider.getInitialState())
+    expect(first.tokens).toEqual([{ startIndex: 0, scopes: '' }])
+    expect(provider.tokenize('next line', first.endState).tokens).toEqual(first.tokens)
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0][0]).toBeInstanceOf(Error)
+
+    const valid = await createTextMateTokensProvider({
+      scopeName: 'source.valid',
+      loadGrammar: async () => ({
+        scopeName: 'source.valid',
+        repository: { $self: {}, $base: {} },
+        patterns: [{ name: 'keyword', match: 'hello' }]
+      }),
+      loadOniguruma: loadNodeOniguruma,
+      onError
+    })
+    expect(valid.tokenize('hello', valid.getInitialState()).tokens[0].scopes).toBe('keyword')
+    expect(onError).toHaveBeenCalledTimes(1)
   })
 })

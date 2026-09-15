@@ -1,3 +1,4 @@
+import type { CustomLanguageSnapshot } from '../../shared/custom-languages'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings'
 import type {
   WarpThemeImportPreview,
@@ -6,6 +7,7 @@ import type {
 import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
 
 export type SettingsApi = {
+  getCustomLanguages?: () => Promise<CustomLanguageSnapshot>
   get: () => Promise<GlobalSettings>
   /** Synchronous persisted-settings read for startup decisions that can't wait for async hydration. Blocking IPC — call sparingly. */
   getSync: () => GlobalSettings | null

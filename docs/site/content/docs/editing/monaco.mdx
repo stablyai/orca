@@ -33,3 +33,76 @@ By default the editor and diff views use the same font as the terminal. Leave **
 ## Language support
 
 Syntax highlighting ships for the languages Monaco supports out of the box. Orca is intentionally editor-first, not IDE-first — run type-checkers and linters in a terminal pane.
+
+## User-defined syntax highlighting
+
+Orca desktop reads `~/.orca/languages.json` on startup. It accepts JSON with
+comments and trailing commas. Restart Orca after changing this file or a grammar.
+
+You can reuse the syntax definitions in an installed VS Code or Cursor extension:
+
+```jsonc
+{
+  "extensions": ["~/.cursor/extensions/your-publisher.your-language-1.0.0"]
+}
+```
+
+Each entry points to an unpacked extension directory containing `package.json`.
+Orca reads its `contributes.languages`, `contributes.grammars`, and basic language
+configuration. Extension JavaScript is never loaded. VSIX archives must be
+unpacked first; point at the directory containing the extension's `package.json`.
+
+Alternatively, register a language directly:
+
+```jsonc
+{
+  "languages": [
+    {
+      "id": "my-language",
+      "aliases": ["My Language"],
+      "extensions": [".mylang", ".template.mylang"],
+      "filenames": ["MyLanguagefile"],
+      "grammar": "./grammars/my-language.tmLanguage.json",
+      "configuration": "./grammars/language-configuration.json"
+    }
+  ],
+  "grammars": ["./grammars/dependency.tmLanguage.json"]
+}
+```
+
+`scopeName` is read from the grammar. An optional `scopeName` in a direct
+registration checks that the file declares the expected scope. `configuration`
+is optional. Missing or invalid configuration produces a diagnostic while the language
+continues to highlight without those editor settings. Supported configuration fields are comments, brackets, auto-closing
+pairs, and surrounding pairs; VS Code tuple pairs and JSONC are accepted.
+
+Paths can be absolute, home-relative (`~/`), or relative to `languages.json`.
+Paths declared inside extension manifests are relative to the extension and
+must stay within that directory, including through symlinks.
+
+### Behavior and limits
+
+- Custom filename associations take precedence over custom suffixes, which take
+  precedence over Orca's built-in associations. Filenames are case-sensitive;
+  suffixes are case-insensitive and the longest matching suffix wins. The first
+  entry wins ties. Extensions are processed before direct registrations.
+- Existing Monaco language IDs keep their built-in tokenizer. To replace the
+  highlighting of an existing language, use a distinct ID in a direct
+  registration and associate the desired extensions with it. Imported grammars
+  for built-in languages remain available as dependencies.
+- Highlighting applies to editors and diff views. Grammar files are loaded from
+  the desktop client, including for SSH workspaces, remote servers, and folder
+  workspaces. Browser-only clients retain their built-in highlighting.
+- A stalled configuration read times out after three seconds so the app can finish starting. Fix the configuration path and restart to try again.
+- Invalid entries produce diagnostics while valid neighboring entries continue
+  to load. Missing dependency scopes or invalid grammar expressions produce an
+  error notification when that language is opened, with a plain-text fallback.
+  Missing language-to-grammar mappings also produce diagnostics. Notifications reuse
+  one toast to avoid stacking startup errors; all diagnostics are logged with the
+  `[custom-languages]` prefix.
+- Only JSON TextMate grammars are supported. Each file is limited to 5 MiB and
+  loaded grammars to 16 MiB total. Duplicate scopes are rejected; the first
+  definition is retained.
+- Extension activation, LSP features, grammar injection contributions, semantic
+  highlighting, and advanced language-configuration regex rules are outside
+  this loader's scope. Embedded grammars referenced by `include` are supported.
