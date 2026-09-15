@@ -92,7 +92,8 @@ export function isCodexMethodNotFoundError(error: unknown): boolean {
  */
 export async function runCodexAppServerSession<T>(
   invocation: CodexAppServerInvocation,
-  body: (rpc: CodexAppServerRpc) => Promise<T>,
+  /** Codex-owned initialize metadata; callers validate the fields they consume. */
+  body: (rpc: CodexAppServerRpc, initializeResult: unknown) => Promise<T>,
   spawnImpl: CodexAppServerSpawn = spawnCodexAppServerProcess
 ): Promise<T> {
   // Why: a default-home grant must run against the real ~/.codex, so strip an
@@ -256,11 +257,11 @@ export async function runCodexAppServerSession<T>(
 
   try {
     const session = async (): Promise<T> => {
-      await requestRpc('initialize', {
+      const initializeResult = await requestRpc('initialize', {
         clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
       })
       notify('initialized')
-      return body({ request: requestRpc, notify })
+      return body({ request: requestRpc, notify }, initializeResult)
     }
     // Why: the timeout owns the whole callback, including time between RPCs;
     // killing the child alone cannot settle a callback awaiting unrelated work.
