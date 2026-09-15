@@ -103,8 +103,63 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
       readTerminal: (handle, opts) => this.readTerminal(handle, opts),
       sendTerminal: (handle, action) => this.sendTerminal(handle, action),
       focusTerminal: (handle) => this.focusTerminal(handle),
-      closeTerminal: (handle) => this.closeTerminal(handle),
+      closeTerminal: (handle) => this.closeAgentTeamsPaneTerminal(handle),
       showTerminal: (handle) => this.showTerminal(handle)
+    })
+  }
+
+  // Why: respawn-pane closes a teammate's placeholder terminal, then immediately
+  // re-splits from its origin pane. closeTerminal() confirms the PTY *process*
+  // died, but for a multi-pane tab it deliberately skips telling the renderer to
+  // remove the pane's tile (see orca-runtime-stop-explicitly-closed-tab-ptys.ts,
+  // "renderer's exit handler closes the pane"). That assumption doesn't hold: a
+  // PTY dying only makes the renderer show a "terminal exited" banner on the
+  // still-mounted pane (handlePaneProcessDied) — nothing calls PaneManager's
+  // closePane() to actually remove it. Only an explicit close IPC does that. So
+  // this agent-teams-only close explicitly requests removal, then waits for the
+  // renderer to confirm it before the follow-up split proceeds, closing the
+  // ghost-pane race without changing closeTerminal()'s behavior for any other caller.
+  private async closeAgentTeamsPaneTerminal(handle: string) {
+    let leafCoords: { tabId: string; leafId: string; paneRuntimeId: number } | null = null
+    try {
+      const { leaf } = this.getLiveLeafForHandle(handle)
+      leafCoords = { tabId: leaf.tabId, leafId: leaf.leafId, paneRuntimeId: leaf.paneRuntimeId }
+    } catch {
+      leafCoords = null
+    }
+    const close = await this.closeTerminal(handle)
+    if (close.ptyKilled && leafCoords) {
+      this.notifier?.closeTerminal(leafCoords.tabId, leafCoords.paneRuntimeId)
+      await this.waitForLeafGoneFromTab(leafCoords.tabId, leafCoords.leafId)
+    }
+    return close
+  }
+
+  private waitForLeafGoneFromTab(tabId: string, leafId: string, timeoutMs = 10_000): Promise<void> {
+    const leafKey = this.getLeafKey(tabId, leafId)
+    if (!this.leaves.has(leafKey)) {
+      return Promise.resolve()
+    }
+    return new Promise<void>((resolve, reject) => {
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        const idx = this.graphSyncCallbacks.indexOf(check)
+        if (idx !== -1) {
+          this.graphSyncCallbacks.splice(idx, 1)
+        }
+      }
+      const check = (): void => {
+        if (!this.leaves.has(leafKey)) {
+          cleanup()
+          resolve()
+        }
+      }
+      const timer = setTimeout(() => {
+        cleanup()
+        reject(new Error('Timed out waiting for pane to leave the layout'))
+      }, timeoutMs)
+      this.graphSyncCallbacks.push(check)
+      check()
     })
   }
 

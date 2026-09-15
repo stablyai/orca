@@ -13,6 +13,7 @@ import {
   updateMainVerticalAfterSplit
 } from './claude-agent-teams-pane-layout'
 import type { AgentTeam, AgentTeamsTerminalApi, TeamPane } from './claude-agent-teams-types'
+import { closeUntilConfirmed } from './claude-agent-teams-close-until-confirmed'
 
 type ResolvedTarget = { type: 'pane'; pane: TeamPane } | { type: 'window' }
 
@@ -166,9 +167,9 @@ export class ClaudeAgentTeamsTmuxDispatcher {
       (pane.splitFromPane ? team.panes.get(pane.splitFromPane) : undefined) ??
       team.panes.get(team.leaderPane)!
     const previousHandle = pane.handle
-    const close = await api.closeTerminal(previousHandle)
-    if (!close.ptyKilled) {
-      pane.respawnBlockedReason = describeUnconfirmedAgentStop(close)
+    const stopped = await closeUntilConfirmed(previousHandle, api)
+    if (!stopped.confirmed) {
+      pane.respawnBlockedReason = describeUnconfirmedAgentStop(stopped.close)
       throw new Error(pane.respawnBlockedReason)
     }
     try {

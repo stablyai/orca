@@ -2,10 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { splitTmuxCommand } from '../../shared/claude-agent-teams-tmux-compat'
 import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
-import {
-  resolveStartupShell,
-  type AgentStartupShell
-} from '../../shared/tui-agent-startup-shell'
+import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import type {
   AgentTeam,
   AgentTeamsLaunchEnv,
@@ -81,7 +78,8 @@ export class ClaudeAgentTeamsService {
       paneOrder: [leaderPane],
       nextPaneNumber: 2,
       mainVertical: null,
-      previouslyFocusedPane: null
+      previouslyFocusedPane: null,
+      commandQueue: Promise.resolve()
     })
     return { teamId, token, leaderPane, env }
   }
@@ -105,12 +103,37 @@ export class ClaudeAgentTeamsService {
     try {
       const team = this.resolveTeam(request)
       const { command, args } = splitTmuxCommand(request.argv)
-      const stdout = await this.dispatcher.dispatch(team, command, args, request.envPane, api)
+      const stdout = await this.runSerialized(team, () =>
+        this.dispatcher.dispatch(team, command, args, request.envPane, api)
+      )
       return { ok: true, stdout, stderr: '', exitCode: 0 }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return { ok: false, stdout: '', stderr: `tmux: ${message}\n`, exitCode: 1 }
     }
+  }
+
+  /**
+   * Runs one tmux command at a time per team.
+   *
+   * Why: every shim invocation is its own process, so Claude Code launching a
+   * whole team arrives as concurrent requests over separate connections. The
+   * pane bookkeeping here is read-modify-write across awaits — `respawn-pane`
+   * closes a pane's terminal before re-splitting from the pane it was split
+   * from, and those origins chain — so an overlapping respawn reads an origin
+   * handle whose terminal is already closed, its split throws, and the teammate
+   * is dropped. A real tmux server answers one command at a time; matching that
+   * is what keeps the bookkeeping consistent.
+   */
+  private runSerialized<T>(team: AgentTeam, run: () => Promise<T>): Promise<T> {
+    const result = team.commandQueue.then(run)
+    // Why swallow: the queue only orders commands, so one command's failure
+    // must not reject every command queued behind it.
+    team.commandQueue = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
   }
 
   private resolveTeam(request: AgentTeamsTmuxCompatRequest): AgentTeam {
