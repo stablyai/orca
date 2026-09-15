@@ -75,6 +75,9 @@ export async function buildPtyIpcSpawnOptions(
   if (args.startupCommandDelivery !== undefined) {
     ctx.spawnOptions.startupCommandDelivery = args.startupCommandDelivery
   }
+  if (args.quickCommandSubmission === true) {
+    ctx.spawnOptions.quickCommandSubmission = true
+  }
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent
   }

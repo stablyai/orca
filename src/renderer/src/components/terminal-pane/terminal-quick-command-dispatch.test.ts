@@ -9,11 +9,12 @@ vi.mock('./terminal-input-activity', () => ({
 }))
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 
-function createPane() {
+function createPane(bracketedPasteMode = true) {
   return {
     leafId: 'leaf-1',
     terminal: {
-      focus: vi.fn()
+      focus: vi.fn(),
+      modes: { bracketedPasteMode }
     }
   }
 }
@@ -67,7 +68,7 @@ describe('sendTerminalQuickCommandToPane', () => {
     expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
   })
 
-  it('flattens multiline commands with semicolons before sending', () => {
+  it('preserves multiline commands before sending', () => {
     const sendInput = vi.fn(() => true)
     const pane = createPane()
     const commandText = 'cd packages\nbun run build\ncd ..'
@@ -85,11 +86,53 @@ describe('sendTerminalQuickCommandToPane', () => {
     })
 
     expect(sent).toBe(true)
-    expect(sendInput).toHaveBeenCalledWith('cd packages; bun run build; cd ..\r')
+    expect(sendInput).toHaveBeenCalledWith(`\x1b[200~${commandText}\x1b[201~\r`)
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
   })
 
-  it('flattens multiline insert-only commands without submitting', () => {
+  it('preserves trailing LF inside bracketed paste for multiline run commands', () => {
+    const sendInput = vi.fn(() => true)
+    const pane = createPane()
+    const commandText = 'echo one\necho two\n'
+
+    const sent = sendTerminalQuickCommandToPane({
+      command: {
+        id: 'run',
+        label: 'Run',
+        command: commandText,
+        appendEnter: true
+      },
+      pane,
+      tabId: 'tab-1',
+      transport: { sendInput }
+    })
+
+    expect(sent).toBe(true)
+    expect(sendInput).toHaveBeenCalledWith(`\x1b[200~${commandText}\x1b[201~\r`)
+  })
+
+  it('preserves trailing LF inside bracketed paste for multiline insert-only commands', () => {
+    const sendInput = vi.fn(() => true)
+    const pane = createPane()
+    const commandText = 'echo one\necho two\n'
+
+    const sent = sendTerminalQuickCommandToPane({
+      command: {
+        id: 'insert',
+        label: 'Insert',
+        command: commandText,
+        appendEnter: false
+      },
+      pane,
+      tabId: 'tab-1',
+      transport: { sendInput }
+    })
+
+    expect(sent).toBe(true)
+    expect(sendInput).toHaveBeenCalledWith(`\x1b[200~${commandText}\x1b[201~`)
+  })
+
+  it('preserves multiline insert-only commands without submitting', () => {
     const sendInput = vi.fn(() => true)
     const pane = createPane()
     const commandText = 'echo one\necho two'
@@ -107,7 +150,29 @@ describe('sendTerminalQuickCommandToPane', () => {
     })
 
     expect(sent).toBe(true)
-    expect(sendInput).toHaveBeenCalledWith('echo one; echo two')
+    expect(sendInput).toHaveBeenCalledWith(`\x1b[200~${commandText}\x1b[201~`)
+    expect(pane.terminal.focus).toHaveBeenCalledOnce()
+  })
+
+  it('writes raw multiline input when bracketed paste mode is off', () => {
+    const sendInput = vi.fn(() => true)
+    const pane = createPane(false)
+    const commandText = 'echo one\necho two'
+
+    const sent = sendTerminalQuickCommandToPane({
+      command: {
+        id: 'insert',
+        label: 'Insert',
+        command: commandText,
+        appendEnter: false
+      },
+      pane,
+      tabId: 'tab-1',
+      transport: { sendInput }
+    })
+
+    expect(sent).toBe(true)
+    expect(sendInput).toHaveBeenCalledWith(commandText)
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
   })
 

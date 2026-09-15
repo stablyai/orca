@@ -1,4 +1,5 @@
 import { accessSync, constants as fsConstants } from 'node:fs'
+import { buildQuickCommandSubmission } from '../../shared/terminal-quick-commands'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
@@ -191,12 +192,15 @@ async function spawnAndPublishSession(
   }
   if (startupCommandWritten && opts.command) {
     const submit = process.platform === 'win32' ? '\r' : '\n'
+    const submissionOptions = {
+      submit,
+      bracketedPasteSafe: shellReadySupported
+    }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.write(
-      buildStartupCommandSubmission(opts.command, {
-        submit,
-        bracketedPasteSafe: shellReadySupported
-      })
+      opts.quickCommandSubmission === true
+        ? buildQuickCommandSubmission(opts.command, submissionOptions)
+        : buildStartupCommandSubmission(opts.command, submissionOptions)
     )
   }
 

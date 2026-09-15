@@ -10,6 +10,9 @@ type QuickCommandPane = {
   leafId: string
   terminal: {
     focus: () => void
+    modes?: {
+      bracketedPasteMode?: boolean
+    }
   }
 }
 
@@ -36,7 +39,10 @@ export function sendTerminalQuickCommandToPane({
   }
 
   const sent = transport.sendInput(
-    buildTerminalQuickCommandInput(flattenTerminalQuickCommand(command))
+    buildTerminalQuickCommandInput(
+      flattenTerminalQuickCommand(command),
+      pane.terminal.modes?.bracketedPasteMode === true
+    )
   )
   if (sent) {
     recordTerminalUserInputForLeaf(tabId, pane.leafId)

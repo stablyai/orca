@@ -70,6 +70,7 @@ export type CreateOrAttachRequest = {
     envToDelete?: string[]
     command?: string
     startupCommandDelivery?: StartupCommandDelivery
+    quickCommandSubmission?: boolean
     launchAgent?: TuiAgent
     /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
     attachOnly?: boolean

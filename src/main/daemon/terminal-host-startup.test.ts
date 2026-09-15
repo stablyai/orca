@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
-function mockSubprocess(): SubprocessHandle {
+function mockSubprocess(): SubprocessHandle & {
+  _onDataCb: ((data: string) => void) | null
+} {
+  let onDataCb: ((data: string) => void) | null = null
   return {
     pid: 1,
     getForegroundProcess: vi.fn(() => null),
@@ -12,10 +15,15 @@ function mockSubprocess(): SubprocessHandle {
     terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(),
     signal: vi.fn(),
-    onData: () => {},
+    onData(cb) {
+      onDataCb = cb
+    },
     onExit: () => {},
-    dispose: vi.fn()
-  } as SubprocessHandle
+    dispose: vi.fn(),
+    get _onDataCb() {
+      return onDataCb
+    }
+  } as SubprocessHandle & { _onDataCb: typeof onDataCb }
 }
 
 // Why: Windows shells (PowerShell/cmd.exe) submit on CR, not LF. Without CR
@@ -128,5 +136,54 @@ describe('TerminalHost startup command delivery logging', () => {
       })
     ).resolves.toMatchObject({ isNew: true })
     expect(sub.write).toHaveBeenCalledWith(`codex${process.platform === 'win32' ? '\r' : '\n'}`)
+  })
+})
+
+describe('TerminalHost quick-command startup submissions', () => {
+  const origPlatform = process.platform
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: origPlatform })
+  })
+
+  let sub: SubprocessHandle & { _onDataCb: ((data: string) => void) | null }
+  let host: TerminalHost
+  beforeEach(() => {
+    sub = mockSubprocess()
+    host = new TerminalHost({ spawnSubprocess: () => sub })
+  })
+
+  it('uses buildQuickCommandSubmission for daemon-hosted quick commands', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const command = 'echo one\necho two\n'
+    await host.createOrAttach({
+      sessionId: 'quick-command-daemon',
+      cols: 80,
+      rows: 24,
+      command,
+      quickCommandSubmission: true,
+      shellReadySupported: true,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+    expect(sub.write).not.toHaveBeenCalled()
+
+    sub._onDataCb?.('\x1b]777;orca-shell-ready\x07')
+    sub._onDataCb?.('\r\nuser@host $ ')
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(sub.write).toHaveBeenCalledWith(`\x1b[200~${command}\x1b[201~\n`)
+  })
+
+  it('replaces trailing LF with CR on Windows when bracketed paste is unavailable', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    await host.createOrAttach({
+      sessionId: 'quick-command-win32',
+      cols: 80,
+      rows: 24,
+      command: 'git status\n',
+      quickCommandSubmission: true,
+      shellReadySupported: false,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+    expect(sub.write).toHaveBeenCalledWith('git status\r')
   })
 })

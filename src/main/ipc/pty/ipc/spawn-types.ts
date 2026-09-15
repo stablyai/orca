@@ -36,6 +36,7 @@ export type PtySpawnIpcArgs = {
   launchToken?: unknown
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
+  quickCommandSubmission?: boolean
   connectionId?: string | null
   worktreeId?: string
   sessionId?: string
