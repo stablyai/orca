@@ -18,7 +18,7 @@ export type LinearIssueSummary = {
   state?: LinearNamedEntity | null
   team?: (LinearNamedEntity & { key?: string | null }) | null
   project?: LinearNamedEntity | null
-  cycle?: LinearNamedEntity | null
+  cycle?: (LinearNamedEntity & { number?: number | null }) | null
   assignee?: LinearUserSummary | null
   labels: LinearNamedEntity[]
   priority?: number | null
