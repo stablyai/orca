@@ -23,6 +23,9 @@ export type WorktreeCardProps = {
   revealHighlightTone?: 'default' | 'ai'
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  // Why: the board mixes projects in one lane, so its cards name the project as
+  // text even in icon-only card styles where the sidebar shows only the chip.
+  showProjectName?: boolean
   hostContextLabel?: string
   inPinnedSection?: boolean
   activationRowKey?: string
