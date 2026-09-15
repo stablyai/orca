@@ -1,8 +1,9 @@
 import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from './pairing'
+import * as secureFile from './secure-file'
 import {
   RuntimeEnvironmentStoreError,
   addEnvironmentFromPairingCode,
@@ -33,6 +34,7 @@ describe('runtime environment store', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
@@ -185,6 +187,20 @@ describe('runtime environment store', () => {
     truncateSync(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES + 1)
 
     expect(() => listEnvironments(userDataPath)).toThrow(RuntimeEnvironmentStoreError)
+  })
+
+  it('reports permission hardening failures without calling valid JSON invalid', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-permission-'))
+    tempDirs.push(userDataPath)
+    const path = getEnvironmentStorePath(userDataPath)
+    writeFileSync(path, '{"version":1,"environments":[]}')
+    vi.spyOn(secureFile, 'hardenExistingSecureFile').mockImplementationOnce(() => {
+      throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+    })
+
+    expect(() => listEnvironments(userDataPath)).toThrow(
+      `Could not secure Orca environments at ${path}; permission hardening failed (EPERM).`
+    )
   })
 
   it('rejects an oversized write without replacing the durable environment list', () => {
