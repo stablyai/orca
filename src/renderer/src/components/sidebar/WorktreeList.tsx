@@ -244,7 +244,9 @@ const WorktreeList = React.memo(function WorktreeList({
     worktrees: allWorktrees,
     folderWorkspaces,
     hasFilters,
-    clearFilters
+    clearFilters,
+    projectGroups,
+    defaultHostId
   })
 
   const filtersHideAllRows = shouldFiltersHideAllRows({

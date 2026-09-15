@@ -17,6 +17,11 @@ import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
 import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
+export {
+  getFolderWorkspaceRevealGroupKeys,
+  getKnownSidebarWorktreeById,
+  sidebarWorkspaceStillExists
+} from './folder-reveal'
 import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
 
 export const MAX_REVEAL_RETRIES = 8
@@ -64,7 +69,8 @@ export function expandGroupsForWorktreeReveal(
     {
       groupBy: args.groupBy,
       workspaceStatuses: args.workspaceStatuses,
-      defaultHostId: args.defaultHostId
+      defaultHostId: args.defaultHostId,
+      executionHostId
     }
   )
   if (folderGroupKeys.length > 0) {
@@ -75,11 +81,17 @@ export function expandGroupsForWorktreeReveal(
     }
     return
   }
-  const targetWorktree = args.worktrees.find(
-    (worktree) =>
-      worktree.id === worktreeId &&
-      (!executionHostId || !worktree.hostId || worktree.hostId === executionHostId)
-  )
+  const targetWorktree = args.worktrees.find((worktree) => {
+    if (worktree.id !== worktreeId) {
+      return false
+    }
+    if (!executionHostId) {
+      return true
+    }
+    const repo = args.repoMap.get(worktree.repoId)
+    const effectiveHostId = getWorktreeExecutionHostId(worktree, repo, args.defaultHostId)
+    return effectiveHostId === executionHostId
+  })
   if (!targetWorktree) {
     return
   }
@@ -92,8 +104,12 @@ export function expandGroupsForWorktreeReveal(
   const hostWorktreeMap = new Map<string, Worktree>()
   const hostLineageById: Record<string, WorktreeLineage> = {}
   for (const worktree of args.worktrees) {
-    if (executionHostId && worktree.hostId && worktree.hostId !== executionHostId) {
-      continue
+    if (executionHostId) {
+      const repo = args.repoMap.get(worktree.repoId)
+      const effectiveHostId = getWorktreeExecutionHostId(worktree, repo, args.defaultHostId)
+      if (effectiveHostId !== executionHostId) {
+        continue
+      }
     }
     hostWorktreeMap.set(worktree.id, worktree)
     const projected = args.worktreeLineageById[worktree.id]

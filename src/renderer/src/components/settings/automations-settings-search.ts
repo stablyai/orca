@@ -18,5 +18,25 @@ export const getAutomationsSettingsSearchEntries = createLocalizedCatalog(() => 
       ...translateSearchKeyword('auto.components.settings.automations.keywordAgent', 'agent'),
       ...translateSearchKeyword('auto.components.settings.automations.keywordRuns', 'runs')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.automations.expandProjectFolderOnAutomationRun',
+      'Expand the project when a run starts'
+    ),
+    description: translate(
+      'auto.components.settings.automations.expandProjectFolderOnAutomationRunDescription',
+      'Open the collapsed project folder that holds the workspace for this run. The sidebar does not scroll.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.automations.keywordAutomations',
+        'automations'
+      ),
+      ...translateSearchKeyword('auto.components.settings.automations.keywordExpand', 'expand'),
+      ...translateSearchKeyword('auto.components.settings.automations.keywordCollapse', 'collapse'),
+      ...translateSearchKeyword('auto.components.settings.automations.keywordFolder', 'folder'),
+      ...translateSearchKeyword('auto.components.settings.automations.keywordProject', 'project')
+    ]
   }
 ])

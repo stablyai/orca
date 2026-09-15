@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
@@ -41,6 +42,17 @@ function makeProjectGroup(overrides: Partial<ProjectGroup>): ProjectGroup {
     color: null,
     createdAt: 1,
     updatedAt: 1,
+    ...overrides
+  }
+}
+function makeRepo(overrides: Partial<Repo> = {}): Repo {
+  return {
+    id: 'repo-1',
+    displayName: 'repo-1',
+    badgeColor: '#000000',
+    addedAt: 1,
+    path: '/workspace/repo-1',
+    projectGroupId: null,
     ...overrides
   }
 }
@@ -118,6 +130,193 @@ describe('worktree list folder reveal', () => {
       )
     ).toEqual([getProjectGroupHeaderKey(root.id), getProjectGroupHeaderKey(child.id)])
   })
+
+  it('accepts raw folder workspace id as well as scoped key (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const child = makeProjectGroup({
+      id: 'group-child',
+      name: 'Platform',
+      parentGroupId: root.id
+    })
+    const folderWorkspace = makeFolderWorkspace({ projectGroupId: child.id })
+
+    expect(
+      getFolderWorkspaceRevealGroupKeys(folderWorkspace.id, [folderWorkspace], [child, root])
+    ).toEqual([getProjectGroupHeaderKey(root.id), getProjectGroupHeaderKey(child.id)])
+  })
+
+  it('resolves project group keys for git worktrees when worktrees and repoMap are provided (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const child = makeProjectGroup({
+      id: 'group-child',
+      name: 'Platform',
+      parentGroupId: root.id
+    })
+    const repo = makeRepo({ id: 'repo-1', projectGroupId: child.id })
+    const worktree = makeWorktree('wt-1')
+
+    const keys = getFolderWorkspaceRevealGroupKeys('wt-1', [], [child, root], {
+      worktrees: [worktree],
+      repoMap: new Map([[repo.id, repo]])
+    })
+
+    expect(keys).toEqual([
+      getProjectGroupHeaderKey(root.id),
+      getProjectGroupHeaderKey(child.id),
+      'repo:repo-1',
+      'host:local'
+    ])
+  })
+
+  it('narrows git worktree reveal to the specified execution host (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const repo = makeRepo({ id: 'repo-1', projectGroupId: root.id })
+    const localWorktree = { ...makeWorktree('wt-1'), hostId: 'local' as const }
+    const remoteWorktree = { ...makeWorktree('wt-1'), hostId: 'ssh:builder' as const }
+
+    const keys = getFolderWorkspaceRevealGroupKeys('wt-1', [], [root], {
+      worktrees: [localWorktree, remoteWorktree],
+      repoMap: new Map([[repo.id, repo]]),
+      executionHostId: 'ssh:builder'
+    })
+
+    expect(keys).toEqual([getProjectGroupHeaderKey(root.id), 'repo:repo-1', 'host:ssh:builder'])
+
+    // When asking for a different host that has no matching worktree, returns empty
+    const mismatchKeys = getFolderWorkspaceRevealGroupKeys('wt-1', [], [root], {
+      worktrees: [localWorktree],
+      repoMap: new Map([[repo.id, repo]]),
+      executionHostId: 'ssh:builder'
+    })
+    expect(mismatchKeys).toEqual([])
+  })
+
+  it('returns empty reveal keys for worktree with hostId omitted queried with remote executionHostId (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const repo = makeRepo({ id: 'repo-1', projectGroupId: root.id })
+    const worktree = makeWorktree('wt-1')
+    expect(worktree.hostId).toBeUndefined()
+
+    const keys = getFolderWorkspaceRevealGroupKeys('wt-1', [], [root], {
+      worktrees: [worktree],
+      repoMap: new Map([[repo.id, repo]]),
+      defaultHostId: 'local',
+      executionHostId: 'ssh:builder'
+    })
+
+    expect(keys).toEqual([])
+  })
+
+  it('resolves folder workspace with executionHostId null under remote project group (#20113)', () => {
+    const remoteGroup = makeProjectGroup({
+      id: 'group-remote',
+      name: 'Remote Group',
+      connectionId: 'builder'
+    })
+    const folderWorkspace = makeFolderWorkspace({
+      id: 'fw-remote',
+      projectGroupId: remoteGroup.id,
+      executionHostId: null
+    })
+
+    const found = getKnownSidebarWorktreeById(
+      folderWorkspaceKey(folderWorkspace.id),
+      new Map(),
+      [folderWorkspace],
+      [],
+      'ssh:builder',
+      [remoteGroup]
+    )
+    expect(found).not.toBeNull()
+    expect(found?.id).toBe(folderWorkspaceKey(folderWorkspace.id))
+
+    expect(
+      sidebarWorkspaceStillExists(
+        folderWorkspaceKey(folderWorkspace.id),
+        [],
+        [folderWorkspace],
+        'ssh:builder',
+        [remoteGroup]
+      )
+    ).toBe(true)
+
+    const keys = getFolderWorkspaceRevealGroupKeys(
+      folderWorkspace.id,
+      [folderWorkspace],
+      [remoteGroup],
+      { executionHostId: 'ssh:builder' }
+    )
+    expect(keys).toEqual([getProjectGroupHeaderKey(remoteGroup.id)])
+  })
+
+  it('safely matches explicit workspace executionHostId when projectGroups is omitted (#20113)', () => {
+    const explicitRemoteWorkspace = makeFolderWorkspace({
+      id: 'fw-explicit-remote',
+      executionHostId: 'ssh:builder'
+    })
+    const nullHostWorkspace = makeFolderWorkspace({
+      id: 'fw-null-remote',
+      executionHostId: null
+    })
+
+    expect(
+      getKnownSidebarWorktreeById(
+        folderWorkspaceKey(explicitRemoteWorkspace.id),
+        new Map(),
+        [explicitRemoteWorkspace],
+        [],
+        'ssh:builder'
+      )
+    ).not.toBeNull()
+
+    expect(
+      getKnownSidebarWorktreeById(
+        folderWorkspaceKey(nullHostWorkspace.id),
+        new Map(),
+        [nullHostWorkspace],
+        [],
+        'ssh:builder'
+      )
+    ).toBeNull()
+  })
+
+  it('narrows folder workspace reveal to the specified execution host (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const child = makeProjectGroup({
+      id: 'group-child',
+      name: 'Platform',
+      parentGroupId: root.id
+    })
+    const localFolderWorkspace = makeFolderWorkspace({
+      id: 'fw-1',
+      projectGroupId: child.id,
+      executionHostId: 'local'
+    })
+    const remoteFolderWorkspace = makeFolderWorkspace({
+      id: 'fw-1',
+      projectGroupId: child.id,
+      executionHostId: 'ssh:builder'
+    })
+
+    const remoteKeys = getFolderWorkspaceRevealGroupKeys(
+      'fw-1',
+      [localFolderWorkspace, remoteFolderWorkspace],
+      [child, root],
+      { executionHostId: 'ssh:builder' }
+    )
+    expect(remoteKeys).toEqual([
+      getProjectGroupHeaderKey(root.id),
+      getProjectGroupHeaderKey(child.id)
+    ])
+
+    const mismatchKeys = getFolderWorkspaceRevealGroupKeys(
+      'fw-1',
+      [localFolderWorkspace],
+      [child, root],
+      { executionHostId: 'ssh:builder' }
+    )
+    expect(mismatchKeys).toEqual([])
+  })
 })
 
 describe('reveal keys under non-repo grouping', () => {
@@ -153,5 +352,61 @@ describe('reveal keys under non-repo grouping', () => {
     })
     expect(keys).toContain(getProjectGroupHeaderKey(group.id))
     expect(keys.some((key) => key.startsWith('workspace-status:'))).toBe(false)
+  })
+
+  it('returns status lane and host keys for git worktrees under workspace-status grouping (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const repo = makeRepo({ id: 'repo-1', projectGroupId: root.id })
+    const worktree: Worktree = {
+      ...makeWorktree('wt-1'),
+      workspaceStatus: 'in-progress'
+    }
+
+    const keys = getFolderWorkspaceRevealGroupKeys('wt-1', [], [root], {
+      worktrees: [worktree],
+      repoMap: new Map([[repo.id, repo]]),
+      groupBy: 'workspace-status',
+      workspaceStatuses: [],
+      defaultHostId: 'local'
+    })
+
+    expect(keys).toContain('workspace-status:in-progress')
+    expect(keys).toContain('host:local')
+    expect(keys.some((key) => key.startsWith('project-group:'))).toBe(false)
+  })
+
+  it('returns all lane and host keys for git worktrees under none grouping (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const repo = makeRepo({ id: 'repo-1', projectGroupId: root.id })
+    const worktree = makeWorktree('wt-1')
+
+    const keys = getFolderWorkspaceRevealGroupKeys('wt-1', [], [root], {
+      worktrees: [worktree],
+      repoMap: new Map([[repo.id, repo]]),
+      groupBy: 'none',
+      workspaceStatuses: [],
+      defaultHostId: 'local'
+    })
+
+    expect(keys).toContain('all')
+    expect(keys).toContain('host:local')
+    expect(keys.some((key) => key.startsWith('project-group:'))).toBe(false)
+  })
+
+  it('respects prCache and settings under pr-status grouping for git worktrees (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const repo = makeRepo({ id: 'repo-1', projectGroupId: root.id })
+    const worktree = makeWorktree('wt-1')
+
+    const keys = getFolderWorkspaceRevealGroupKeys('wt-1', [], [root], {
+      worktrees: [worktree],
+      repoMap: new Map([[repo.id, repo]]),
+      groupBy: 'pr-status',
+      prCache: {},
+      defaultHostId: 'local'
+    })
+
+    expect(keys).toContain('host:local')
+    expect(keys.some((k) => k.startsWith('pr:'))).toBe(true)
   })
 })
