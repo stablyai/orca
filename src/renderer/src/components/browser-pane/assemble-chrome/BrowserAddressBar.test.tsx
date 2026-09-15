@@ -8,8 +8,15 @@ import BrowserAddressBar from './BrowserAddressBar'
 
 const mocks = vi.hoisted(() => ({
   browserUrlHistory: [] as BrowserHistoryEntry[],
+  workspaceDocHistory: [] as unknown[],
   browserDefaultSearchEngine: null as string | null,
-  browserKagiSessionLink: null as string | null
+  browserKagiSessionLink: null as string | null,
+  removeBrowserHistoryEntry: vi.fn(),
+  clearBrowserHistory: vi.fn()
+}))
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() }
 }))
 
 vi.mock('@/store', () => ({
@@ -38,7 +45,8 @@ vi.mock('@/components/ui/command', () => ({
       {children}
     </button>
   ),
-  CommandList: ({ children }: { children: ReactNode }) => <div>{children}</div>
+  CommandList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  CommandSeparator: () => <hr data-slot="command-separator" />
 }))
 
 function historyEntry(overrides: Partial<BrowserHistoryEntry>): BrowserHistoryEntry {
@@ -94,6 +102,9 @@ describe('BrowserAddressBar autocomplete preview', () => {
     ]
     mocks.browserDefaultSearchEngine = null
     mocks.browserKagiSessionLink = null
+    mocks.workspaceDocHistory = []
+    mocks.removeBrowserHistoryEntry = vi.fn()
+    mocks.clearBrowserHistory = vi.fn()
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -247,5 +258,88 @@ describe('BrowserAddressBar autocomplete preview', () => {
     )
     expect(onNavigate).not.toHaveBeenCalled()
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('removes a suggestion when pressing Shift+Delete on a highlighted history entry', async () => {
+    const onNavigate = vi.fn()
+    const onSubmit = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <AddressBarHarness initialValue="local" onNavigate={onNavigate} onSubmit={onSubmit} />
+      )
+    })
+
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    expect(input).not.toBeNull()
+
+    await act(async () => {
+      input?.focus()
+    })
+    await act(async () => {
+      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+
+    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
+      'http://localhost:3000/review-one'
+    )
+
+    await act(async () => {
+      input?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Delete', shiftKey: true, bubbles: true })
+      )
+    })
+
+    expect(mocks.removeBrowserHistoryEntry).toHaveBeenCalledWith('http://localhost:3000/review-one')
+  })
+
+  it('removes a suggestion when clicking the remove button on an entry', async () => {
+    const onNavigate = vi.fn()
+    const onSubmit = vi.fn()
+
+    await act(async () => {
+      root.render(<AddressBarHarness initialValue="" onNavigate={onNavigate} onSubmit={onSubmit} />)
+    })
+
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    await act(async () => {
+      input?.focus()
+    })
+
+    const removeBtn = container.querySelector<HTMLButtonElement>(
+      'button[title="Remove from history"]'
+    )
+    expect(removeBtn).not.toBeNull()
+
+    await act(async () => {
+      removeBtn?.click()
+    })
+
+    expect(mocks.removeBrowserHistoryEntry).toHaveBeenCalledWith('http://localhost:3000/review-one')
+  })
+
+  it('clears history when clicking the clear history button', async () => {
+    const onNavigate = vi.fn()
+    const onSubmit = vi.fn()
+
+    await act(async () => {
+      root.render(<AddressBarHarness initialValue="" onNavigate={onNavigate} onSubmit={onSubmit} />)
+    })
+
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    await act(async () => {
+      input?.focus()
+    })
+
+    const clearBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+      b.textContent?.includes('Clear history')
+    )
+    expect(clearBtn).not.toBeUndefined()
+
+    await act(async () => {
+      clearBtn?.click()
+    })
+
+    expect(mocks.clearBrowserHistory).toHaveBeenCalled()
   })
 })

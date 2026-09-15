@@ -248,6 +248,7 @@ export type BrowserSlice = {
     options?: { bump?: boolean }
   ) => void
   clearBrowserHistory: () => void
+  removeBrowserHistoryEntry: (urlOrPath: string) => void
   defaultBrowserSessionProfileId: string | null
   defaultBrowserSessionProfileIdByHostId: Partial<Record<ExecutionHostId, string | null>>
   setDefaultBrowserSessionProfileId: (profileId: string | null) => void
