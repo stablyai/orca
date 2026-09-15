@@ -42,6 +42,13 @@ describe('detectLanguage', () => {
     expect(detectLanguage('api/v1/service.proto')).toBe('proto')
   })
 
+  it('maps Quarto and R Markdown files to the quarto language id', () => {
+    expect(detectLanguage('slides/talk.qmd')).toBe('quarto')
+    expect(detectLanguage('analysis/report.Rmd')).toBe('quarto')
+    expect(detectLanguage('C:\\repo\\NOTES.QMD')).toBe('quarto')
+    expect(detectLanguage('README.md')).toBe('markdown')
+  })
+
   it('maps .jsonl files to the dedicated jsonl language id (case-insensitive)', () => {
     expect(detectLanguage('/home/user/.claude/sessions/transcript.jsonl')).toBe('jsonl')
     expect(detectLanguage('C:\\Users\\alice\\.codex\\LOG.JSONL')).toBe('jsonl')
