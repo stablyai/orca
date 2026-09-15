@@ -1,3 +1,5 @@
+import { detachString } from './detached-string'
+
 const ESC_CODE_UNIT = 0x1b
 const BEL_CODE_UNIT = 0x07
 const RIGHT_BRACKET_CODE_UNIT = 0x5d
@@ -8,9 +10,14 @@ export const MAX_OSC_TITLE_CHARS = 1024
 export const MAX_OSC_TITLES_PER_CHUNK = 4096
 
 type OscTitleParseResult =
-  | { kind: 'title'; title: string; nextIndex: number }
+  | { kind: 'title'; titleStart: number; titleEnd: number; nextIndex: number }
   | { kind: 'invalid'; nextIndex: number }
   | { kind: 'incomplete' }
+
+type OscTitleBounds = {
+  titleStart: number
+  titleEnd: number
+}
 
 function isOscIntroducerAt(data: string, index: number): boolean {
   return (
@@ -36,7 +43,8 @@ function parseOscTitleAt(data: string, index: number): OscTitleParseResult {
     if (code === BEL_CODE_UNIT) {
       return {
         kind: 'title',
-        title: readBoundedOscTitle(data, titleStart, cursor),
+        titleStart,
+        titleEnd: cursor,
         nextIndex: cursor + 1
       }
     }
@@ -46,7 +54,8 @@ function parseOscTitleAt(data: string, index: number): OscTitleParseResult {
     if (data.charCodeAt(cursor + 1) === BACKSLASH_CODE_UNIT) {
       return {
         kind: 'title',
-        title: readBoundedOscTitle(data, titleStart, cursor),
+        titleStart,
+        titleEnd: cursor,
         nextIndex: cursor + 2
       }
     }
@@ -58,16 +67,17 @@ function parseOscTitleAt(data: string, index: number): OscTitleParseResult {
 
 function readBoundedOscTitle(data: string, titleStart: number, titleEnd: number): string {
   // Why: PTY output can contain pasted or remote-controlled OSC titles; keep
-  // downstream title detection bounded while preserving trailing status words.
+  // downstream title detection bounded, and detached from the raw chunk so a
+  // small retained title cannot pin a multi-megabyte PTY frame.
   const length = titleEnd - titleStart
   if (length <= MAX_OSC_TITLE_CHARS) {
-    return data.slice(titleStart, titleEnd)
+    return detachString(data.slice(titleStart, titleEnd))
   }
   const prefixLength = Math.ceil(MAX_OSC_TITLE_CHARS / 2)
   const suffixLength = MAX_OSC_TITLE_CHARS - prefixLength
-  return (
+  return detachString(
     data.slice(titleStart, titleStart + prefixLength) +
-    data.slice(titleEnd - suffixLength, titleEnd)
+      data.slice(titleEnd - suffixLength, titleEnd)
   )
 }
 
@@ -76,7 +86,7 @@ export function extractLastOscTitle(data: string): string | null {
     return null
   }
 
-  let last: string | null = null
+  let last: OscTitleBounds | null = null
   let searchStart = 0
   // Why: raw PTY chunks can include large pasted content. Parse OSC titles
   // directly instead of running a global regex over the whole chunk.
@@ -90,13 +100,13 @@ export function extractLastOscTitle(data: string): string | null {
       break
     }
     if (parsed.kind === 'title') {
-      last = parsed.title
+      last = { titleStart: parsed.titleStart, titleEnd: parsed.titleEnd }
       searchStart = parsed.nextIndex
       continue
     }
     searchStart = parsed.nextIndex
   }
-  return last
+  return last ? readBoundedOscTitle(data, last.titleStart, last.titleEnd) : null
 }
 
 export function extractAllOscTitles(data: string): string[] {
@@ -104,7 +114,7 @@ export function extractAllOscTitles(data: string): string[] {
     return []
   }
 
-  const titles: string[] = []
+  const titles: OscTitleBounds[] = []
   let oldestTitleIndex = 0
   let searchStart = 0
   while (searchStart < data.length) {
@@ -117,10 +127,11 @@ export function extractAllOscTitles(data: string): string[] {
       break
     }
     if (parsed.kind === 'title') {
+      const bounds = { titleStart: parsed.titleStart, titleEnd: parsed.titleEnd }
       if (titles.length < MAX_OSC_TITLES_PER_CHUNK) {
-        titles.push(parsed.title)
+        titles.push(bounds)
       } else {
-        titles[oldestTitleIndex] = parsed.title
+        titles[oldestTitleIndex] = bounds
         oldestTitleIndex = (oldestTitleIndex + 1) % MAX_OSC_TITLES_PER_CHUNK
       }
       searchStart = parsed.nextIndex
@@ -128,7 +139,9 @@ export function extractAllOscTitles(data: string): string[] {
     }
     searchStart = parsed.nextIndex
   }
-  return oldestTitleIndex === 0
-    ? titles
-    : [...titles.slice(oldestTitleIndex), ...titles.slice(0, oldestTitleIndex)]
+  const ordered =
+    oldestTitleIndex === 0
+      ? titles
+      : [...titles.slice(oldestTitleIndex), ...titles.slice(0, oldestTitleIndex)]
+  return ordered.map(({ titleStart, titleEnd }) => readBoundedOscTitle(data, titleStart, titleEnd))
 }

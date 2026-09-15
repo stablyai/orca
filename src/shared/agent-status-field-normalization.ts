@@ -4,6 +4,7 @@
 // truncate without splitting surrogate pairs. Extracted from
 // agent-status-types.ts, which owns the payload shapes and per-field caps.
 
+import { detachString } from './detached-string'
 import {
   compactDispatchPromptForStatus,
   isOrcaDispatchStatusPrompt
@@ -190,7 +191,13 @@ export function normalizeInteractivePromptField(
     return undefined
   }
   const truncated = truncatePreservingSurrogates(value, maxLength)
-  return truncated.length > 0 ? truncated : undefined
+  if (truncated.length === 0) {
+    return undefined
+  }
+  // Why: this value is cached in the store, and V8 slices retain their parent.
+  // Detach unconditionally — an under-cap prompt can still arrive as a slice of
+  // a much larger hook payload, which pass-through would pin indefinitely.
+  return detachString(truncated)
 }
 
 export function normalizeOptionalField(value: unknown, maxLength: number): string | undefined {
