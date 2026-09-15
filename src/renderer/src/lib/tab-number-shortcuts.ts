@@ -1,4 +1,5 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { requestBrowserWorkspaceTabPageFocus } from '@/lib/browser-workspace-tab-activation'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -90,6 +91,7 @@ export function activateTabNumberShortcut(index: number): boolean {
     }
     store.setActiveBrowserTab(target.entityId)
     store.setActiveTabType('browser')
+    requestBrowserWorkspaceTabPageFocus(worktreeId, target.entityId)
     return true
   }
 

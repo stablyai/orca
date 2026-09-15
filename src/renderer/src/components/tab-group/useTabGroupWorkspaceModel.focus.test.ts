@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   openFile: vi.fn(),
   pinFile: vi.fn(),
   recordFeatureInteraction: vi.fn(),
+  requestBrowserFocus: vi.fn(),
   setActiveBrowserTab: vi.fn(),
   setActiveFile: vi.fn(),
   setActiveTab: vi.fn(),
@@ -68,6 +69,10 @@ vi.mock('../../store/selectors', () => ({
 
 vi.mock('../../lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
+}))
+
+vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
+  requestBrowserFocus: mocks.requestBrowserFocus
 }))
 
 vi.mock('../../runtime/web-runtime-session', () => ({
@@ -212,6 +217,117 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+  })
+
+  it('moves keyboard focus into the page after a browser tab is activated', async () => {
+    storeBox.state = {
+      ...storeBox.state,
+      browserTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-workspace-1',
+            worktreeId: 'wt-1',
+            activePageId: 'browser-page-1',
+            pageIds: ['browser-page-1'],
+            url: 'https://example.com'
+          }
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'browser-unified-1',
+            tabOrder: ['browser-unified-1']
+          }
+        ]
+      },
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-unified-1',
+            entityId: 'browser-workspace-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'browser',
+            label: 'Example',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.activateBrowser('browser-workspace-1')
+
+    expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
+    expect(mocks.activateTab).toHaveBeenCalledWith('browser-unified-1')
+    expect(mocks.setActiveBrowserTab).toHaveBeenCalledWith('browser-workspace-1')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('browser')
+    expect(mocks.requestBrowserFocus).toHaveBeenCalledWith({
+      pageId: 'browser-page-1',
+      target: 'webview'
+    })
+  })
+
+  it('leaves a blank browser tab in its address bar when it is re-activated', async () => {
+    storeBox.state = {
+      ...storeBox.state,
+      browserTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-workspace-1',
+            worktreeId: 'wt-1',
+            activePageId: 'browser-page-1',
+            pageIds: ['browser-page-1'],
+            url: 'about:blank'
+          }
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'browser-unified-1',
+            tabOrder: ['browser-unified-1']
+          }
+        ]
+      },
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-unified-1',
+            entityId: 'browser-workspace-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'browser',
+            label: 'New Browser Tab',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.activateBrowser('browser-workspace-1')
+
+    // Why: the empty guest cannot receive a URL, so a blank tab's activation belongs in the bar.
+    expect(mocks.requestBrowserFocus).toHaveBeenCalledWith({
+      pageId: 'browser-page-1',
+      target: 'address-bar'
+    })
   })
 
   it('closes the durable native owner from the real structured tab close action', async () => {

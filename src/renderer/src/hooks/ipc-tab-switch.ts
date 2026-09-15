@@ -1,4 +1,5 @@
 import { useAppStore } from '../store'
+import { requestBrowserWorkspaceTabPageFocus } from '@/lib/browser-workspace-tab-activation'
 import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getActiveEntityIdForTabType,
@@ -73,6 +74,10 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
       store.activateTab?.(next.tabId)
     }
     store.setActiveTabType('browser')
+    const worktreeId = store.activeWorktreeId
+    if (worktreeId) {
+      requestBrowserWorkspaceTabPageFocus(worktreeId, next.id)
+    }
   } else if (next.type === 'simulator') {
     store.setActiveTab(next.tabId ?? next.id)
     if (next.tabId) {
