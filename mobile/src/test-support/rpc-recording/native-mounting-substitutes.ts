@@ -39,13 +39,11 @@ import * as zod from 'zod'
 function partialNativeModule(module: string, members: Record<string, unknown>): unknown {
   return new Proxy(members, {
     get: (target, key) => {
-      if (typeof key === 'string') {
-        if (key !== '__esModule' && !(key in target)) {
-          throw new Error(`Unsubstituted native member: ${module}.${key}`)
-        }
-        return target[key]
+      if (typeof key === 'string' && key !== '__esModule' && !(key in target)) {
+        throw new Error(`Unsubstituted native member: ${module}.${key}`)
       }
-      return (target as Record<symbol, unknown>)[key]
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap default forward: raw string|symbol pass-through, with the receiver left as the target.
+      return Reflect.get(target, key)
     }
   })
 }
