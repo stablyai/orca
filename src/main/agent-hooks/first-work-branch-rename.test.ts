@@ -229,10 +229,37 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       expect.anything(),
       'local',
       'branchName',
-      expect.objectContaining({ id: REPO_ID })
+      expect.objectContaining({ id: REPO_ID }),
+      { contextualDefaultAgent: null }
     )
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('uses the first working agent as the branch-name default when it supports Source Control AI', async () => {
+    const { deps } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ agentType: 'codex' }), deps)
+
+    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'local',
+      'branchName',
+      expect.objectContaining({ id: REPO_ID }),
+      { contextualDefaultAgent: 'codex' }
+    )
+  })
+
+  it('ignores unsupported first working agents when choosing the branch-name default', async () => {
+    const { deps } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ agentType: 'gemini' }), deps)
+
+    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'local',
+      'branchName',
+      expect.objectContaining({ id: REPO_ID }),
+      { contextualDefaultAgent: null }
+    )
   })
 
   it('asks to align the on-disk folder with the generated slug after renaming', async () => {
@@ -362,7 +389,8 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       expect.anything(),
       'local',
       'branchName',
-      null
+      null,
+      { contextualDefaultAgent: null }
     )
     expect(setDisplayName).toHaveBeenCalledWith(FOLDER_WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(FOLDER_WORKTREE_ID)

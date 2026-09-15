@@ -20,7 +20,7 @@ export type MainWindowAgentStatusOptions = {
     paneKey: string
     tabId: string | undefined
     worktreeId: string | undefined
-    payload: { state: string; prompt?: string; lastAssistantMessage?: string }
+    payload: { state: string; agentType?: string; prompt?: string; lastAssistantMessage?: string }
     isReplay: boolean | undefined
   }) => void
   onRecordAgentState: (agentType: string, status: string) => void

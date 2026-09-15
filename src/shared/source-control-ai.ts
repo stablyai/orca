@@ -75,6 +75,7 @@ type ResolveSourceControlAiInput = {
   repo?: Pick<Repo, 'sourceControlAi'> | null
   operation: SourceControlAiOperation
   discoveryHostKey?: string
+  contextualDefaultAgent?: TuiAgent | null
   prCreationProductDefaults?: SourceControlAiPrCreationDefaults
 }
 
@@ -132,7 +133,7 @@ export function resolveSourceControlAiForOperation(
   const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
-    input.settings.defaultTuiAgent,
+    input.contextualDefaultAgent ?? input.settings.defaultTuiAgent,
     input.settings.disabledTuiAgents
   )
   if (!agentChoice) {
@@ -182,7 +183,7 @@ export function resolveSourceControlAiForOperation(
       ? agentChoice
       : resolveCommitMessageAgentChoice(
           actionAgentId,
-          input.settings.defaultTuiAgent,
+          input.contextualDefaultAgent ?? input.settings.defaultTuiAgent,
           input.settings.disabledTuiAgents
         )
   if (!resolvedAgent || isCustomAgentId(resolvedAgent)) {
