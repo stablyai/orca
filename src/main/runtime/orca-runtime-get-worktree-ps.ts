@@ -32,6 +32,7 @@ import { hostname } from 'node:os'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { startSpan } from '../observability/tracer'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner {
   async getWorktreePs(
@@ -149,6 +150,11 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       stateDirectory: getProfileUserDataPath(),
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
+      onError: ({ scope, error }) => {
+        startSpan('agent-session.error', { attributes: { scope } }).fail(
+          error instanceof Error ? error : String(error)
+        )
+      },
       // Resolves folder workspaces as well as git worktrees, so a chat session
       // in a plain folder lands in the folder rather than failing to resolve.
       resolveWorkspacePath: async (workspaceId) =>
