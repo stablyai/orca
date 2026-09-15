@@ -122,6 +122,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
         await Clipboard.setStringAsync(
           trimsGutterRef.current ? stripTerminalSelectionGutter(text) : text
         )
+        setCanPaste(true)
         triggerSuccess()
         // Why: Android 13+ shows its own system copy toast; iOS shows none, so only iOS needs our in-app toast.
         if (Platform.OS === 'ios') {
