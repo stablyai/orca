@@ -122,6 +122,41 @@ describe('details markdown html', () => {
     expect(isEditableHtml(nestedToggles(400))).toBe(false)
   })
 
+  it('stays editable when the body mentions a details pair inside a code span', () => {
+    expect(
+      isEditableHtml(
+        '<details><summary>T</summary><p>Mentions `<details>text</details>` inline.</p></details>'
+      )
+    ).toBe(true)
+  })
+
+  it('stays editable when the body holds a fenced block containing details tags', () => {
+    const html = [
+      '<details><summary>T</summary><p>Body</p>',
+      '',
+      '```',
+      '<details>',
+      '</details>',
+      '```',
+      '',
+      '</details>'
+    ].join('\n')
+
+    expect(isEditableHtml(html)).toBe(true)
+  })
+
+  it('keeps a real nested toggle editable after a code-span mention', () => {
+    const html = [
+      '<details><summary>Outer</summary><p>Mentions `<details>` inline.</p>',
+      '',
+      '<details><summary>Inner</summary><p>Body</p></details>',
+      '',
+      '</details>'
+    ].join('\n')
+
+    expect(isEditableHtml(html)).toBe(true)
+  })
+
   it('rejects unbalanced and non-toggle tags that start with details', () => {
     const unbalanced: DetailsHtmlBlock = {
       raw: '',
