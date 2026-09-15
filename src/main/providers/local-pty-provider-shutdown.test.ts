@@ -555,10 +555,11 @@ describe('LocalPtyProvider', () => {
       await provider.spawn({ cols: 80, rows: 24 })
       await provider.spawn({ cols: 80, rows: 24 })
 
-      provider.killAll()
+      await provider.killAll()
 
       expect(mock1Kill).toHaveBeenCalled()
       expect(mock2Kill).toHaveBeenCalled()
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
       const list = await provider.listProcesses()
       expect(list).toHaveLength(0)
     })
@@ -575,10 +576,29 @@ describe('LocalPtyProvider', () => {
 
       await provider.spawn({ cols: 80, rows: 24 })
 
-      provider.killAll()
+      await provider.killAll()
 
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(destroySpy).not.toHaveBeenCalled()
+    })
+
+    it('sweeps agent descendants before taking final exit ownership', async () => {
+      const onExit = vi.fn()
+      provider.configure({ onExit })
+      const { id } = await provider.spawn({ cols: 80, rows: 24, launchAgent: 'claude' })
+
+      await provider.killAll()
+
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        mockProc.pid,
+        expect.any(Function),
+        expect.objectContaining({
+          ownsRoot: expect.any(Function),
+          terminateOwnedTree: expect.any(Function)
+        })
+      )
+      expect(onExit).not.toHaveBeenCalled()
+      expect(provider.hasPty(id)).toBe(false)
     })
 
     it('settles an overlapping shutdown when app quit takes final ownership', async () => {
@@ -592,7 +612,7 @@ describe('LocalPtyProvider', () => {
       await Promise.resolve()
       expect(settled).toBe(false)
 
-      provider.killAll()
+      await provider.killAll()
 
       await expect(shutdown).resolves.toBeUndefined()
     })

@@ -106,4 +106,51 @@ describe('EmulatorStartLeaseRegistry', () => {
     expect(stopHelperForDevice).toHaveBeenCalledOnce()
     expect(shutdownDevice).toHaveBeenCalledOnce()
   })
+
+  it('cleans up an unreleased lease when shutdown begins', async () => {
+    const { backend, stopHelperForDevice, shutdownDevice } = makeBackend()
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'Pixel_Tablet', () => false)
+
+    await registry.shutdown()
+
+    expect(stopHelperForDevice).toHaveBeenCalledWith('emulator-5554', {
+      helperPid: undefined,
+      includeOrphaned: true
+    })
+    expect(shutdownDevice).toHaveBeenCalledWith('emulator-5554')
+    await lease.release()
+    expect(stopHelperForDevice).toHaveBeenCalledOnce()
+  })
+
+  it('cleans up a helper that finishes starting after shutdown begins', async () => {
+    const { backend, startSession, stopHelperForDevice, shutdownDevice } = makeBackend()
+    let finishStart: ((info: EmulatorSessionInfo) => void) | undefined
+    startSession.mockImplementation(
+      () =>
+        new Promise<EmulatorSessionInfo>((resolve) => {
+          finishStart = resolve
+        })
+    )
+    const registry = new EmulatorStartLeaseRegistry()
+    const acquire = registry.acquire(backend, 'Pixel_Tablet', () => false)
+
+    await vi.waitFor(() => expect(startSession).toHaveBeenCalledOnce())
+    const shutdown = registry.shutdown()
+    finishStart?.({
+      deviceUdid: 'emulator-5554',
+      streamUrl: 'scrcpy://emulator-5554',
+      wsUrl: '',
+      streamCodec: 'h264',
+      backend: 'android'
+    })
+
+    await expect(acquire).rejects.toMatchObject({ code: 'emulator_no_active' })
+    await shutdown
+    expect(stopHelperForDevice).toHaveBeenCalledWith('emulator-5554', {
+      helperPid: undefined,
+      includeOrphaned: true
+    })
+    expect(shutdownDevice).toHaveBeenCalledWith('emulator-5554')
+  })
 })
