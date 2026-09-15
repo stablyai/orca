@@ -204,6 +204,9 @@ export function getWorktreeMapFromState(
  * The row for one id on one host (STA-4343). Prefer this over the id-keyed map
  * anywhere the caller already knows which host's row it is acting on — the map
  * keeps a single row per id and cannot represent a two-host collision.
+ *
+ * When `hostId` is omitted, a single row is unambiguous; two hosts sharing the
+ * id fail closed (`undefined`) instead of first-wins.
  */
 export function getWorktreeOnHostFromState(
   state: Pick<AppState, 'worktreesByRepo'>,
@@ -211,7 +214,10 @@ export function getWorktreeOnHostFromState(
   hostId: ExecutionHostId | undefined
 ): Worktree | undefined {
   const rows = getCachedWorktreesById(state.worktreesByRepo, worktreeId)
-  return hostId ? rows.find((row) => row.hostId === hostId) : rows[0]
+  if (hostId) {
+    return rows.find((row) => row.hostId === hostId)
+  }
+  return rows.length === 1 ? rows[0] : undefined
 }
 
 export function getHasAnyWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): boolean {
