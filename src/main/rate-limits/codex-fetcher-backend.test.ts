@@ -137,6 +137,36 @@ describe('Codex backend rate-limit requests', () => {
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
+  // STA-3445: the WSL path publishes the backend reading directly, so a payload whose only
+  // readable field is `plan_type` published two null windows as a success -- the same
+  // last-good-snapshot overwrite the RPC probe was fixed for, through a second door.
+  it('does not publish a backend payload with no readable window as a successful reading', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: { access_token: 'access-token', account_id: 'account-id' }
+      })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        plan_type: 'plus',
+        rate_limit: {
+          primary_window: { used_percent: 'lots', limit_window_seconds: 3_600 },
+          secondary_window: null
+        }
+      })
+    } as Response)
+
+    const limits = await fetchCodexRateLimits({
+      codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
+      allowPtyFallback: false
+    })
+
+    expect(limits.status).not.toBe('ok')
+    expect(limits.session).toBeNull()
+    expect(limits.weekly).toBeNull()
+  })
+
   it('aborts callers while sharing one stalled backend auth read', async () => {
     let resolveRead!: (content: string) => void
     readFileMock.mockImplementation(
