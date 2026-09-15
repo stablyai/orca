@@ -6,6 +6,7 @@ import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import { getWorktreeCardJiraIssueDisplay } from './worktree-card-jira-issue-display'
 import type { WorktreeCardIssueDisplay } from './WorktreeCardMeta'
+import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import {
   coerceWorktreeCardVisibleTitle,
   getWorktreeCardTitleDisplay
@@ -116,7 +117,12 @@ export function useWorktreeCardLinkedDetails({
     reviewTitle: prDisplay?.title
   })
   const legacyCardTitleDisplay = coerceWorktreeCardVisibleTitle(worktree.displayName)
-  const visibleCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
+  // Why: cleared/nullish displayName arrives at runtime; never leave the closed card blank.
+  // Pinned rows also leave the project group header, so empty titles look like a missing name (#13353).
+  const preferredCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
+  const visibleCardTitle = preferredCardTitle.trim()
+    ? preferredCardTitle
+    : resolveWorktreeDisplayName(worktree)
   const isDeleting = deleteState?.isDeleting ?? false
   const isQueuedForDeletion = deleteState?.phase === 'queued'
   const deleteLabel = isQueuedForDeletion
