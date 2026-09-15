@@ -13,6 +13,7 @@ import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
 import { BrowserLinkRoutingModifierSetting } from './BrowserLinkRoutingModifierSetting'
 import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsSetting'
+import { BrowserLinkSidePaneSetting } from './BrowserLinkSidePaneSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
 import { BrowserSshWorkspaceRoutingSetting } from './BrowserSshWorkspaceRoutingSetting'
@@ -119,6 +120,7 @@ export function BrowserPane({
   const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [
     getBrowserPaneSearchEntries()[9]
   ])
+  const showLinkSidePane = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[10]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -273,6 +275,10 @@ export function BrowserPane({
           isMac={isMac}
           updateSettings={updateSettings}
         />
+      ) : null}
+
+      {showLinkSidePane ? (
+        <BrowserLinkSidePaneSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showLocalhostLabels ? (

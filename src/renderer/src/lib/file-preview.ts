@@ -12,6 +12,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '@/store/slices/tabs'
+import { resolveSourceGroupId } from '@/lib/side-group-placement'
 import { browserPageDocLocationsEqual } from '../../../shared/browser-page-doc-location'
 import type { BrowserPageDocLocation } from '../../../shared/browser-workspace-types'
 import { findPage } from '@/store/slices/browser-page-records'
@@ -325,14 +326,11 @@ export function openFilePreviewToSide(params: {
     return
   }
 
-  // Resolve the group this action originated from. Prefer the caller-supplied
-  // id (the tab's own group under split-pane layouts), fall back to the
-  // worktree's active group.
-  const sourceGroupId =
-    params.sourceGroupId ??
-    state.activeGroupIdByWorktree[worktreeId] ??
-    state.groupsByWorktree[worktreeId]?.[0]?.id ??
-    null
+  const sourceGroupId = resolveSourceGroupId({
+    requestedGroupId: params.sourceGroupId,
+    activeGroupId: state.activeGroupIdByWorktree?.[worktreeId] ?? null,
+    fallbackGroupId: state.groupsByWorktree[worktreeId]?.[0]?.id ?? null
+  })
   if (!sourceGroupId) {
     return
   }
