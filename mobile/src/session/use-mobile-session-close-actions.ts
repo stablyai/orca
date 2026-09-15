@@ -1,4 +1,5 @@
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
+import { pickNextTabAfterClose } from '../../../src/shared/session-tab-close-successor'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 
 export function useMobileSessionCloseActions(scope: MobileSessionContentCreateActionsModel) {
@@ -16,6 +17,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     setActiveHandle,
     setActiveSessionTabId,
     activeSessionTabIdRef,
+    recentSessionTabIdsRef,
+    switchSessionTab,
     selectedSessionTabIdRef,
     renameTarget,
     setRenameTarget,
@@ -121,16 +124,35 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         setSessionTabs(remainingTabs)
         // Why: tombstone the closed tab and rely on the snapshot, not a blind refetch that often re-added the not-yet-closed tab.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
+        recentSessionTabIdsRef.current = recentSessionTabIdsRef.current.filter(
+          (id) => id !== tab.id
+        )
         // Why: bulk close re-activates the anchor before awaiting each close;
         // the render-synced ref sees that switch while this closure would not,
         // so comparing against the ref keeps the anchor from being nulled out.
-        if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
+        if (remainingTabs.length === 0) {
           activeSessionTabTypeRef.current = null
           selectedSessionTabIdRef.current = null
           activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)
           activeHandleRef.current = null
           setActiveHandle(null)
+        } else if (activeSessionTabIdRef.current === tab.id) {
+          const nextTab = pickNextTabAfterClose(
+            remainingTabs,
+            tab.id,
+            recentSessionTabIdsRef.current
+          )
+          if (nextTab) {
+            switchSessionTab(nextTab)
+          } else {
+            activeSessionTabTypeRef.current = null
+            selectedSessionTabIdRef.current = null
+            activeSessionTabIdRef.current = null
+            setActiveSessionTabId(null)
+            activeHandleRef.current = null
+            setActiveHandle(null)
+          }
         }
       }
     } catch {

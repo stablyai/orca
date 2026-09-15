@@ -32,6 +32,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     activeSessionTabTypeRef,
     pendingActiveSessionTabIdRef,
     selectedSessionTabIdRef,
+    recentSessionTabIdsRef,
     pendingActiveTerminalHandleRef,
     pendingBrowserFocusPageIdRef,
     pendingTerminalActivationAttemptRef,
@@ -54,6 +55,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
     selectedSessionTabIdRef.current = null
+    recentSessionTabIdsRef.current = []
     pendingActiveTerminalHandleRef.current = null
     pendingBrowserFocusPageIdRef.current = null
     pendingTerminalActivationAttemptRef.current = null

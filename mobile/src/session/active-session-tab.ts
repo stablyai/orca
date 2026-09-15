@@ -1,3 +1,5 @@
+import { pickNextTabAfterClose } from '../../../src/shared/session-tab-close-successor'
+
 type SessionTabLike = {
   id: string
   isActive: boolean
@@ -21,10 +23,22 @@ export function resolveActiveSessionTab<T extends SessionTabLike>(
   opts: {
     pendingActiveSessionTabId: string | null
     selectedSessionTabId: string | null
+    previousActiveTabId?: string | null
+    recentTabIds?: readonly string[]
     navigationIntent?: 'follow'
   }
 ): ResolveActiveSessionTabResult<T> {
-  const snapshotActive = tabs.find((tab) => tab.isActive) ?? tabs[0] ?? null
+  const previousActive = opts.previousActiveTabId
+    ? (tabs.find((tab) => tab.id === opts.previousActiveTabId) ?? null)
+    : null
+  const snapshotActive =
+    tabs.find((tab) => tab.isActive) ??
+    previousActive ??
+    (opts.previousActiveTabId
+      ? pickNextTabAfterClose(tabs, opts.previousActiveTabId, opts.recentTabIds)
+      : null) ??
+    tabs[0] ??
+    null
   const pendingActiveSessionTabId = opts.pendingActiveSessionTabId
   // Why: targeted follow is the only host action allowed to supersede phone-local intent.
   if (opts.navigationIntent === 'follow') {
