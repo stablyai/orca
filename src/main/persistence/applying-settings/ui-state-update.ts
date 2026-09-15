@@ -1,4 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { normalizeAgentRowDisplayFields } from '../../../shared/agent-row-display-fields'
 import {
   getDefaultUIState,
   normalizeAgentActivityDisplayMode,
@@ -122,6 +123,10 @@ export function updatePersistedUI(
       sanitizedUpdates.agentActivityDisplayMode !== undefined
         ? normalizeAgentActivityDisplayMode(sanitizedUpdates.agentActivityDisplayMode)
         : normalizeAgentActivityDisplayMode(operations.state.ui?.agentActivityDisplayMode),
+    agentRowDisplayFields:
+      sanitizedUpdates.agentRowDisplayFields !== undefined
+        ? normalizeAgentRowDisplayFields(sanitizedUpdates.agentRowDisplayFields)
+        : normalizeAgentRowDisplayFields(operations.state.ui?.agentRowDisplayFields),
     workspaceStatuses:
       sanitizedUpdates.workspaceStatuses !== undefined
         ? normalizeWorkspaceStatuses(sanitizedUpdates.workspaceStatuses)

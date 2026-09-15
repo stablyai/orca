@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type {
   AgentActivityDisplayMode,
+  AgentRowDisplayField,
   WorktreeCardProperty
 } from '../../../../shared/ui-chrome-types'
 import {
@@ -19,7 +20,9 @@ import {
   CARD_LAYOUT_OPTIONS,
   getWorktreeCardPropertyOptions
 } from './sidebar-workspace-option-items'
+import { AGENT_ROW_DISPLAY_FIELD_OPTIONS } from './agent-row-display-field-options'
 import { PROPERTY_OPTIONS } from './worktree-card-display-property-options'
+import { DEFAULT_AGENT_ROW_DISPLAY_FIELDS } from '../../../../shared/agent-row-display-fields'
 import { translate } from '@/i18n/i18n'
 
 type WorktreeCardDisplayMenuSectionProps = {
@@ -35,6 +38,9 @@ export function WorktreeCardDisplayMenuSection({
   const setWorktreeCardMode = useAppStore((s) => s.setWorktreeCardMode)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
+  const agentRowDisplayFields =
+    useAppStore((s) => s.agentRowDisplayFields) ?? DEFAULT_AGENT_ROW_DISPLAY_FIELDS
+  const setAgentRowDisplayFields = useAppStore((s) => s.setAgentRowDisplayFields)
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
@@ -56,6 +62,36 @@ export function WorktreeCardDisplayMenuSection({
       setWorktreeCardProperties(next)
     },
     [setWorktreeCardProperties, worktreeCardProperties]
+  )
+  const handleAgentRowDisplayFieldChange = useCallback(
+    (field: AgentRowDisplayField, checked: boolean): void => {
+      const next = checked
+        ? [...agentRowDisplayFields, field]
+        : agentRowDisplayFields.filter((entry) => entry !== field)
+      setAgentRowDisplayFields(next)
+    },
+    [agentRowDisplayFields, setAgentRowDisplayFields]
+  )
+  const agentRowFieldItems = (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+        {translate(
+          'auto.components.sidebar.WorktreeCardDisplayMenuSection.511f830c30',
+          'Agent row fields'
+        )}
+      </DropdownMenuLabel>
+      {AGENT_ROW_DISPLAY_FIELD_OPTIONS.map((opt) => (
+        <DropdownMenuCheckboxItem
+          key={opt.id}
+          checked={agentRowDisplayFields.includes(opt.id)}
+          onCheckedChange={(checked) => handleAgentRowDisplayFieldChange(opt.id, checked === true)}
+          onSelect={(e) => e.preventDefault()}
+        >
+          {opt.label}
+        </DropdownMenuCheckboxItem>
+      ))}
+    </>
   )
 
   if (newCardStyle) {
@@ -87,6 +123,7 @@ export function WorktreeCardDisplayMenuSection({
               {opt.label}
             </DropdownMenuCheckboxItem>
           ))}
+          {agentRowFieldItems}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
     )
@@ -193,6 +230,7 @@ export function WorktreeCardDisplayMenuSection({
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
+          {agentRowFieldItems}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
     </>

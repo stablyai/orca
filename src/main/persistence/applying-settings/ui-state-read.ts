@@ -1,4 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { normalizeAgentRowDisplayFields } from '../../../shared/agent-row-display-fields'
 import {
   getDefaultUIState,
   normalizeAgentActivityDisplayMode,
@@ -50,6 +51,7 @@ export function getPersistedUI(
     ),
     worktreeCardProperties: normalizeWorktreeCardProperties(state.ui?.worktreeCardProperties),
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(state.ui?.agentActivityDisplayMode),
+    agentRowDisplayFields: normalizeAgentRowDisplayFields(state.ui?.agentRowDisplayFields),
     workspaceStatuses: normalizeWorkspaceStatuses(state.ui?.workspaceStatuses),
     workspaceBoardOpacity: clampWorkspaceBoardOpacity(state.ui?.workspaceBoardOpacity),
     workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(state.ui?.workspaceBoardColumnWidth),
