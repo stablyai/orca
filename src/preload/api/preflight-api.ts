@@ -23,6 +23,8 @@ export type PreflightStatus = {
     account: string | null
     baseUrl: string | null
     tokenConfigured: boolean
+    /** Optional: older runtimes omit this; UI falls back to the generic auth message. */
+    authError?: string | null
   }
 }
 
