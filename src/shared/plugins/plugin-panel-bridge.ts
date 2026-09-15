@@ -17,6 +17,7 @@ export const PANEL_ACTION_RESULT_TYPE = 'orca-panel-action-result'
 export const PANEL_PING_TYPE = 'orca-panel-ping'
 export const PANEL_PONG_TYPE = 'orca-panel-pong'
 export const PLUGIN_PANEL_FRAME_NAME_PREFIX = 'orca-plugin-panel:'
+export const PANEL_OPEN_WORKSPACE_VIEW_ACTION = 'workspace.openView'
 
 /** Per-plugin bridge budgets, enforced host-side. */
 export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024
@@ -39,7 +40,13 @@ export const panelActionRequestSchema = z.object({
   type: z.literal(PANEL_ACTION_REQUEST_TYPE),
   /** Plugin-chosen correlation id echoed back on the result message. */
   requestId: z.string().min(1).max(128),
-  action: z.string().min(1).refine(isPluginPanelAction, 'not a panel-callable action'),
+  action: z
+    .string()
+    .min(1)
+    .refine(
+      (action) => action === PANEL_OPEN_WORKSPACE_VIEW_ACTION || isPluginPanelAction(action),
+      'not a panel-callable action'
+    ),
   params: z.unknown().optional()
 })
 

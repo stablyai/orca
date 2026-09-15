@@ -1,6 +1,7 @@
 import {
   PANEL_ACTION_RESULT_TYPE,
   PANEL_CONTROL_MESSAGE_MAX_BYTES,
+  PANEL_OPEN_WORKSPACE_VIEW_ACTION,
   looksLikePanelActionRequest,
   parsePanelActionRequest,
   readPanelPongId,
@@ -36,6 +37,7 @@ export type PanelBridgeHostOptions = {
   /** The mounted panel iframe's contentWindow, or null when unmounted. */
   getPanelWindow: () => Window | null
   callPanelAction: (call: PanelActionCall) => Promise<PluginPanelActionOutcome>
+  openWorkspaceView?: (viewId: string) => boolean
   /** False once the requesting panel document/session has been replaced. */
   isActive?: () => boolean
   onPong?: (pingId: number) => void
@@ -155,6 +157,27 @@ export function createPanelBridgeMessageHandler(
       return
     }
     const { requestId, action, params } = parsed.request
+    if (action === PANEL_OPEN_WORKSPACE_VIEW_ACTION) {
+      const viewId =
+        typeof params === 'object' &&
+        params !== null &&
+        typeof (params as { viewId?: unknown }).viewId === 'string'
+          ? (params as { viewId: string }).viewId
+          : null
+      const opened = viewId ? options.openWorkspaceView?.(viewId) === true : false
+      respond(
+        opened
+          ? { type: PANEL_ACTION_RESULT_TYPE, requestId, ok: true, value: null }
+          : {
+              type: PANEL_ACTION_RESULT_TYPE,
+              requestId,
+              ok: false,
+              errorCode: 'invalid_request',
+              error: 'Workspace view is unavailable.'
+            }
+      )
+      return
+    }
     options
       .callPanelAction({ sessionToken: options.sessionToken, action, params })
       .then((outcome) => {

@@ -29,6 +29,7 @@ export type PluginListPanelEntry = {
   id: string
   title: string
   icon?: string
+  location?: 'right-sidebar' | 'workspace'
   tabKey: `plugin:${string}`
 }
 
@@ -175,6 +176,7 @@ export async function buildPluginList(
           id: panel.id,
           title: panel.title,
           ...(panel.icon ? { icon: panel.icon } : {}),
+          ...(panel.location ? { location: panel.location } : {}),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
         commands: service.contentPacks.commands.preview(plugin.pluginKey).map((command) => ({

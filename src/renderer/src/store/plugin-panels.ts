@@ -19,10 +19,13 @@ export type PluginPanelHealth = 'healthy' | 'error'
 type PluginPanelsState = {
   plugins: PluginHostListEntry[]
   panelErrors: Record<string, true>
+  activeWorkspacePanel: string | null
   fetchStatus: PluginPanelsFetchStatus
   fetchPlugins: () => Promise<void>
   setPlugins: (plugins: PluginHostListEntry[]) => void
   setPanelHealth: (tabKey: string, health: PluginPanelHealth) => void
+  openWorkspacePanel: (tabKey: string) => void
+  closeWorkspacePanel: () => void
 }
 
 let pluginListGeneration = 0
@@ -49,6 +52,7 @@ function schedulePluginListRetry(generation: number): void {
 export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   plugins: [],
   panelErrors: {},
+  activeWorkspacePanel: null,
   fetchStatus: 'idle',
   fetchPlugins: async () => {
     const generation = ++pluginListGeneration
@@ -106,7 +110,9 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
       }
       return { panelErrors }
     })
-  }
+  },
+  openWorkspacePanel: (tabKey) => set({ activeWorkspacePanel: tabKey }),
+  closeWorkspacePanel: () => set({ activeWorkspacePanel: null })
 }))
 
 function retainInstalledPanelErrors(
@@ -153,13 +159,30 @@ export function collectActivePluginPanels(plugins: PluginHostListEntry[]): Activ
     )
 }
 
-/** Tab keys of every installed plugin panel (any status) — used by the
+export function collectActivePluginPanelsAt(
+  plugins: PluginHostListEntry[],
+  location: NonNullable<PluginHostPanel['location']>
+): ActivePluginPanel[] {
+  return collectActivePluginPanels(plugins).filter(
+    (panel) => (panel.location ?? 'right-sidebar') === location
+  )
+}
+
+/** Tab keys of every installed sidebar panel (any status) — used by the
  *  persisted-route normalizer to drop keys of uninstalled plugins while
- *  keeping keys that are merely disabled. */
+ *  keeping keys that are merely disabled. Workspace panels are excluded: they
+ *  are not sidebar-routable, so a panel that moved surface must drop its stale
+ *  sidebar route rather than survive normalization. */
 export function collectInstalledPluginTabKeys(
   plugins: readonly PluginHostListEntry[]
 ): Set<string> {
-  return new Set(plugins.flatMap((plugin) => plugin.panels.map((panel) => panel.tabKey)))
+  return new Set(
+    plugins.flatMap((plugin) =>
+      plugin.panels
+        .filter((panel) => (panel.location ?? 'right-sidebar') === 'right-sidebar')
+        .map((panel) => panel.tabKey)
+    )
+  )
 }
 
 export function collectActivePluginCommands(
@@ -202,6 +225,16 @@ export function usePluginPanels(): ActivePluginPanel[] {
   // Why: derive in useMemo (not the selector) so the store snapshot stays
   // referentially stable and doesn't retrigger useSyncExternalStore loops.
   return useMemo(() => collectActivePluginPanels(plugins), [plugins])
+}
+
+export function usePluginPanelsAt(
+  location: NonNullable<PluginHostPanel['location']>
+): ActivePluginPanel[] {
+  const plugins = usePluginPanelsStore((s) => s.plugins)
+  useEffect(() => {
+    ensurePluginPanelsLoaded()
+  }, [])
+  return useMemo(() => collectActivePluginPanelsAt(plugins, location), [location, plugins])
 }
 
 /** Commands of enabled plugins, sharing the authoritative plugin-list refresh. */
