@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { NATIVE_CHAT_SUPPORTED_AGENT_LIST } from './native-chat-agent-support'
 import {
   getHostClaimedNativeChatCommands,
   getNativeChatAgentProfile,
+  getNativeChatAttachmentForm,
   getVerifiedNativeChatCommands
 } from './native-chat-agent-profiles'
 
@@ -54,5 +56,35 @@ describe('host-claimed native chat commands', () => {
   it('claims the whole catalog for agents with no pass-through policy', () => {
     expect(names('custom-agent')).toEqual(['clear', 'help'])
     expect(names('grok')).toEqual([])
+  })
+})
+
+describe('native chat attachment form', () => {
+  it.each([
+    ['claude', 'image-paste'],
+    ['openclaude', 'image-paste'],
+    ['codex', 'image-paste'],
+    ['grok', 'image-paste'],
+    // OMP wraps Pi's TUI, which has no verified image-path paste gesture.
+    ['omp', 'file-reference'],
+    ['custom-agent', 'file-reference']
+  ] as const)('%s attaches as %s', (agent, form) => {
+    expect(getNativeChatAttachmentForm(agent)).toBe(form)
+  })
+
+  it('never leaves a native-chat agent without a form', () => {
+    for (const agent of NATIVE_CHAT_SUPPORTED_AGENT_LIST) {
+      expect(getNativeChatAttachmentForm(agent)).toMatch(/^(image-paste|file-reference)$/)
+    }
+  })
+
+  it('does not give every native-chat agent the same form', () => {
+    const forms = new Set(NATIVE_CHAT_SUPPORTED_AGENT_LIST.map(getNativeChatAttachmentForm))
+    expect(forms.size).toBeGreaterThan(1)
+  })
+
+  it('falls back to the reference form for an unknown agent', () => {
+    expect(getNativeChatAttachmentForm(null)).toBe('file-reference')
+    expect(getNativeChatAttachmentForm(undefined)).toBe('file-reference')
   })
 })

@@ -1,10 +1,16 @@
 // Pure: turn raw composer text into the exact PTY bytes to write. Kept separate
 // from the React composer so the byte rules are unit-testable without a DOM.
 
+import type { NativeChatAttachmentForm } from '../../../../shared/native-chat-agent-profiles'
+import {
+  imagePasteWritesFollowedByText,
+  separateImagePasteFromFollowingText
+} from '../../../../shared/image-paste-following-text'
 import {
   sanitizeBracketedPasteText,
   wrapTerminalBracketedPasteText
 } from '../terminal-pane/terminal-bracketed-paste'
+import { formatNativeChatFileReference } from './native-chat-composer-target'
 
 // Why: carriage return (not \n) is what xterm/agent composers treat as the
 // submit/Enter key over a PTY.
@@ -40,10 +46,41 @@ export function buildNativeChatPasteBytes(text: string): string {
   return sanitizeBracketedPasteText(text)
 }
 
-/** Image attachments must look like a real terminal image paste to Claude/Codex
- *  TUIs. A plain typed path (or @file mention) is treated as text/file-read. */
-export function buildNativeChatImagePasteBytes(filePath: string): string {
+/**
+ * One attachment's bytes, in the form its agent understands:
+ *  - `image-paste` → bracketed paste of the raw path. Claude/Codex/Grok TUIs
+ *    detect that gesture and attach the file as an image; a plain typed path (or
+ *    @file mention) would be treated as text/file-read instead.
+ *  - `file-reference` → the portable `@path` mention. Agents with no verified
+ *    image-paste gesture would otherwise receive a naked path as prose.
+ */
+export function buildNativeChatAttachmentBytes(
+  filePath: string,
+  form: NativeChatAttachmentForm
+): string {
+  if (form === 'file-reference') {
+    // Why: an unframed write is keystrokes, so a filename holding CR/LF would
+    // submit the turn early. buildNativeChatPasteBytes already frames those.
+    return buildNativeChatPasteBytes(formatNativeChatFileReference(filePath))
+  }
   return wrapTerminalBracketedPasteText(filePath)
+}
+
+/** The per-attachment PTY writes for a send. Bracketed image frames are
+ *  self-delimiting, so only the last needs a space before prompt text; `@path`
+ *  references are plain text and need one between every pair as well. */
+export function buildNativeChatAttachmentWrites(
+  filePaths: readonly string[],
+  form: NativeChatAttachmentForm,
+  followedByText: boolean
+): string[] {
+  const payloads = filePaths.map((filePath) => buildNativeChatAttachmentBytes(filePath, form))
+  if (form === 'image-paste') {
+    return imagePasteWritesFollowedByText(payloads, followedByText)
+  }
+  return payloads.map((payload, index) =>
+    separateImagePasteFromFollowingText(payload, index < payloads.length - 1 || followedByText)
+  )
 }
 
 /**

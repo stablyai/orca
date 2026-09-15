@@ -1,9 +1,10 @@
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import { imagePasteWritesFollowedByText } from '../../../../shared/image-paste-following-text'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../shared/native-chat-answer-stepping'
+import { getNativeChatAttachmentForm } from '../../../../shared/native-chat-agent-profiles'
 import {
-  buildNativeChatImagePasteBytes,
+  buildNativeChatAttachmentWrites,
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
 } from './native-chat-send'
@@ -21,9 +22,13 @@ export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
 
+/** `agent` picks the attachment form: only agents with a verified image-paste
+ *  gesture get a bracketed raw path; the rest get `@path` (see
+ *  getNativeChatAttachmentForm). */
 export function sendNativeChatMessageWithImageAttachments(
   settings: RuntimeSettings,
   ptyId: string,
+  agent: AgentType | null | undefined,
   text: string,
   imagePaths: readonly string[],
   options?: NativeChatSendOptions
@@ -47,8 +52,9 @@ export function sendNativeChatMessageWithImageAttachments(
         if (isCancelled()) {
           return
         }
-        for (const payload of imagePasteWritesFollowedByText(
-          imagePaths.map(buildNativeChatImagePasteBytes),
+        for (const payload of buildNativeChatAttachmentWrites(
+          imagePaths,
+          getNativeChatAttachmentForm(agent),
           trimmedText.length > 0
         )) {
           sendRuntimePtyInput(settings, ptyId, payload)
