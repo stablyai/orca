@@ -6,6 +6,7 @@ import {
   type OrchestrationFleetAttentionCategory
 } from './orchestration-fleet-attention'
 import { projectOrchestrationFleetWorker } from './orchestration-fleet-worker-projection'
+import type { DispatchHeartbeatStamp, FleetHeartbeat } from './orchestration-heartbeat-freshness'
 
 export const ORCHESTRATION_FLEET_PAGE_MAX = 100
 
@@ -33,6 +34,10 @@ export type FleetDurableWorker = {
   pendingApproval?: boolean
   terminationReason?: 'operator_close' | 'signaled' | 'exited' | 'unknown' | null
   outcome?: 'in_progress' | 'succeeded' | 'failed' | 'outcome_unknown' | 'finished_unverified'
+  /** Epoch ms this host recorded the last heartbeat; `null` = never, `'unreadable'` = a stored
+   *  stamp nothing can parse, absent = the caller does not carry the column, which is why the
+   *  projected `heartbeat` is omitted rather than `none`. */
+  lastHeartbeatAt?: DispatchHeartbeatStamp
   resource: {
     id: string
     ownerDispatchId: string
@@ -106,6 +111,9 @@ export type OrchestrationFleetWorker = {
   }
   outcome: 'in_progress' | 'succeeded' | 'failed' | 'outcome_unknown' | 'finished_unverified'
   liveness: FleetLiveness
+  /** Protocol-level proof the agent is still reporting, beside `liveness`'s process verdict.
+   *  Optional: a host that does not carry the arrival stamp omits it entirely. */
+  heartbeat?: FleetHeartbeat
   evidence: {
     durable: true
     liveStatus: 'fresh' | 'stale' | 'unavailable' | 'redacted_restore'
