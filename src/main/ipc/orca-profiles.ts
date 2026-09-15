@@ -14,7 +14,6 @@ import type {
   SwitchOrcaProfileResult,
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult,
-  ConnectCurrentOrcaProfileResult,
   OrcaProfileAuthStatus,
   SelectOrcaProfileOrgArgs,
   SelectOrcaProfileOrgResult,
@@ -37,15 +36,14 @@ import { findOrcaProfileProjectsByPath } from '../orca-profiles/profile-project-
 import { flushActiveProfileBeforeFileMutation } from '../orca-profiles/profile-persistence-deadline'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import {
-  cancelCurrentOrcaProfileConnect,
   createCloudLinkedOrcaProfile,
-  connectCurrentOrcaProfile,
   getCurrentOrcaProfileAuthStatus,
   refreshCurrentOrcaProfileAuth,
   selectCurrentOrcaProfileOrg,
   signOutCurrentOrcaProfile
 } from '../orca-profiles/profile-cloud-service'
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
+import { registerOrcaProfileSignInHandlers } from './orca-profile-sign-in-handlers'
 import { onOrcaCloudSessionInvalidated } from '../orca-profiles/profile-cloud-session-invalidation'
 import { broadcastOrcaProfileAuthStatusChanged } from './orca-profile-auth-status-broadcast'
 
@@ -267,18 +265,7 @@ export function registerOrcaProfileHandlers(
       )
   )
 
-  ipcMain.handle(
-    'orcaProfiles:connectCurrent',
-    async (): Promise<ConnectCurrentOrcaProfileResult> => {
-      const result = await connectCurrentOrcaProfile(getProfileUserDataPath())
-      if (result.status === 'connected') {
-        options.onAuthMutation?.()
-      }
-      return result
-    }
-  )
-
-  ipcMain.handle('orcaProfiles:cancelConnect', (): void => cancelCurrentOrcaProfileConnect())
+  registerOrcaProfileSignInHandlers(options)
 
   ipcMain.handle(
     'orcaProfiles:createCloudLinked',

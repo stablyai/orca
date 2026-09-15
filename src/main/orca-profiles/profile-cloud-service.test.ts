@@ -169,10 +169,16 @@ describe('Orca cloud profile service', () => {
     async (message) => {
       configureCloudEnv()
       beginOrcaCloudPkceFlowMock.mockRejectedValue(new Error(message))
+      const signal = new AbortController().signal
 
-      const result = await connectCurrentOrcaProfile(userDataPath)
+      const result = await connectCurrentOrcaProfile(userDataPath, { signal })
 
       expect(result.status).toBe('cancelled')
+      expect(beginOrcaCloudPkceFlowMock).toHaveBeenCalledWith(
+        expect.any(Object),
+        'local-default',
+        signal
+      )
       expect(exchangeOrcaCloudAuthCodeMock).not.toHaveBeenCalled()
       expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
         state: 'local',

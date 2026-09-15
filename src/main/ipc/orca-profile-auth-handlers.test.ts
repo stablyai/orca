@@ -103,13 +103,46 @@ describe('registerOrcaProfileHandlers auth channels', () => {
     } as never)
 
     await expect(
-      Promise.resolve(handlers.get('orcaProfiles:connectCurrent')?.(null))
+      Promise.resolve(handlers.get('orcaProfiles:connectCurrent')?.({ sender: { id: 1 } }))
     ).resolves.toBe(connectResult)
     await expect(
       Promise.resolve(handlers.get('orcaProfiles:signOutCurrent')?.(null))
     ).resolves.toBe(signOutResult)
-    expect(connectCurrentOrcaProfileMock).toHaveBeenCalledWith('/tmp/orca-user-data')
+    expect(connectCurrentOrcaProfileMock).toHaveBeenCalledWith('/tmp/orca-user-data', {
+      signal: expect.any(AbortSignal)
+    })
     expect(signOutCurrentOrcaProfileMock).toHaveBeenCalledWith('/tmp/orca-user-data')
+  })
+
+  it('cancels only the sign-in started by the same renderer', async () => {
+    const signals: AbortSignal[] = []
+    connectCurrentOrcaProfileMock.mockImplementation(
+      (_path: string, options: { signal: AbortSignal }) =>
+        new Promise((resolve) => {
+          signals.push(options.signal)
+          options.signal.addEventListener(
+            'abort',
+            () => resolve({ status: 'cancelled', auth: { activeProfileId: 'local-default' } }),
+            { once: true }
+          )
+        })
+    )
+    registerOrcaProfileHandlers({
+      flush: vi.fn(),
+      freezeWrites: vi.fn(),
+      getSettings: () => ({})
+    } as never)
+
+    const mainWindow = handlers.get('orcaProfiles:connectCurrent')?.({ sender: { id: 1 } })
+    const popout = handlers.get('orcaProfiles:connectCurrent')?.({ sender: { id: 2 } })
+    expect(signals).toHaveLength(2)
+
+    handlers.get('orcaProfiles:cancelConnect')?.({ sender: { id: 2 } })
+    await expect(popout).resolves.toMatchObject({ status: 'cancelled' })
+    expect(signals[0]?.aborted).toBe(false)
+
+    handlers.get('orcaProfiles:cancelConnect')?.({ sender: { id: 1 } })
+    await expect(mainWindow).resolves.toMatchObject({ status: 'cancelled' })
   })
 
   it('refreshes profile auth through the cloud service', async () => {

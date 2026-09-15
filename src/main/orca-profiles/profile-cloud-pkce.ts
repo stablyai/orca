@@ -17,15 +17,6 @@ export type OrcaCloudAuthorizationCode = {
 
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000
 
-const pendingFlowCancels = new Set<() => void>()
-
-/** Ends every loopback wait, e.g. after the user abandoned the browser tab. */
-export function cancelOrcaCloudPkceFlows(): void {
-  for (const cancel of pendingFlowCancels) {
-    cancel()
-  }
-}
-
 function base64Url(buffer: Buffer): string {
   return buffer.toString('base64').replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
 }
@@ -51,8 +42,12 @@ function closeServer(server: Server): void {
 
 export function beginOrcaCloudPkceFlow(
   config: OrcaCloudAuthConfig,
-  localProfileId: string
+  localProfileId: string,
+  signal?: AbortSignal
 ): Promise<OrcaCloudAuthorizationCode> {
+  if (signal?.aborted) {
+    return Promise.reject(new Error('orca_cloud_auth_cancelled'))
+  }
   const codeVerifier = createCodeVerifier()
   const nonce = base64Url(randomBytes(32))
   const state = base64Url(randomBytes(32))
@@ -60,15 +55,12 @@ export function beginOrcaCloudPkceFlow(
   return new Promise((resolve, reject) => {
     let settled = false
     let redirectUri = ''
-    const cancel = (): void => rejectFlow(new Error('orca_cloud_auth_cancelled'))
-    pendingFlowCancels.add(cancel)
 
     function rejectFlow(error: Error): void {
       if (settled) {
         return
       }
       settled = true
-      pendingFlowCancels.delete(cancel)
       reject(error)
       closeServer(server)
     }
@@ -78,7 +70,6 @@ export function beginOrcaCloudPkceFlow(
         return
       }
       settled = true
-      pendingFlowCancels.delete(cancel)
       resolve({
         code,
         codeVerifier,
@@ -137,7 +128,12 @@ export function beginOrcaCloudPkceFlow(
     const timeout = setTimeout(() => {
       rejectFlow(new Error('orca_cloud_auth_timeout'))
     }, AUTH_TIMEOUT_MS)
-    server.once('close', () => clearTimeout(timeout))
+    const onAbort = (): void => rejectFlow(new Error('orca_cloud_auth_cancelled'))
+    signal?.addEventListener('abort', onAbort, { once: true })
+    server.once('close', () => {
+      clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
+    })
     server.once('error', rejectFlow)
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()

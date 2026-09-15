@@ -35,7 +35,6 @@ import { getOrcaProfileAuthStatusFromProfile } from './profile-cloud-auth-status
 import { selectCloudOrgWithMutationFence } from './profile-cloud-org-selection'
 
 export { refreshCurrentOrcaProfileAuth } from './profile-cloud-capability-refresh'
-export { cancelOrcaCloudPkceFlows as cancelCurrentOrcaProfileConnect } from './profile-cloud-pkce'
 
 function isUserCancelledAuthError(message: string): boolean {
   return (
@@ -57,7 +56,8 @@ export function getCurrentOrcaProfileAuthStatus(userDataPath: string): OrcaProfi
 }
 
 export async function connectCurrentOrcaProfile(
-  userDataPath: string
+  userDataPath: string,
+  options?: { signal?: AbortSignal }
 ): Promise<ConnectCurrentOrcaProfileResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
   if (isOrcaCloudDevAuthEnabled()) {
@@ -79,7 +79,11 @@ export async function connectCurrentOrcaProfile(
   }
 
   try {
-    const code = await beginOrcaCloudPkceFlow(configState.config, active.profile.id)
+    const code = await beginOrcaCloudPkceFlow(
+      configState.config,
+      active.profile.id,
+      options?.signal
+    )
     const exchange = await exchangeOrcaCloudAuthCode(configState.config, {
       ...code,
       localProfileId: active.profile.id
