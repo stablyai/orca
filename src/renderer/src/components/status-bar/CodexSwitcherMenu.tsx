@@ -102,7 +102,14 @@ export function CodexSwitcherMenu({
       onOpenChange={handleOpenChange}
     >
       <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
-        <DialogContent className="sm:max-w-[420px]" {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}>
+        <DialogContent
+          // Why: the reset item calls preventDefault() in onSelect to keep the
+          // dropdown open, so this confirm opens under a live z-70 menu. The
+          // default dialog z-50 would let the menu cover it.
+          overlayClassName="z-[110]"
+          className="z-[120] sm:max-w-[420px]"
+          {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
+        >
           <DialogHeader>
             <DialogTitle>
               {translate('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
