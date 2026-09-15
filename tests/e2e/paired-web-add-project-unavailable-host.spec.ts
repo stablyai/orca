@@ -35,20 +35,53 @@ async function setOnlyRuntimeHostHealth(page: Page, health: HostHealth): Promise
     if (nextHealth === 'blocked' && !current?.status) {
       throw new Error('Paired web runtime status unavailable for compatibility fault')
     }
+    // Why: health derives from the status snapshot (transport + verification)
+    // whenever one exists, and a background snapshot hydrate overwrites a
+    // status-only fault. Encode the fault in the snapshot at a sequence the
+    // real hydration cannot outbid, so the injected health stays stable.
+    const FAULT_SEQUENCE = 2_147_483_647
+    const blockedStatus = current?.status
+      ? { ...current.status, protocolVersion: 0, runtimeProtocolVersion: 0 }
+      : null
+    const nextEntry =
+      nextHealth === 'blocked'
+        ? {
+            ...current,
+            checkedAt: Date.now(),
+            status: blockedStatus,
+            remoteControl: null,
+            snapshot: current?.snapshot
+              ? {
+                  ...current.snapshot,
+                  checkedAt: Date.now(),
+                  sequence: FAULT_SEQUENCE,
+                  verification: 'verified' as const,
+                  transport: 'ready' as const,
+                  status: blockedStatus
+                }
+              : undefined
+          }
+        : {
+            ...current,
+            checkedAt: Date.now(),
+            status: null,
+            remoteControl: null,
+            snapshot: current?.snapshot
+              ? {
+                  ...current.snapshot,
+                  checkedAt: Date.now(),
+                  sequence: FAULT_SEQUENCE,
+                  verification: 'unavailable' as const,
+                  transport: 'disconnected' as const,
+                  status: null,
+                  retired: true as const
+                }
+              : undefined
+          }
     store.setState({
       runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set(
         environment.id,
-        nextHealth === 'blocked'
-          ? {
-              ...current,
-              checkedAt: Date.now(),
-              status: {
-                ...current!.status!,
-                protocolVersion: 0,
-                runtimeProtocolVersion: 0
-              }
-            }
-          : { ...current, checkedAt: Date.now(), status: null }
+        nextEntry
       )
     })
     return environment.name

@@ -191,7 +191,10 @@ test.describe('Terminal attention', () => {
         throw new Error(`No owner worktree found for terminal tab ${tabId}`)
       }
       state.markWorktreeUnread(ownerWorktreeId)
-      state.markTerminalTabUnread(tabId)
+      // Why: the attention contract reads the marker value, not key presence
+      // (#20525). Production always marks with 'terminal-bell'; a bare call
+      // stores undefined, which the DOM correctly ignores.
+      state.markTerminalTabUnread(tabId, 'terminal-bell')
     }, secondTabId)
 
     await expect
