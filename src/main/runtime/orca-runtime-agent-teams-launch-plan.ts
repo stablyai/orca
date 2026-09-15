@@ -54,7 +54,7 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
       ? {
           ...args.launchConfig,
           agentCommand: args.launchConfig.agentCommand
-            ? mode === 'in-process' || process.platform === 'win32'
+            ? plan.mode === 'in-process'
               ? addClaudeTeammateModeInProcess(args.launchConfig.agentCommand)
               : addClaudeTeammateModeAuto(args.launchConfig.agentCommand)
             : plan.command,

@@ -60,6 +60,7 @@ describe('claude agent teams shim env', () => {
 
     expect(plan).toMatchObject({
       command: "claude --teammate-mode auto 'hello'",
+      mode: 'native-panes-shim',
       env: expect.objectContaining({ TMUX_PANE: '%1' }),
       envToDelete: ['TERM_PROGRAM']
     })
@@ -97,6 +98,7 @@ describe('claude agent teams shim env', () => {
       })
     ).resolves.toEqual({
       command: 'claude --teammate-mode in-process',
+      mode: 'in-process',
       env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
     })
   })
@@ -121,6 +123,7 @@ describe('claude agent teams shim env', () => {
         })
       ).resolves.toEqual({
         command: 'claude --teammate-mode in-process',
+        mode: 'in-process',
         env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
       })
     }
@@ -187,6 +190,7 @@ describe('claude agent teams shim env', () => {
       })
     ).resolves.toEqual({
       command: 'claude --teammate-mode in-process',
+      mode: 'in-process',
       env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
     })
   })

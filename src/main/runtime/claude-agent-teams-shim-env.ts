@@ -16,6 +16,8 @@ import { resolvePathEnvKey } from '../pty/windows-path-segment-merge'
 
 export type ClaudeAgentTeamsLaunchPlan = {
   command: string
+  /** Execution mode the plan actually selected, after cmd-shell/shim fallback — not the requested mode. */
+  mode: Extract<ClaudeAgentTeamsMode, 'in-process' | 'native-panes-shim'>
   env: Record<string, string>
   envToDelete?: string[]
 }
@@ -70,6 +72,7 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   }
   const inProcess: ClaudeAgentTeamsLaunchPlan = {
     command: addClaudeTeammateModeInProcess(args.command),
+    mode: 'in-process',
     env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
   }
   // Why: Claude Code writes pane commands for sh, and cmd.exe is the one pane shell Orca cannot re-spell them for.
@@ -95,6 +98,7 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   const env = args.createTeamEnv(shimDir, shimBin, args.paneShell)
   return {
     command: addClaudeTeammateModeAuto(args.command),
+    mode: 'native-panes-shim',
     env,
     envToDelete: ['TERM_PROGRAM']
   }
