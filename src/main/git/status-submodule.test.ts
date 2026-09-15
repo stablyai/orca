@@ -123,11 +123,24 @@ describe('submodule diff routing', () => {
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
       ['show', '--end-of-options', `${OLD_OID}:lib/main.dart`],
-      { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
+      expect.objectContaining({
+        cwd: SUBMODULE,
+        maxBuffer: 10 * 1024 * 1024,
+        preferWslDirectGit: true,
+        allowExplicitBareRepositoryRetry: true
+      })
     )
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
       ['show', '--end-of-options', `${NEW_OID}:lib/main.dart`],
-      { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
+      expect.objectContaining({
+        cwd: SUBMODULE,
+        maxBuffer: 10 * 1024 * 1024,
+        preferWslDirectGit: true,
+        allowExplicitBareRepositoryRetry: true
+      })
+    )
+    expect(gitExecFileAsyncBufferMock.mock.calls[0]?.[1].explicitBareRepositoryReadState).toBe(
+      gitExecFileAsyncBufferMock.mock.calls[1]?.[1].explicitBareRepositoryReadState
     )
     expect(result.kind).toBe('text')
     expect(result.originalContent).toBe('v1\n')
@@ -167,11 +180,21 @@ describe('submodule diff routing', () => {
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
       ['show', '--end-of-options', `${OLD_OID}:lib/main.dart`],
-      { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
+      expect.objectContaining({
+        cwd: SUBMODULE,
+        maxBuffer: 10 * 1024 * 1024,
+        preferWslDirectGit: true,
+        allowExplicitBareRepositoryRetry: true
+      })
     )
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
       ['show', '--end-of-options', `${NEW_OID}:lib/main.dart`],
-      { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
+      expect.objectContaining({
+        cwd: SUBMODULE,
+        maxBuffer: 10 * 1024 * 1024,
+        preferWslDirectGit: true,
+        allowExplicitBareRepositoryRetry: true
+      })
     )
     expect(result.kind).toBe('text')
     expect(result.originalContent).toBe('v1\n')
@@ -200,11 +223,15 @@ describe('submodule diff routing', () => {
 
     const result = await getDiff(PARENT, 'flutter_mine/lib/main.dart', false)
 
-    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(['show', ':lib/main.dart'], {
-      cwd: SUBMODULE,
-      maxBuffer: 10 * 1024 * 1024,
-      preferWslDirectGit: true
-    })
+    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
+      ['show', ':lib/main.dart'],
+      expect.objectContaining({
+        cwd: SUBMODULE,
+        maxBuffer: 10 * 1024 * 1024,
+        preferWslDirectGit: true,
+        allowExplicitBareRepositoryRetry: true
+      })
+    )
     expect(readFileMock).toHaveBeenCalledWith(path.join(SUBMODULE, 'lib/main.dart'))
     expect(result.kind).toBe('text')
     expect(result.originalContent).toBe('old\n')

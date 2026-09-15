@@ -1,10 +1,10 @@
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitCompareOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
 
 export async function resolveCompareRef(
   worktreePath: string,
-  options: GitRuntimeOptions = {}
+  options: GitCompareOptions
 ): Promise<string> {
   try {
     const { stdout } = await gitExecFileAsync(['branch', '--show-current'], {
@@ -20,7 +20,7 @@ export async function resolveCompareRef(
 export async function resolveRefOid(
   worktreePath: string,
   ref: string,
-  options: GitRuntimeOptions = {}
+  options: GitCompareOptions
 ): Promise<string> {
   const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', '--end-of-options', ref], {
     ...gitOptionsForWorktree(worktreePath, options)
@@ -32,7 +32,7 @@ export async function resolveMergeBase(
   worktreePath: string,
   baseOid: string,
   headOid: string,
-  options: GitRuntimeOptions = {}
+  options: GitCompareOptions
 ): Promise<string> {
   const { stdout } = await gitExecFileAsync(['merge-base', baseOid, headOid], {
     ...gitOptionsForWorktree(worktreePath, options)
@@ -46,7 +46,7 @@ export async function countCompareDivergence(
   worktreePath: string,
   baseOid: string,
   headOid: string,
-  options: GitRuntimeOptions = {}
+  options: GitCompareOptions
 ): Promise<{ ahead: number; behind: number }> {
   const { stdout } = await gitExecFileAsync(
     ['rev-list', '--left-right', '--count', `${baseOid}...${headOid}`],

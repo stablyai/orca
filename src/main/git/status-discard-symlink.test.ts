@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, rm, symlink, writeFile, access, readFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
+import { runGitFixture } from '../../shared/git-process-test-fixture'
 import { bulkDiscardChanges, discardChanges } from './status'
 
 const tempRoots: string[] = []
@@ -118,7 +119,13 @@ describe('discardChanges symlink safety', () => {
     const { repo } = await createRepoWithOutsideDirectory()
     await writeFile(path.join(repo, globNamedFile), 'selected')
     await writeFile(path.join(repo, globMatchedFile), 'keep')
-    execFileSync('git', ['add', gitLiteralPathspec(globNamedFile), globMatchedFile], { cwd: repo })
+    await runGitFixture(repo, [
+      'add',
+      '-f',
+      '--',
+      gitLiteralPathspec(globNamedFile),
+      globMatchedFile
+    ])
     execFileSync('git', ['commit', '-q', '-m', 'track log fixtures'], { cwd: repo })
     await writeFile(path.join(repo, globNamedFile), 'selected modified')
     await writeFile(path.join(repo, globMatchedFile), 'keep modified')

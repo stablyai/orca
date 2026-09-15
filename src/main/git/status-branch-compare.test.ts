@@ -382,11 +382,11 @@ describe('getBranchCompare', () => {
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
-      { cwd: '/repo' }
+      expect.objectContaining({ cwd: '/repo', allowExplicitBareRepositoryRetry: true })
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', '--end-of-options', 'refs/remotes/origin/main'],
-      { cwd: '/repo' }
+      expect.objectContaining({ cwd: '/repo', allowExplicitBareRepositoryRetry: true })
     )
   })
 

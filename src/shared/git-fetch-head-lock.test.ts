@@ -29,12 +29,21 @@ describe('runWithGitFetchHeadLock', () => {
   // Why resolve() rather than a literal: the subject resolves these through path.resolve, so a
   // POSIX literal asserts the separator of the machine running the suite instead of the behaviour.
   it('resolves -C and --git-dir before deriving the lock identity', () => {
+    const initialCwd = path.resolve('/tmp')
+    const repoCwd = path.resolve(initialCwd, 'repo')
     expect(resolveGitFetchHeadCommand(['-C', 'repo', 'fetch'], '/tmp')).toMatchObject({
-      cwd: path.resolve('/tmp', 'repo'),
+      cwd: repoCwd,
       needsLock: true
     })
     expect(resolveGitFetchHeadCommand(['--git-dir=/repo/.git', 'fetch'], '/tmp')).toMatchObject({
-      gitDir: path.resolve('/tmp', '/repo/.git'),
+      gitDir: path.resolve('/repo/.git'),
+      needsLock: true
+    })
+    expect(
+      resolveGitFetchHeadCommand(['--git-dir=.', '-C', 'repo', 'fetch'], '/tmp')
+    ).toMatchObject({
+      cwd: repoCwd,
+      gitDir: repoCwd,
       needsLock: true
     })
   })

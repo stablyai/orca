@@ -6,12 +6,16 @@ import {
   runWithGitFetchHeadLock
 } from '../../../shared/git-fetch-head-lock'
 import {
+  explicitBareRepositoryRetryArgs,
+  runWithExplicitBareRepositoryRetry
+} from '../../../shared/git-bare-repository-command'
+import {
   isWslLinkedWorktreeGitRoutingCandidate,
   prepareWslLinkedWorktreeGitRouting
 } from '../wsl-linked-worktree-git-routing'
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import { annotateWslHostFailure } from './wsl-host-failure'
-import type { GitAdmissionTier, GitExecOptions } from './git-exec-options'
+import type { GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './exec-file-capture'
 import {
   pendingWslDirectGitReadEnvironment,
@@ -120,6 +124,12 @@ async function gitExecFileAsyncUnlocked(
             !isQuietGitControlFlowExit(error) &&
             !options.signal?.aborted
           ) {
+            if (
+              options.allowExplicitBareRepositoryRetry &&
+              explicitBareRepositoryRetryArgs(args, error)
+            ) {
+              throw error
+            }
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
             const fallback = resolveGitCommand(
@@ -166,15 +176,16 @@ export function gitExecFileAsync(
   args: string[],
   options: GitExecOptions
 ): Promise<{ stdout: string; stderr: string }> {
-  const command = resolveGitFetchHeadCommand(args, options.cwd)
-  return command.needsLock
-    ? runWithGitFetchHeadLock(
-        command.cwd,
-        options.signal,
-        () => gitExecFileAsyncUnlocked(args, options),
-        command.gitDir
-      )
-    : gitExecFileAsyncUnlocked(args, options)
+  const execute = (commandArgs: string[]) => {
+    const run = () => gitExecFileAsyncUnlocked(commandArgs, options)
+    const command = resolveGitFetchHeadCommand(commandArgs, options.cwd)
+    return command.needsLock
+      ? runWithGitFetchHeadLock(command.cwd, options.signal, run, command.gitDir)
+      : run()
+  }
+  return options.allowExplicitBareRepositoryRetry
+    ? runWithExplicitBareRepositoryRetry(args, execute, options.explicitBareRepositoryReadState)
+    : execute(args)
 }
 
 /**
@@ -183,69 +194,77 @@ export function gitExecFileAsync(
  */
 export async function gitExecFileAsyncBuffer(
   args: string[],
-  options: {
-    cwd: string
-    maxBuffer?: number
-    timeout?: number
-    timeoutMsForTest?: number
-    env?: NodeJS.ProcessEnv
-    wslDistro?: string
-    preferWslDirectGit?: boolean
-    admissionTier?: GitAdmissionTier
-  }
+  options: Pick<
+    GitExecOptions,
+    | 'cwd'
+    | 'maxBuffer'
+    | 'timeout'
+    | 'timeoutMsForTest'
+    | 'env'
+    | 'wslDistro'
+    | 'preferWslDirectGit'
+    | 'admissionTier'
+    | 'allowExplicitBareRepositoryRetry'
+    | 'explicitBareRepositoryReadState'
+  >
 ): Promise<{ stdout: Buffer }> {
-  return withGitSpan({ args, cwd: options.cwd }, async (span) => {
-    if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
-      await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro)
-    }
-    const readEnvironmentReady = pendingWslDirectGitReadEnvironment(args, options)
-    if (readEnvironmentReady) {
-      await readEnvironmentReady
-    }
-    // `git show` is a read, so this normally runs with no shell at all. The fence
-    // still matters for the login-shell fallback: these are raw blob bytes going
-    // straight to the diff/blob viewer, where a banner becomes file content.
-    let resolved = resolveGitCommand(args, options, false, true)
-    const environmentReady = prepareWindowsHostGitEnvironment(resolved, undefined)
-    if (environmentReady) {
-      await environmentReady
-    }
-    resolved = resolveGitCommand(args, options, false, true)
-    const grant = await acquireGitAdmission({
-      args,
-      cwd: options.cwd,
-      wslDistro: options.wslDistro,
-      tier: options.admissionTier
-    })
-    span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
-    const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
-    let termination: Promise<void> | null = null
-    try {
-      let reportTerminated: () => void = () => {}
-      termination = new Promise<void>((resolve) => {
-        reportTerminated = resolve
-      })
-      const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
-        cwd: resolved.cwd,
-        encoding: 'buffer',
-        maxBuffer: options.maxBuffer,
-        timeout: timeoutMs,
-        env: untranslatedGitOutputEnv(options.env),
-        admissionTier: options.admissionTier,
-        onChildTerminated: reportTerminated,
-        ...(timeoutMs === undefined
-          ? {}
-          : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })
-      })) as { stdout: Buffer }
-      return { stdout: readCapturedGitBuffer(stdout, resolved) }
-    } finally {
-      if (termination) {
-        void termination.then(grant.release)
-      } else {
-        grant.release()
+  const execute = async (commandArgs: string[]): Promise<{ stdout: Buffer }> => {
+    return withGitSpan({ args: commandArgs, cwd: options.cwd }, async (span) => {
+      if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
+        await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro)
       }
-    }
-  })
+      const readEnvironmentReady = pendingWslDirectGitReadEnvironment(commandArgs, options)
+      if (readEnvironmentReady) {
+        await readEnvironmentReady
+      }
+      // `git show` is a read, so this normally runs with no shell at all. The fence
+      // still matters for the login-shell fallback: these are raw blob bytes going
+      // straight to the diff/blob viewer, where a banner becomes file content.
+      let resolved = resolveGitCommand(commandArgs, options, false, true)
+      const environmentReady = prepareWindowsHostGitEnvironment(resolved, undefined)
+      if (environmentReady) {
+        await environmentReady
+      }
+      resolved = resolveGitCommand(commandArgs, options, false, true)
+      const grant = await acquireGitAdmission({
+        args: commandArgs,
+        cwd: options.cwd,
+        wslDistro: options.wslDistro,
+        tier: options.admissionTier
+      })
+      span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
+      const timeoutMs = gitCommandTimeoutMs(commandArgs, options.timeout, options.timeoutMsForTest)
+      let termination: Promise<void> | null = null
+      try {
+        let reportTerminated: () => void = () => {}
+        termination = new Promise<void>((resolve) => {
+          reportTerminated = resolve
+        })
+        const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
+          cwd: resolved.cwd,
+          encoding: 'buffer',
+          maxBuffer: options.maxBuffer,
+          timeout: timeoutMs,
+          env: untranslatedGitOutputEnv(options.env),
+          admissionTier: options.admissionTier,
+          onChildTerminated: reportTerminated,
+          ...(timeoutMs === undefined
+            ? {}
+            : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })
+        })) as { stdout: Buffer }
+        return { stdout: readCapturedGitBuffer(stdout, resolved) }
+      } finally {
+        if (termination) {
+          void termination.then(grant.release)
+        } else {
+          grant.release()
+        }
+      }
+    })
+  }
+  return options.allowExplicitBareRepositoryRetry
+    ? runWithExplicitBareRepositoryRetry(args, execute, options.explicitBareRepositoryReadState)
+    : execute(args)
 }
 
 /**
