@@ -22,6 +22,12 @@ export type MonacoE2EProbe = {
   restoreScrollTop: (scrollTop: number) => void
   runLegacySetValueAppend: (suffix: string) => void
   snapshot: () => MonacoE2ESnapshot
+  // Why: lets e2e specs dispatch real mouse events (e.g. Cmd/Ctrl+Click) at a
+  // text position instead of only asserting through synthetic APIs.
+  getClientPointForPosition: (position: { lineNumber: number; column: number }) => {
+    x: number
+    y: number
+  } | null
 }
 
 export function installMonacoE2EProbe(
@@ -61,6 +67,15 @@ export function installMonacoE2EProbe(
       // Why: the legacy setValue control can perturb Monaco's pixel rounding;
       // paired fixed-path measurements must start from the recorded geometry.
       editorInstance.setScrollTop(scrollTop)
+    },
+    getClientPointForPosition: (position) => {
+      editorInstance.revealPositionInCenterIfOutsideViewport(position)
+      const visible = editorInstance.getScrolledVisiblePosition(position)
+      if (!visible) {
+        return null
+      }
+      const rect = editorInstance.getContainerDomNode().getBoundingClientRect()
+      return { x: rect.left + visible.left, y: rect.top + visible.top + visible.height / 2 }
     },
     snapshot: (): MonacoE2ESnapshot => {
       const container = editorInstance.getContainerDomNode()
