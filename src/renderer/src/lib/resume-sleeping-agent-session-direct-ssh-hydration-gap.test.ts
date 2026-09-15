@@ -104,6 +104,25 @@ describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
+  it.each(['offline', 'error', 'conflict'] as const)(
+    'preserves the record through %s and resumes once after a successful retry',
+    (phase) => {
+      const record = seedColdDirectSshStart()
+      useAppStore.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, { phase, direction: 'pull' })
+      for (let attempt = 0; attempt < 3; attempt++) {
+        expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
+      }
+      expect(resumedTabCount(WORKTREE_ID)).toBe(0)
+      expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+
+      useAppStore.getState().markRemoteWorkspaceHydrated(TARGET_ID)
+      useAppStore.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, { phase: 'synced' })
+      expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(1)
+      expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
+      expect(resumedTabCount(WORKTREE_ID)).toBe(1)
+    }
+  )
+
   it('wakes the same session once the host answers and holds no pane for it', () => {
     const record = seedColdDirectSshStart()
     resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)

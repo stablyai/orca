@@ -8,7 +8,7 @@ import {
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { workspaceSessionPartitionHostId } from '../../shared/workspace-session-partition-owner'
+import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -47,59 +47,34 @@ export class RuntimeWorkspaceSessionController {
       return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    const repo = store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
-    // Why: SSH worktrees keep their own `ssh:<targetId>` partition here while the renderer writes
-    // them to 'local'; the shared owner map records that divergence (#12723).
-    return repo
-      ? workspaceSessionPartitionHostId(getRepoExecutionHostId(repo), 'host-partition')
-      : LOCAL_EXECUTION_HOST_ID
-  }
-
-  private resolveHostId(
-    worktreeId: string,
-    preferredHostId: ExecutionHostId,
-    persistedHostIds: readonly ExecutionHostId[],
-    getWorkspaceSession: (hostId: ExecutionHostId) => WorkspaceSessionState
-  ): ExecutionHostId {
-    const hasPersistedTabs = (hostId: ExecutionHostId): boolean =>
-      (getWorkspaceSession(hostId).tabsByWorktree[worktreeId]?.length ?? 0) > 0
-    // Why: only runtime environment ids rotate across relay restarts. An empty SSH or
-    // local partition is the truth, and `repoId::path` repeats across hosts, so a
-    // same-id workspace elsewhere must never be adopted as this one's owner.
-    if (
-      parseExecutionHostId(preferredHostId)?.kind !== 'runtime' ||
-      hasPersistedTabs(preferredHostId)
-    ) {
-      return preferredHostId
+    const repoId = getRepoIdFromWorktreeId(resolvedWorktreeId)
+    const repos = store.getRepos?.() ?? []
+    const routing = resolveWorktreeHostRouting(repos, { repoId })
+    if (routing.kind === 'ambiguous') {
+      return null
     }
-    const persistedOwners = persistedHostIds.filter(
-      (hostId) => hostId !== preferredHostId && hasPersistedTabs(hostId)
-    )
-    return persistedOwners.length === 1 ? persistedOwners[0]! : preferredHostId
+    return routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID
   }
 
   tryGetHostId(worktreeId: string): ExecutionHostId | null {
     const store = this.deps.getStore()
-    if (!store) {
-      return null
+    // Partition contents cannot prove that two execution hosts are the same host.
+    const hostId = store ? this.getPreferredHostId(worktreeId, store) : null
+    // Existing callers default a missing partition to local; ambiguity must not take that path.
+    if (store && !hostId && parseWorkspaceKey(worktreeId)?.type !== 'folder') {
+      throw new Error('worktree_execution_host_unresolved')
     }
-    const preferredHostId = this.getPreferredHostId(worktreeId, store)
-    if (!preferredHostId) {
-      return null
-    }
-    const persistedHostIds = store?.getWorkspaceSessionHostIds?.()
-    if (!store.getWorkspaceSession || !persistedHostIds) {
-      return preferredHostId
-    }
-    return this.resolveHostId(worktreeId, preferredHostId, persistedHostIds, (hostId) =>
-      store.getWorkspaceSession!(hostId)
-    )
+    return hostId
   }
 
   getHostId(worktreeId: string): ExecutionHostId {
     const hostId = this.tryGetHostId(worktreeId)
     if (!hostId) {
-      throw new Error('folder_workspace_not_found')
+      throw new Error(
+        parseWorkspaceKey(worktreeId)?.type === 'folder'
+          ? 'folder_workspace_not_found'
+          : 'worktree_execution_host_unresolved'
+      )
     }
     return hostId
   }
@@ -139,23 +114,6 @@ export class RuntimeWorkspaceSessionController {
       return new Map()
     }
     const repos = store?.getRepos?.() ?? []
-    const repoHostIdByRepoId = new Map(
-      repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
-    )
-    const folderHostIdByWorkspaceId = new Map(
-      (store?.getFolderWorkspaces?.() ?? []).map((workspace) => {
-        const explicitHostId =
-          workspace.executionHostId != null
-            ? (parseExecutionHostId(workspace.executionHostId)?.id ?? null)
-            : null
-        const connectionId = explicitHostId ? null : this.deps.resolveFolderConnectionId(workspace)
-        return [
-          workspace.id,
-          explicitHostId ??
-            (connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID)
-        ] as const
-      })
-    )
     const hostIds = new Set<ExecutionHostId>(['local'])
     for (const repo of repos) {
       hostIds.add(getRepoExecutionHostId(repo))
@@ -175,20 +133,7 @@ export class RuntimeWorkspaceSessionController {
     }
     for (const [hostId, session] of sessionsByHostId) {
       for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-        const scope = parseWorkspaceKey(worktreeId)
-        const catalogOwnerHostId =
-          scope?.type === 'folder'
-            ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
-            : (repoHostIdByRepoId.get(
-                getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
-              ) ?? LOCAL_EXECUTION_HOST_ID)
-        const ownerHostId = this.resolveHostId(
-          worktreeId,
-          catalogOwnerHostId ?? LOCAL_EXECUTION_HOST_ID,
-          [...sessionsByHostId.keys()],
-          (candidateHostId) =>
-            sessionsByHostId.get(candidateHostId) ?? store.getWorkspaceSession!(candidateHostId)
-        )
+        const ownerHostId = this.getPreferredHostId(worktreeId, store)
         if (
           ownerHostId === hostId &&
           (includeAllPersistedWorktrees ||

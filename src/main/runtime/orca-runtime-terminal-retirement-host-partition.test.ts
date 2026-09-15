@@ -175,7 +175,7 @@ function syncSshSplit(runtime: OrcaRuntimeService, snapshot: RuntimeMobileSessio
 }
 
 describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', () => {
-  it('routes a stale catalog owner to the unique persisted session owner', async () => {
+  it('does not treat a unique foreign partition as proof of catalog host rotation', async () => {
     const staleHostId: ExecutionHostId = 'runtime:stale-host'
     const persistedTab = {
       id: 'tab',
@@ -233,12 +233,11 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       leafId: 'leaf'
     })
 
-    await expect(
-      runtime.closeMobileSessionTab(`id:${SSH_WORKTREE_ID}`, 'tab')
-    ).resolves.toMatchObject({
-      closed: true
-    })
-    expect(sessions.get(LOCAL_EXECUTION_HOST_ID)?.tabsByWorktree[SSH_WORKTREE_ID]).toEqual([])
+    const localBefore = sessions.get(LOCAL_EXECUTION_HOST_ID)
+    await expect(runtime.closeMobileSessionTab(`id:${SSH_WORKTREE_ID}`, 'tab')).rejects.toThrow(
+      'tab_not_found'
+    )
+    expect(sessions.get(LOCAL_EXECUTION_HOST_ID)).toBe(localBefore)
     expect(sessions.get(staleHostId)?.tabsByWorktree[SSH_WORKTREE_ID]).toEqual([])
   })
 
@@ -322,7 +321,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
     expect(Object.keys(local.sleepingAgentSessionsByPaneKey ?? {})).toEqual(['local-tab:leaf'])
   })
 
-  it('clears resume records from the partition that owned the tabs when the catalog owner rotated', async () => {
+  it('preserves foreign resume records when catalog host rotation is unproven', async () => {
     const staleHostId: ExecutionHostId = 'runtime:stale-host'
     const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
       [
@@ -359,14 +358,15 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.registerPty(SSH_PTY_LEFT, SSH_WORKTREE_ID, null, { tabId: 'tab', leafId: 'left' })
 
+    const localBefore = sessions.get(LOCAL_EXECUTION_HOST_ID)
     await expect(runtime.closeTerminalsForWorktree(`id:${SSH_WORKTREE_ID}`)).resolves.toMatchObject(
-      { closed: 1 }
+      { closed: 0, stopped: 0 }
     )
-    expect(sessions.get(LOCAL_EXECUTION_HOST_ID)?.tabsByWorktree[SSH_WORKTREE_ID]).toEqual([])
-    expect(sessions.get(LOCAL_EXECUTION_HOST_ID)?.terminalPtyIncarnationsByPaneKey).toEqual({})
+    expect(sessions.get(LOCAL_EXECUTION_HOST_ID)).toBe(localBefore)
+    expect(localBefore?.terminalPtyIncarnationsByPaneKey).toEqual({ 'tab:left': 'incarnation-1' })
   })
 
-  it('hydrates the persisted owner when a folder host is absent from the host index', () => {
+  it('does not hydrate local folder tabs into an absent runtime host partition', () => {
     const folderWorktreeId = 'folder:folder-1'
     const localSession = {
       ...getDefaultWorkspaceSession(),
@@ -405,7 +405,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
 
     const targets = controller.getHydrationTargets(true)
 
-    expect(targets.get(folderWorktreeId)).toBe(localSession)
+    expect(targets.has(folderWorktreeId)).toBe(false)
   })
 
   it('waits for provider retirement on a direct worktree stop', async () => {
