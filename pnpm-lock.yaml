@@ -116,7 +116,7 @@ patchedDependencies:
   '@xterm/addon-webgl@0.20.0-beta.299': 94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e
   '@xterm/xterm@6.1.0-beta.303': 1f36ce689bc50c703ae09aeda0e064f107e18e4a5ecba19e746fa5edc4b02ef4
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
-  node-pty@1.1.0: df529c6811e4c63c97faf9fe1cccc3b0d837af99f13f1e94d133436fab0e0dc3
+  node-pty@1.1.0: 11fd568fe4ee1001ecdd75e603deeb472fd83b1e7913dd962c2867f50f678941
 
 importers:
 
@@ -160,7 +160,7 @@ importers:
         version: 3.3.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=df529c6811e4c63c97faf9fe1cccc3b0d837af99f13f1e94d133436fab0e0dc3)
+        version: 1.1.0(patch_hash=11fd568fe4ee1001ecdd75e603deeb472fd83b1e7913dd962c2867f50f678941)
       posthog-node:
         specifier: ^5.33.3
         version: 5.33.3
@@ -13014,7 +13014,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=df529c6811e4c63c97faf9fe1cccc3b0d837af99f13f1e94d133436fab0e0dc3):
+  node-pty@1.1.0(patch_hash=11fd568fe4ee1001ecdd75e603deeb472fd83b1e7913dd962c2867f50f678941):
     dependencies:
       node-addon-api: 7.1.1
 

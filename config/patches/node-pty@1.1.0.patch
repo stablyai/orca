@@ -58,7 +58,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
        ]
      }, { # OS!="win"
        'targets': [
-@@ -88,6 +85,16 @@
+@@ -88,6 +85,23 @@
                'libraries!': [
                  '-lutil'
                ]
@@ -69,8 +69,15 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
 +            # libc's compat aliases at build time) so openpty/forkpty/
 +            # pthread_sigmask still resolve on Ubuntu 20.04 (glibc 2.31).
 +            ['OS=="linux"', {
-+              'ldflags': [
-+                '-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0,--as-needed'
++              'variables': {
++                'orca_glibc': '<!("<(python)" scripts/orca-glibc.py)'
++              },
++              'conditions': [
++                ['orca_glibc==1', {
++                  'ldflags': [
++                    '-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0,--as-needed'
++                  ]
++                }]
 +              ]
              }]
            ]
@@ -305,7 +312,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
 + * launch. Pin these to the pre-merge version glibc still ships as a compat
 + * alias; the binding.gyp ldflags force libutil/libpthread into DT_NEEDED so
 + * those aliases are actually loaded on the target. */
-+#if defined(__linux__)
++#if defined(__linux__) && defined(__GLIBC__)
 +#  if defined(__x86_64__)
 +#    define ORCA_GLIBC_COMPAT_VERSION "GLIBC_2.2.5"
 +#  elif defined(__aarch64__)
@@ -1419,3 +1426,24 @@ index 13f6c6d..eda63c8 100644
 +
      this._forwardEvents();
    }
+diff --git a/scripts/orca-glibc.py b/scripts/orca-glibc.py
+new file mode 100644
+--- /dev/null
++++ b/scripts/orca-glibc.py
+@@ -0,0 +1,16 @@
++import os
++import re
++import shlex
++import subprocess
++
++# Match GYP's target C++ compiler and flags, including cross-compiler/sysroot wrappers.
++compiler = os.environ.get("CXX_target") or os.environ.get("CXX") or "g++"
++flags = shlex.split(os.environ.get("CPPFLAGS", "")) + shlex.split(os.environ.get("CXXFLAGS", ""))
++result = subprocess.run(
++    shlex.split(compiler) + flags + ["-dM", "-E", "-x", "c++", "-"],
++    input="#include <features.h>\n",
++    text=True,
++    stdout=subprocess.PIPE,
++    check=True,
++)
++print(int(re.search(r"^#define __GLIBC__ ", result.stdout, re.MULTILINE) is not None))

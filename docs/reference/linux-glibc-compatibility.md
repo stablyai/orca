@@ -61,7 +61,12 @@ resolve from libc's compat aliases at build time, it drops `libutil`/`libpthread
 from `DT_NEEDED`. On the target those libraries are where the symbols actually
 live, so the patch's `binding.gyp` `ldflags` force
 `-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0` back into `DT_NEEDED`.
-The shim is guarded by `#if defined(__linux__)`; macOS and Windows are untouched.
+The shim is guarded by `#if defined(__linux__) && defined(__GLIBC__)`.
+On Linux, `binding.gyp` probes the target C++ compiler through the patched
+`scripts/orca-glibc.py` before adding the glibc SONAME flags. The probe respects
+`CXX_target`/`CXX` and `CPPFLAGS`/`CXXFLAGS`, including wrappers and sysroots,
+and a failed compiler probe stops configuration. Musl builds use unversioned
+symbols and their normal linker dependencies; macOS and Windows are untouched.
 
 **2. Gate packaging (the regression guard).**
 [`config/scripts/verify-linux-glibc-floor.cjs`](../../config/scripts/verify-linux-glibc-floor.cjs)
