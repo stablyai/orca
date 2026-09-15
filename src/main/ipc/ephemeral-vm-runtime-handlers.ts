@@ -1,18 +1,17 @@
 import { app, ipcMain } from 'electron'
+import {
+  runEphemeralVmRuntimeOperation,
+  runEphemeralVmWorkspaceOperation
+} from '../ephemeral-vm-runtime-operation'
 import type { Store } from '../persistence'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
 } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import {
-  getEphemeralVmRecipeResultConnection,
-  getEphemeralVmRecipeResultPairingCode
-} from '../../shared/ephemeral-vm-recipes'
-import {
-  removeEnvironment,
-  updateEnvironmentFromPairingCode
-} from '../../shared/runtime-environment-store'
+import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
+import { removeEnvironment } from '../../shared/runtime-environment-store'
+import { synchronizeEphemeralVmRuntimePairing } from '../ephemeral-vm-runtime-pairing'
 import {
   cleanupEphemeralVmRuntime,
   resumeEphemeralVmRuntime,
@@ -69,57 +68,59 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:cleanup',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
       const userDataPath = app.getPath('userData')
-      const runtime = listEphemeralVmRuntimes(userDataPath).find(
-        (entry) => entry.id === args.runtimeId
-      )
-      if (!runtime) {
-        throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
-      }
-      if (!runtime.repoId) {
-        throw new Error(`Ephemeral VM runtime has no repo id: ${args.runtimeId}`)
-      }
-      let result
-      if (runtime.cleanupStatus === 'succeeded') {
-        result = { ok: true as const, runtime, skipped: false }
-      } else {
-        let resolved: ReturnType<typeof getRuntimeRecipeContext>
-        try {
-          resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
-        } catch (error) {
-          const failed = updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-            status: 'cleanup_failed',
-            cleanupStatus: 'failed',
-            cleanupLastAttemptAt: Date.now(),
-            cleanupLastError: error instanceof Error ? error.message : String(error)
-          })
-          return removeEphemeralVmRuntimeSshTarget({
+      return runEphemeralVmRuntimeOperation(userDataPath, args.runtimeId, async () => {
+        const runtime = listEphemeralVmRuntimes(userDataPath).find(
+          (entry) => entry.id === args.runtimeId
+        )
+        if (!runtime) {
+          throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
+        }
+        if (!runtime.repoId) {
+          throw new Error(`Ephemeral VM runtime has no repo id: ${args.runtimeId}`)
+        }
+        let result
+        if (runtime.cleanupStatus === 'succeeded') {
+          result = { ok: true as const, runtime, skipped: false }
+        } else {
+          let resolved: ReturnType<typeof getRuntimeRecipeContext>
+          try {
+            resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+          } catch (error) {
+            const failed = updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+              status: 'cleanup_failed',
+              cleanupStatus: 'failed',
+              cleanupLastAttemptAt: Date.now(),
+              cleanupLastError: error instanceof Error ? error.message : String(error)
+            })
+            return removeEphemeralVmRuntimeSshTarget({
+              userDataPath,
+              runtime: failed,
+              removeTarget: removeRuntimeOwnedSshTarget
+            })
+          }
+          result = await cleanupEphemeralVmRuntime({
             userDataPath,
-            runtime: failed,
-            removeTarget: removeRuntimeOwnedSshTarget
+            repoPath: resolved.repo.repo.path,
+            recipe: resolved.recipe,
+            runtimeId: runtime.id
           })
         }
-        result = await cleanupEphemeralVmRuntime({
-          userDataPath,
-          repoPath: resolved.repo.repo.path,
-          recipe: resolved.recipe,
-          runtimeId: runtime.id
-        })
-      }
-      if (result.ok && runtime.runtimeEnvironmentId) {
-        try {
-          removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
-        } catch {
-          // Cleanup of provider resources matters more than hiding a stale local
-          // environment row; users can still remove that manually.
+        if (result.ok && runtime.runtimeEnvironmentId) {
+          try {
+            removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
+          } catch {
+            // Cleanup of provider resources matters more than hiding a stale local
+            // environment row; users can still remove that manually.
+          }
         }
-      }
-      if (!result.ok) {
-        return result.runtime
-      }
-      return removeEphemeralVmRuntimeSshTarget({
-        userDataPath,
-        runtime: result.runtime,
-        removeTarget: removeRuntimeOwnedSshTarget
+        if (!result.ok) {
+          return result.runtime
+        }
+        return removeEphemeralVmRuntimeSshTarget({
+          userDataPath,
+          runtime: result.runtime,
+          removeTarget: removeRuntimeOwnedSshTarget
+        })
       })
     }
   )
@@ -157,35 +158,28 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:suspendWorkspace',
     async (_event, args: { workspaceId: string }): Promise<EphemeralVmRuntimeRecord | null> => {
       const userDataPath = app.getPath('userData')
-      const runtime = listEphemeralVmRuntimes(userDataPath).find(
-        (entry) =>
-          entry.workspaceId === args.workspaceId &&
-          entry.status !== 'cleaned' &&
-          entry.status !== 'cleanup_pending'
-      )
-      if (!runtime?.repoId) {
-        return null
-      }
-      const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
-      const result = await suspendEphemeralVmRuntime({
-        userDataPath,
-        repoPath: recipeContext.repo.repo.path,
-        recipe: recipeContext.recipe,
-        runtimeId: runtime.id
+      return runEphemeralVmWorkspaceOperation(userDataPath, args.workspaceId, async (runtime) => {
+        const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+        const result = await suspendEphemeralVmRuntime({
+          userDataPath,
+          repoPath: recipeContext.repo.repo.path,
+          recipe: recipeContext.recipe,
+          runtimeId: runtime.id
+        })
+        if (!result.ok) {
+          throw new Error(result.error)
+        }
+        // Only tear down SSH for a real suspend; a skipped suspend keeps the runtime
+        // 'running', so disconnecting would break the still-active session with no resume.
+        if (runtime.connectionMode === 'ssh' && !result.skipped) {
+          // Why: the suspend recipe already succeeded (VM is suspended), so a failed
+          // LOCAL relay teardown must NOT flip to 'suspend_failed' — that status is not
+          // resume-eligible (see resume gate below), which would strand the runtime
+          // unrecoverable. Keep 'suspended'; resume re-establishes the relay anyway.
+          await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
+        }
+        return result.runtime
       })
-      if (!result.ok) {
-        throw new Error(result.error)
-      }
-      // Only tear down SSH for a real suspend; a skipped suspend keeps the runtime
-      // 'running', so disconnecting would break the still-active session with no resume.
-      if (runtime.connectionMode === 'ssh' && !result.skipped) {
-        // Why: the suspend recipe already succeeded (VM is suspended), so a failed
-        // LOCAL relay teardown must NOT flip to 'suspend_failed' — that status is not
-        // resume-eligible (see resume gate below), which would strand the runtime
-        // unrecoverable. Keep 'suspended'; resume re-establishes the relay anyway.
-        await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
-      }
-      return result.runtime
     }
   )
 
@@ -193,57 +187,49 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:resumeWorkspace',
     async (_event, args: { workspaceId: string }): Promise<EphemeralVmRuntimeRecord | null> => {
       const userDataPath = app.getPath('userData')
-      const runtime = listEphemeralVmRuntimes(userDataPath).find(
-        (entry) =>
-          entry.workspaceId === args.workspaceId &&
-          entry.status !== 'cleaned' &&
-          entry.status !== 'cleanup_pending'
-      )
-      if (!runtime?.repoId) {
-        return null
-      }
-      if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
-        return runtime
-      }
-      const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
-      const result = await resumeEphemeralVmRuntime({
-        userDataPath,
-        repoPath: recipeContext.repo.repo.path,
-        recipe: recipeContext.recipe,
-        runtimeId: runtime.id
-      })
-      if (!result.ok) {
-        throw new Error(result.error)
-      }
-      if (!result.skipped && runtime.runtimeEnvironmentId) {
-        const pairingCode = getEphemeralVmRecipeResultPairingCode(result.runtime.recipeResult)
-        if (!pairingCode) {
-          throw new Error('Resume result did not include an Orca Server pairing code.')
+      return runEphemeralVmWorkspaceOperation(userDataPath, args.workspaceId, async (runtime) => {
+        if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
+          if (
+            runtime.status === 'running' &&
+            synchronizeEphemeralVmRuntimePairing(userDataPath, runtime)
+          ) {
+            invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId!)
+          }
+          return runtime
         }
-        updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
-          pairingCode
+        const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+        const result = await resumeEphemeralVmRuntime({
+          userDataPath,
+          repoPath: recipeContext.repo.repo.path,
+          recipe: recipeContext.recipe,
+          runtimeId: runtime.id
         })
-        invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
-      }
-      const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
-      if (!result.skipped && connection.type === 'ssh') {
-        try {
-          const ssh = await connectRuntimeOwnedSshTarget({
-            runtimeId: result.runtime.id,
-            connection
-          })
-          return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-            connectionMode: 'ssh',
-            sshTargetId: ssh.targetId
-          })
-        } catch (error) {
-          updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-            status: 'resume_failed'
-          })
-          throw error
+        if (!result.ok) {
+          throw new Error(result.error)
         }
-      }
-      return result.runtime
+        if (!result.skipped && synchronizeEphemeralVmRuntimePairing(userDataPath, result.runtime)) {
+          invalidateRuntimeEnvironmentTransport(result.runtime.runtimeEnvironmentId!)
+        }
+        const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
+        if (!result.skipped && connection.type === 'ssh') {
+          try {
+            const ssh = await connectRuntimeOwnedSshTarget({
+              runtimeId: result.runtime.id,
+              connection
+            })
+            return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+              connectionMode: 'ssh',
+              sshTargetId: ssh.targetId
+            })
+          } catch (error) {
+            updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+              status: 'resume_failed'
+            })
+            throw error
+          }
+        }
+        return result.runtime
+      })
     }
   )
 

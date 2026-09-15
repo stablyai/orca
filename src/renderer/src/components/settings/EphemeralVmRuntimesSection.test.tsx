@@ -10,6 +10,11 @@ import {
   getVisibleEphemeralVmRuntimes
 } from './EphemeralVmRuntimesSection'
 
+const resumeMocks = vi.hoisted(() => ({ resume: vi.fn() }))
+vi.mock('@/lib/ephemeral-vm-workspace-resume', () => ({
+  resumeEphemeralVmWorkspace: resumeMocks.resume
+}))
+
 const toastMocks = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn()
@@ -309,5 +314,48 @@ describe('EphemeralVmRuntimesSection', () => {
         (button) => button.textContent === 'Retry cleanup'
       )
     ).toBe(true)
+  })
+  it('offers recovery without a sidebar row and refreshes the runtime after success', async () => {
+    const runtime = makeRuntime({ status: 'suspended', workspaceId: 'persisted-workspace' })
+    window.api.ephemeralVm.listRuntimes = vi
+      .fn()
+      .mockResolvedValueOnce([runtime])
+      .mockResolvedValue([{ ...runtime, status: 'running' }])
+    resumeMocks.resume.mockResolvedValue(undefined)
+    const container = await renderSection()
+    const button = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Resume'
+    )!
+    expect(button).toBeDefined()
+    await act(async () => {
+      button.click()
+    })
+    await vi.waitFor(() => expect(resumeMocks.resume).toHaveBeenCalledWith('persisted-workspace'))
+    await vi.waitFor(() => expect(container.textContent).toContain('Running'))
+    expect(container.textContent).not.toContain('Resume')
+  })
+  it('refreshes provider state and offers Reconnect after the catalog load fails', async () => {
+    const runtime = makeRuntime({
+      status: 'suspended',
+      workspaceId: 'workspace',
+      runtimeEnvironmentId: 'server'
+    })
+    window.api.ephemeralVm.listRuntimes = vi
+      .fn()
+      .mockResolvedValueOnce([runtime])
+      .mockResolvedValue([{ ...runtime, status: 'running' }])
+    resumeMocks.resume.mockRejectedValueOnce(
+      new Error('Could not load the resumed Cloud VM project.')
+    )
+    const container = await renderSection()
+    const button = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Resume'
+    )!
+    await act(async () => {
+      button.click()
+    })
+    await vi.waitFor(() => expect(container.textContent).toContain('Reconnect'))
+    expect(container.textContent).toContain('Running')
+    expect(toastMocks.error).toHaveBeenCalledWith('Could not load the resumed Cloud VM project.')
   })
 })

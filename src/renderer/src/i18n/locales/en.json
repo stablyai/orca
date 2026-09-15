@@ -11867,6 +11867,12 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "EphemeralVmResumeButton": {
+          "reconnect": "Reconnect",
+          "resuming": "Resuming…",
+          "resume": "Resume",
+          "failed": "Could not resume Cloud VM."
         }
       },
       "right": {

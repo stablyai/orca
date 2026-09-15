@@ -13,7 +13,11 @@ import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
 import { getEnvironmentSshStateGeneration } from '../slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '../slices/runtime-status'
 import type { RepoSlice } from './repo-state'
-import { claimRepoCatalogGeneration, isLatestRepoCatalogGeneration } from './repo-catalog-fencing'
+import {
+  claimRepoCatalogGeneration,
+  isLatestRepoCatalogGeneration,
+  RuntimeRepoCatalogSupersededError
+} from './repo-catalog-fencing'
 import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
@@ -33,7 +37,7 @@ export function createRuntimeRepoCatalogActions(
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'fetchRuntimeEnvironmentRepos'> {
   return {
-    fetchRuntimeEnvironmentRepos: async (environmentId) => {
+    fetchRuntimeEnvironmentRepos: async (environmentId, options) => {
       const requestGeneration =
         (runtimeRepoFetchGenerationByEnvironment.get(environmentId) ?? 0) + 1
       runtimeRepoFetchGenerationByEnvironment.set(environmentId, requestGeneration)
@@ -59,6 +63,9 @@ export function createRuntimeRepoCatalogActions(
           getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
           getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
         ) {
+          if (options?.rejectSuperseded) {
+            throw new RuntimeRepoCatalogSupersededError()
+          }
           return []
         }
         let finalizedHostRepos: Repo[] = []
@@ -69,6 +76,9 @@ export function createRuntimeRepoCatalogActions(
             getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
             getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
           ) {
+            if (options?.rejectSuperseded) {
+              throw new RuntimeRepoCatalogSupersededError()
+            }
             return s
           }
           // Why: skip merging a runtime env removed while this Connect-flow fetch was in flight, so purged repos aren't re-added (#8881).
@@ -149,6 +159,9 @@ export function createRuntimeRepoCatalogActions(
         scheduleSafeAutoForkSync(get, finalizedHostRepos)
         return finalizedHostRepos
       } catch (err) {
+        if (err instanceof RuntimeRepoCatalogSupersededError) {
+          throw err
+        }
         console.error(`Failed to fetch repos for runtime environment ${environmentId}:`, err)
         return []
       }

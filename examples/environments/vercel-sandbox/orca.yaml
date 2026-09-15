@@ -1,0 +1,7 @@
+environmentRecipes:
+  - id: vercel-sandbox
+    name: Vercel Sandbox
+    create: ./scripts/orca-vercel-sandbox/run.sh create
+    suspend: ./scripts/orca-vercel-sandbox/run.sh suspend
+    resume: ./scripts/orca-vercel-sandbox/run.sh resume
+    destroy: ./scripts/orca-vercel-sandbox/run.sh destroy
