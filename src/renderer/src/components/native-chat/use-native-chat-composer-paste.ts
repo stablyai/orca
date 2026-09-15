@@ -2,7 +2,6 @@ import { useCallback, useRef } from 'react'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { getAgentImageHandling } from './native-chat-image-paste'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-composer-target'
 import {
   nativeChatLocalAttachmentUnsupportedNotice,
@@ -85,7 +84,6 @@ function attachmentOwnerStillMatches(
  * a dropped paste and invites duplicate pastes.
  */
 export function useNativeChatComposerPaste({
-  agent,
   disabled,
   caret,
   resolveAttachmentOwner,
@@ -105,7 +103,6 @@ export function useNativeChatComposerPaste({
   // the captured closure would otherwise attach/insert into a guarded composer.
   const disabledRef = useRef(disabled)
   disabledRef.current = disabled
-  const acceptsImages = getAgentImageHandling(agent) === 'attachment'
 
   // Distinguishes 'empty' (no image on the clipboard — text may fall through)
   // from 'failed' (save errored — the flow must stop and say why).
@@ -140,15 +137,6 @@ export function useNativeChatComposerPaste({
     },
     [setNotice]
   )
-
-  const noteImagesUnsupported = useCallback(() => {
-    setNotice(
-      translate(
-        'components.native-chat.composer.imageUnsupported',
-        'Image paste is not supported for this agent.'
-      )
-    )
-  }, [setNotice])
 
   /** Settle the chip started at paste time, or attach directly when the paste
    *  produced no placeholder (no clipboard preview was available). */
@@ -203,10 +191,6 @@ export function useNativeChatComposerPaste({
         setNotice(nativeChatWorktreeNotReadyNotice())
         return
       }
-      if (!acceptsImages) {
-        noteImagesUnsupported()
-        return
-      }
       // Why: snapshot the caret before the async temp-file round-trip — `caret`
       // state can move (further typing/selection) while the await is in flight.
       const caretAtPaste = caret
@@ -232,11 +216,9 @@ export function useNativeChatComposerPaste({
       })()
     },
     [
-      acceptsImages,
       beginPendingImageAttachment,
       caret,
       dropPendingImageAttachment,
-      noteImagesUnsupported,
       resolveAttachmentOwner,
       saveClipboardImageForOwner,
       setCaret,
@@ -256,7 +238,7 @@ export function useNativeChatComposerPaste({
       // The in-memory thumbnail probe runs alongside the save rather than before
       // it: it answers first (it never touches disk or the network), so the chip
       // appears while the save is still in flight and text paste stays as fast.
-      const wantsPlaceholder = acceptsImages && ownerAcceptsClipboardImage(owner)
+      const wantsPlaceholder = ownerAcceptsClipboardImage(owner)
       const thumbnailPromise = wantsPlaceholder
         ? window.api.ui.readClipboardImageThumbnail().catch(() => null)
         : Promise.resolve(null)
@@ -274,10 +256,6 @@ export function useNativeChatComposerPaste({
       if (saved.status === 'saved') {
         if (owner.kind === 'not-ready') {
           setNotice(nativeChatWorktreeNotReadyNotice())
-          return
-        }
-        if (!acceptsImages) {
-          noteImagesUnsupported()
           return
         }
         settleImagePaste(pendingId, saved.tempPath, ownerConnectionId(owner), owner)
@@ -298,11 +276,9 @@ export function useNativeChatComposerPaste({
       }
     })()
   }, [
-    acceptsImages,
     beginPendingImageAttachment,
     dropPendingImageAttachment,
     insertTypedText,
-    noteImagesUnsupported,
     resolveAttachmentOwner,
     saveClipboardImageForOwner,
     setNotice,

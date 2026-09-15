@@ -8,6 +8,7 @@ import type { MobileImageSource, PickedMobileImage } from './mobile-image-source
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 
 export type AttachMobileImageDeps = {
+  readonly agent?: string | null
   readonly client: Pick<RpcClient, 'sendRequest'>
   readonly terminal: string
   readonly deviceToken: string | null
@@ -21,14 +22,12 @@ export type AttachMobileImageDeps = {
   readonly beforeTerminalSend?: (terminal: string) => Promise<boolean>
 }
 
-// Uploads a picked image to the host and pastes the resulting file path into the
-// active terminal — the same bracketed-path payload desktop image paste sends, so
-// TUIs (Claude Code, etc.) attach it exactly as a desktop paste. Returns false
-// when the user cancelled the picker.
+// Capture the terminal and agent before opening the picker.
 export async function attachMobileImageToTerminal(
   source: MobileImageSource,
   {
     client,
+    agent,
     terminal,
     deviceToken,
     getConnectionId,
@@ -46,12 +45,13 @@ export async function attachMobileImageToTerminal(
   const imagePath = await saveMobileClipboardImageAsTempFile(client, picked.base64, {
     connectionId
   })
-  // Why: a generated image path is terminal image injection, so it's always
-  // bracketed (matching desktop paste) regardless of terminal mode.
   // Always separated: attach-then-type is the whole interaction here, so the user's
   // next keystroke would otherwise glue onto the path (`…pngadd`). Unlike native
   // chat there is no batch to look ahead in, and a trailing space is inert.
-  const payload = separateImagePasteFromFollowingText(buildMobileImagePastePayload(imagePath), true)
+  const payload = separateImagePasteFromFollowingText(
+    buildMobileImagePastePayload(imagePath, agent),
+    true
+  )
   if (beforeTerminalSend && !(await beforeTerminalSend(terminal))) {
     return false
   }

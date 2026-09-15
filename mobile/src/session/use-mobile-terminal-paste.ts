@@ -1,3 +1,4 @@
+import { separateImagePasteFromFollowingText } from '../../../src/shared/image-paste-following-text'
 import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback, type RefObject } from 'react'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
@@ -72,6 +73,7 @@ function buildMobileTerminalClipboardTextPayload(
 }
 
 type UseMobileTerminalPasteOptions = {
+  readonly agent?: string | null
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
   readonly activeSessionTabTypeRef: RefObject<string | null>
@@ -92,6 +94,7 @@ type UseMobileTerminalPasteOptions = {
 
 export function useMobileTerminalPaste({
   activeHandle,
+  agent,
   activeHandleRef,
   activeSessionTabTypeRef,
   canSend,
@@ -132,7 +135,10 @@ export function useMobileTerminalPaste({
         const imagePath = await saveMobileClipboardImageAsTempFile(client, base64, {
           connectionId
         })
-        payload = buildMobileImagePastePayload(imagePath)
+        payload = separateImagePasteFromFollowingText(
+          buildMobileImagePastePayload(imagePath, agent),
+          true
+        )
       }
 
       const wrappedBytes = new TextEncoder().encode(payload).byteLength
@@ -186,6 +192,7 @@ export function useMobileTerminalPaste({
     }
   }, [
     activeHandle,
+    agent,
     activeHandleRef,
     activeSessionTabTypeRef,
     canSend,
