@@ -13,6 +13,7 @@ import {
 } from '../../git/repo'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
+import { getLocalGitRepoAccessBlocker } from '../../git/git-safe-directory'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 
 export async function addLocalRepoFromPath(
@@ -31,10 +32,26 @@ export async function addLocalRepoFromPath(
 
   const resolvedPath = repoKind === 'git' ? getGitRepoRoot(path) : path
   const pathKey = normalizeRuntimePathForComparison(path)
+
+  const blockIfGitInaccessible = async (repoPath: string): Promise<{ error: string } | null> => {
+    // Why: isGitRepo may accept a .git marker after rev-parse fails for ownership; without this
+    // probe we persist or re-surface kind:git with zero worktrees and no remediation (#12627).
+    if (repoKind !== 'git') {
+      return null
+    }
+    const accessBlocker = await getLocalGitRepoAccessBlocker(repoPath)
+    return accessBlocker ? { error: accessBlocker } : null
+  }
+
   const existing = store
     .getRepos()
     .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
   if (existing) {
+    // Why: re-add of a pre-fix empty record must surface safe.directory, not silently "succeed".
+    const blocked = await blockIfGitInaccessible(existing.path)
+    if (blocked) {
+      return blocked
+    }
     return { repo: existing, alreadyExisted: true }
   }
 
@@ -47,6 +64,10 @@ export async function addLocalRepoFromPath(
           !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
       )
     if (existingAfterRootResolve) {
+      const blocked = await blockIfGitInaccessible(existingAfterRootResolve.path)
+      if (blocked) {
+        return blocked
+      }
       return { repo: existingAfterRootResolve, alreadyExisted: true }
     }
   }
@@ -69,8 +90,16 @@ export async function addLocalRepoFromPath(
             normalizeRuntimePathForComparison(repo.path) === mainRepoKey
         )
       if (trackedMainRepo) {
+        const blocked = await blockIfGitInaccessible(trackedMainRepo.path)
+        if (blocked) {
+          return blocked
+        }
         return { repo: trackedMainRepo, alreadyExisted: true }
       }
+    }
+    const blocked = await blockIfGitInaccessible(resolvedPath)
+    if (blocked) {
+      return blocked
     }
   }
 

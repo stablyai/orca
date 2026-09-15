@@ -9,6 +9,7 @@ import {
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
+import { getLocalGitRepoAccessBlocker } from '../git/git-safe-directory'
 import { getRepoName, isGitRepo } from '../git/repo'
 import { invalidateAuthorizedRootsCache, isENOENT } from '../ipc/filesystem-auth'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
@@ -43,12 +44,27 @@ export class RuntimeRepositoryRegistrationController {
     if (kind === 'git' && !isGitRepo(path)) {
       throw new Error(`Not a valid git repository: ${path}`)
     }
+    if (kind === 'git') {
+      // Why: marker-based isGitRepo can accept an Administrators-owned checkout while Git
+      // refuses worktree scans — same zero-worktree silent import as local repos:add (#12627).
+      const accessBlocker = await getLocalGitRepoAccessBlocker(path)
+      if (accessBlocker) {
+        throw new Error(accessBlocker)
+      }
+    }
+
     const existing = store.getRepos().find((repo) => {
       return (
         runtimePathsEqual(repo.path, path) && runtimeRepoMatchesExecutionHost(repo, executionHostId)
       )
     })
     if (existing) {
+      if (existing.kind === 'git' || kind === 'git') {
+        const accessBlocker = await getLocalGitRepoAccessBlocker(existing.path)
+        if (accessBlocker) {
+          throw new Error(accessBlocker)
+        }
+      }
       if (
         existing.executionHostId == null &&
         parseExecutionHostId(executionHostId)?.kind === 'runtime'
