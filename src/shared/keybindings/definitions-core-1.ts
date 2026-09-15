@@ -257,6 +257,15 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'sidebar.activity.toggle',
+    title: 'Toggle Activity View',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sidebar', 'activity', 'agents', 'bell', 'toggle', 'view'],
+    defaultBindings: platformBindings(['Mod+Shift+Y']),
+    allowInTerminal: true
+  },
+  {
     id: 'sidebar.focusWorktreeList',
     title: 'Focus worktree list',
     group: 'Global',
@@ -272,29 +281,6 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'floating terminal', 'terminal'],
     defaultBindings: platformBindings(['Mod+Alt+A']),
-    allowInTerminal: true
-  },
-  {
-    id: 'floatingWorkspace.maximize',
-    title: 'Maximize Floating Workspace Panel',
-    group: 'Global',
-    scope: 'global',
-    searchKeywords: [
-      'shortcut',
-      'floating',
-      'workspace',
-      'panel',
-      'floating workspace',
-      'workspace panel',
-      'maximize',
-      'expand'
-    ],
-    // Why: pairs with floatingTerminal.toggle (Cmd+Opt+A) so maximize stays one-handed; macOS-only, Linux/Windows unbound.
-    defaultBindings: {
-      darwin: ['Mod+Alt+Shift+A'],
-      linux: [],
-      win32: []
-    },
     allowInTerminal: true
   }
 ]

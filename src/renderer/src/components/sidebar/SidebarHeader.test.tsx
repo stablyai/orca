@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     openWorkspaceCreationComposerWithTourHandoff: vi.fn(),
     popoverContentProps,
     shortcutLabel,
+    activityShortcut: '⌘⇧Y' as string | null,
     toast: vi.fn()
   }
 })
@@ -22,8 +23,10 @@ const mocks = vi.hoisted(() => {
 type MockState = {
   repos: { id: string }[]
   groupBy: string
+  sidebarOpen: boolean
   sidebarBody: 'workspaces' | 'agents'
   sidebarWidth: number
+  setSidebarOpen: (open: boolean) => void
   setSidebarBody: (body: 'workspaces' | 'agents') => void
   openModal: (modal: string, data?: unknown) => void
   updateSettings: (patch: Record<string, unknown>) => void
@@ -62,6 +65,8 @@ vi.mock('./workspace-options-menu-items', () => ({
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutLabel: () => '⌘N',
+  useOptionalShortcutLabel: (actionId: string) =>
+    actionId === 'sidebar.activity.toggle' ? mocks.activityShortcut : '⌘N',
   formatOptionalPrimaryShortcutLabel: () => mocks.shortcutLabel.current
 }))
 
@@ -108,12 +113,15 @@ function createButton(): HTMLButtonElement {
 beforeEach(() => {
   mocks.openWorkspaceCreationComposerWithTourHandoff.mockClear()
   mocks.toast.mockClear()
+  mocks.activityShortcut = '⌘⇧Y'
   mocks.shortcutLabel.current = '⌘N'
   mockState = {
     repos: [],
     groupBy: 'repo',
+    sidebarOpen: true,
     sidebarBody: 'workspaces',
     sidebarWidth: 280,
+    setSidebarOpen: vi.fn(),
     setSidebarBody: vi.fn(),
     openModal: vi.fn(),
     updateSettings: vi.fn(),
@@ -214,7 +222,20 @@ describe('SidebarHeader', () => {
       activityButton?.click()
     })
 
+    expect(mockState.setSidebarOpen).toHaveBeenCalledWith(true)
     expect(mockState.setSidebarBody).toHaveBeenCalledWith('agents')
+    expect(container.textContent).toContain('View activity (⌘⇧Y)')
+  })
+
+  it('omits the chord from the activity tooltip when the action is unbound', () => {
+    mocks.activityShortcut = null
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+
+    expect(container.textContent).toContain('View activity')
+    expect(container.textContent).not.toContain('Unassigned')
+    expect(container.textContent).not.toContain('View activity (')
   })
 
   it('shows the Agents introduction only for migrated users and never offers a hide action', () => {
@@ -250,6 +271,8 @@ describe('SidebarHeader', () => {
     })
 
     expect(mockState.setSidebarBody).toHaveBeenCalledWith('workspaces')
+    expect(mockState.setSidebarOpen).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Turn off activity view (⌘⇧Y)')
   })
 
   it('uses the legacy title based on workspace grouping', () => {

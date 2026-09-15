@@ -3,6 +3,29 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
   {
+    id: 'floatingWorkspace.maximize',
+    title: 'Maximize Floating Workspace Panel',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'floating',
+      'workspace',
+      'panel',
+      'floating workspace',
+      'workspace panel',
+      'maximize',
+      'expand'
+    ],
+    // Why: pairs with floatingTerminal.toggle (Cmd+Opt+A) so maximize stays one-handed; macOS-only, Linux/Windows unbound.
+    defaultBindings: {
+      darwin: ['Mod+Alt+Shift+A'],
+      linux: [],
+      win32: []
+    },
+    allowInTerminal: true
+  },
+  {
     id: 'floatingWorkspace.minimize',
     title: 'Minimize Floating Workspace Panel',
     group: 'Global',

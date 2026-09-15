@@ -7,6 +7,7 @@ export const PLUGIN_COMMAND_ALIAS_ACTION_IDS = [
   'worktree.history.forward',
   'sidebar.left.toggle',
   'sidebar.sleepingWorkspaces.toggle',
+  'sidebar.activity.toggle',
   'floatingWorkspace.maximize',
   'tab.rename',
   'workspace.rename',
