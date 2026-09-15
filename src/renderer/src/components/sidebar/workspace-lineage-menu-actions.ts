@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 
 type WorkspaceActivityMaps = {
@@ -32,8 +33,14 @@ export function getWorkspaceLineageMenuActions(args: {
   worktrees: readonly Worktree[]
   lineageById: Record<string, WorktreeLineage>
   activity: WorkspaceActivityMaps
+  repos?: readonly Repo[]
 }): WorkspaceLineageMenuActions {
-  const { descendants } = getWorkspaceDeleteLineage(args.parent, args.worktrees, args.lineageById)
+  const { descendants } = getWorkspaceDeleteLineage(
+    args.parent,
+    args.worktrees,
+    args.lineageById,
+    args.repos
+  )
   const targets = [args.parent, ...descendants]
   return {
     descendants,
@@ -53,7 +60,7 @@ const EMPTY_LINEAGE_MENU_ACTIONS: WorkspaceLineageMenuActions = {
 export function useWorkspaceLineageMenuActions(
   args: Parameters<typeof getWorkspaceLineageMenuActions>[0] & { enabled: boolean }
 ): WorkspaceLineageMenuActions {
-  const { enabled, parent, worktrees, lineageById, activity } = args
+  const { enabled, parent, worktrees, lineageById, activity, repos } = args
   const { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree } = activity
   return useMemo(
     () =>
@@ -62,9 +69,19 @@ export function useWorkspaceLineageMenuActions(
             parent,
             worktrees,
             lineageById,
+            repos,
             activity: { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree }
           })
         : EMPTY_LINEAGE_MENU_ACTIONS,
-    [browserTabsByWorktree, enabled, lineageById, parent, ptyIdsByTabId, tabsByWorktree, worktrees]
+    [
+      browserTabsByWorktree,
+      enabled,
+      lineageById,
+      parent,
+      ptyIdsByTabId,
+      tabsByWorktree,
+      worktrees,
+      repos
+    ]
   )
 }

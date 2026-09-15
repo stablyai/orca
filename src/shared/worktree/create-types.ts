@@ -89,6 +89,7 @@ export type SparsePreset = {
 }
 
 export type CreateWorktreeArgs = {
+  executionHostId?: ExecutionHostId
   repoId: string
   name: string
   /** True only when `name` came from Orca's creature-name generator rather than the user. Gates

@@ -27,10 +27,17 @@ export function replaceWorktreeInRepoLists(
   if (!current) {
     return worktreesByRepo
   }
+  // Why: mutation replies must carry their captured owner; unstamped replies cannot overwrite stamped rows.
+  const sameIdCount = current.filter((worktree) => worktree.id === updatedWorktree.id).length
   return {
     ...worktreesByRepo,
     [repoId]: current.map((worktree) =>
-      worktree.id === updatedWorktree.id ? updatedWorktree : worktree
+      worktree.id === updatedWorktree.id &&
+      ((worktree.hostId === updatedWorktree.hostId &&
+        worktree.runtimeOwnerEnvironmentId === updatedWorktree.runtimeOwnerEnvironmentId) ||
+        (sameIdCount === 1 && !worktree.hostId && !worktree.runtimeOwnerEnvironmentId))
+        ? updatedWorktree
+        : worktree
     )
   }
 }
@@ -43,7 +50,10 @@ export function settingsForRepoOwner(
 ) {
   const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
   if (repo) {
-    return settingsForKnownRepoOwner(state.settings, repo)
+    return settingsForKnownRepoOwner(
+      state.settings,
+      honorMissingHostId && hostId ? { ...repo, executionHostId: hostId } : repo
+    )
   }
   const parsedHost = honorMissingHostId && hostId ? parseExecutionHostId(hostId) : null
   if (parsedHost?.kind === 'runtime') {

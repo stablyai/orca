@@ -7,7 +7,7 @@ import {
   getLineageRenderInfo
 } from './worktree-lineage-projection'
 import { getWorkspaceStatus } from './workspace-status'
-import { getEligibleWorktreeParents } from './worktree-parent-candidates'
+import { useWorktreeParentCount } from './use-worktree-parent-count'
 import {
   hasSleepableWorkspaceActivity,
   useWorkspaceLineageMenuActions
@@ -92,6 +92,7 @@ export function useWorktreeContextMenuModel({
   const lifecycleStartedRef = useRef(false)
   const isDeleting = deleteState?.isDeleting ?? false
   const repoMap = useRepoMap()
+  const repos = useAppStore((state) => state.repos)
   const worktreeMap = useWorktreeMap()
   const allWorktrees = useAllWorktrees()
   // Why: these maps feed only items rendered inside the OPEN dropdown, yet delete
@@ -146,7 +147,8 @@ export function useWorktreeContextMenuModel({
     parent: worktree,
     worktrees: allWorktrees,
     lineageById: worktreeLineageById,
-    activity: { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree }
+    activity: { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree },
+    repos
   })
   const lineageDescendantCount = lineageMenuActions.descendants.length
   const subtreeSleepableWorktrees = lineageMenuActions.sleepableTargets
@@ -210,20 +212,15 @@ export function useWorktreeContextMenuModel({
   const hasAnyContextLineage = activeContextWorktrees.some((item) =>
     hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
   )
-  const eligibleParentCount = useMemo(
-    () =>
-      menuOpen
-        ? getEligibleWorktreeParents({
-            child: worktree,
-            worktrees: allWorktrees,
-            lineageById: worktreeLineageById,
-            worktreeMap,
-            repoMap,
-            cyclicLineageIds
-          }).length
-        : 0,
-    [allWorktrees, cyclicLineageIds, menuOpen, repoMap, worktree, worktreeLineageById, worktreeMap]
-  )
+  const eligibleParentCount = useWorktreeParentCount(menuOpen, {
+    child: worktree,
+    worktrees: allWorktrees,
+    lineageById: worktreeLineageById,
+    worktreeMap,
+    repoMap,
+    repos,
+    cyclicLineageIds
+  })
 
   const setMenuOpenState = useCallback(
     (open: boolean) => {

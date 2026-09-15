@@ -8,7 +8,18 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace-scope'
-import { getIndexedWorktreeById } from '@/store/worktree-repo-index'
+import {
+  getComposerParentCandidates,
+  getComposerLineageOwnerScope
+} from '@/components/new-workspace/composer-parent-candidates'
+import {
+  getRepoHostSummaries,
+  repoHostId,
+  worktreeMatchesHost
+} from '../listing/worktree-host-ownership'
+import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getFolderWorkspaceExecutionHostId } from '../../../../../../shared/folder-workspace-worktree'
 
 export type WorktreeCreateParentPick = {
   /** Workspace the create attaches to. Undefined once a stale pick is dropped. */
@@ -25,13 +36,35 @@ export type WorktreeCreateParentPick = {
 export function resolveWorktreeCreateParent(
   state: AppState,
   repoId: string,
-  requestedParentWorktreeId: string | undefined
+  requestedParentWorktreeId: string | undefined,
+  executionHostId: ExecutionHostId = repoHostId(state, repoId)
 ): WorktreeCreateParentPick {
+  const activeScope = parseWorkspaceKey(state.activeWorkspaceKey ?? '')
+  const activeFolder =
+    activeScope?.type === 'folder'
+      ? state.folderWorkspaces?.find((folder) => folder.id === activeScope.folderWorkspaceId)
+      : undefined
   const picked = requestedParentWorktreeId
-    ? getIndexedWorktreeById(state.worktreesByRepo, requestedParentWorktreeId)
+    ? getComposerParentCandidates(state, executionHostId, null).find(
+        (candidate) => candidate.id === requestedParentWorktreeId
+      )
     : undefined
-  const usable = picked && !picked.isArchived && picked.repoId === repoId ? picked.id : undefined
-  const pickedDisplayName = picked ? resolveWorktreeDisplayName(picked).trim() : null
+  const usable = picked?.id
+  const owners = getRepoHostSummaries(state.repos)
+  const displayRows = requestedParentWorktreeId
+    ? getIndexedWorktreesById(
+        state.worktreesByRepo,
+        requestedParentWorktreeId,
+        getComposerLineageOwnerScope(executionHostId)
+      ).filter((candidate) => {
+        const owner = owners.get(candidate.repoId)
+        return worktreeMatchesHost(candidate, executionHostId, {
+          unhostedWorktreesMatchHost: owner?.count === 1 && owner.onlyHostId === executionHostId
+        })
+      })
+    : []
+  const displayRow = displayRows.length === 1 ? displayRows[0] : undefined
+  const pickedDisplayName = displayRow ? resolveWorktreeDisplayName(displayRow).trim() : null
   if (usable) {
     return {
       parentWorkspace: worktreeWorkspaceKey(usable),
@@ -40,11 +73,10 @@ export function resolveWorktreeCreateParent(
       staleBeforeCreate: false
     }
   }
-  const activeScope = parseWorkspaceKey(state.activeWorkspaceKey ?? '')
   return {
     parentWorkspace:
-      activeScope?.type === 'folder'
-        ? folderWorkspaceKey(activeScope.folderWorkspaceId)
+      activeFolder && getFolderWorkspaceExecutionHostId(activeFolder) === executionHostId
+        ? folderWorkspaceKey(activeFolder.id)
         : undefined,
     pickedDisplayName,
     staleBeforeCreate: Boolean(requestedParentWorktreeId)

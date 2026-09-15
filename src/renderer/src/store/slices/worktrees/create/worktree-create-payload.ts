@@ -6,6 +6,7 @@ import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/type
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
+  executionHostId?: ExecutionHostId
   automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
@@ -104,6 +105,9 @@ export function buildLocalWorktreeCreateArgs(
 ): CreateWorktreeArgs {
   return {
     repoId: request.repoId,
+    ...(request.options?.executionHostId
+      ? { executionHostId: request.options.executionHostId }
+      : {}),
     ...sharedCreateFields(request, attempt),
     ...(request.startup ? { startup: request.startup } : {}),
     ...(request.creationId ? { creationId: request.creationId } : {})

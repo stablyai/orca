@@ -28,6 +28,7 @@ type QuickSubmitActionInput = Pick<
   | 'requiresExplicitSetupChoice'
   | 'resolvePendingSmartGitHubSubmit'
   | 'selectedRepo'
+  | 'selectedRepoExecutionHostId'
   | 'selectedRepoRequiresConnection'
   | 'selectedWorkspaceTarget'
   | 'setCreateError'
@@ -54,6 +55,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     requiresExplicitSetupChoice,
     resolvePendingSmartGitHubSubmit,
     selectedRepo,
+    selectedRepoExecutionHostId,
     selectedRepoRequiresConnection,
     selectedWorkspaceTarget,
     setCreateError,
@@ -115,7 +117,10 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
           repoId,
           ...(parsedLinkedIssueNumber != null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
           ...(effectiveLinkedPR != null ? { linkedPR: effectiveLinkedPR } : {}),
-          workspaceRunContext
+          workspaceRunContext,
+          executionHostId: workspaceRunContext
+            ? undefined
+            : (selectedRepoExecutionHostId ?? undefined)
         }
       )
 
@@ -171,6 +176,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       requiresExplicitSetupChoice,
       resolvePendingSmartGitHubSubmit,
       selectedRepo,
+      selectedRepoExecutionHostId,
       selectedRepoRequiresConnection,
       selectedWorkspaceTarget,
       setCreateError,

@@ -122,6 +122,7 @@ export function useWorktreePointerDrag(args: {
       suppressWorktreeClickUntilRef.current = window.performance.now() + 500
       setSidebarPointerDragDocumentStyles(true)
       session.worktreeDragSessionRef.current = {
+        sourceRowKey: drag.sourceRow.dataset.worktreeRowKey,
         draggingWorktreeId: drag.worktreeId,
         sourceGroupKey: drag.sourceGroupKey,
         draggedIds: drag.draggedIds,

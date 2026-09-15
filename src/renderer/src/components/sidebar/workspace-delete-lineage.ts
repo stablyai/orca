@@ -1,5 +1,7 @@
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { Repo } from '../../../../shared/repo-types'
+import { getRepoHostSummaries } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { getProjectedWorktreeLineageChildrenByParentId } from './worktree-lineage-projection'
 
 type WorkspaceDeleteLineage = {
@@ -10,16 +12,26 @@ type WorkspaceDeleteLineage = {
 export function getWorkspaceDeleteLineage(
   parent: Worktree,
   worktrees: readonly Worktree[],
-  lineageById: Record<string, WorktreeLineage>
+  lineageById: Record<string, WorktreeLineage>,
+  repos?: readonly Repo[]
 ): WorkspaceDeleteLineage {
   // Why (STA-4343): lineage is recorded against the bare `repoId::path` id, so a
   // colliding id resolves to one of two hosts here. A lineage child of a workspace
   // on host X is on host X, so prefer the parent's host — otherwise "delete all"
   // could route a descendant's removal at the other machine's checkout.
   const worktreeById = new Map<string, Worktree>()
+  const owners = repos ? getRepoHostSummaries(repos) : null
+  const hostFor = (worktree: Worktree) => {
+    const owner = owners?.get(worktree.repoId)
+    return worktree.hostId ?? (owner?.count === 1 ? owner.onlyHostId : undefined)
+  }
+  const parentHost = hostFor(parent)
   for (const worktree of worktrees) {
-    const claimed = worktreeById.get(worktree.id)
-    if (claimed && claimed.hostId === parent.hostId && worktree.hostId !== parent.hostId) {
+    if (
+      (owners && !parentHost) ||
+      hostFor(worktree) !== parentHost ||
+      worktree.runtimeOwnerEnvironmentId !== parent.runtimeOwnerEnvironmentId
+    ) {
       continue
     }
     worktreeById.set(worktree.id, worktree)

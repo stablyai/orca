@@ -73,6 +73,13 @@ export function resolveFolderLineageOwner(
   }
   const group = groups[0]
   const hosts = new Set<ExecutionHostId>()
+  if (folder.executionHostId) {
+    const explicitHost = parseExecutionHostId(folder.executionHostId)
+    if (!explicitHost) {
+      return remember({ status: 'ambiguous' })
+    }
+    hosts.add(explicitHost.id)
+  }
   if (folder.connectionId) {
     hosts.add(`ssh:${encodeURIComponent(folder.connectionId)}`)
   }

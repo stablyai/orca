@@ -97,7 +97,8 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const deleteLineage = getWorkspaceDeleteLineage(
     target,
     getAllWorktreesFromState(state),
-    state.worktreeLineageById
+    state.worktreeLineageById,
+    state.repos
   )
   const hasLineageChildren = deleteLineage.descendants.length > 0
   const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
@@ -149,7 +150,8 @@ export function runWorktreeBatchDelete(
       ? getWorkspaceDeleteLineage(
           targets[0],
           getAllWorktreesFromState(state),
-          state.worktreeLineageById
+          state.worktreeLineageById,
+          state.repos
         )
       : null
   const singleTargetHasLineageChildren = (singleTargetLineage?.descendants.length ?? 0) > 0

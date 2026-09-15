@@ -215,6 +215,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const request = buildQuickCreationRequest({
         repoId,
+        executionHostId: selectedRepoExecutionHostId ?? undefined,
         ephemeralVmRecipe,
         indeterminateProgress:
           Boolean(activeEphemeralVmRecipeId) ||

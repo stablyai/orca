@@ -91,6 +91,23 @@ describe('findPendingLinkedWorkItemCreationId', () => {
     ).toBeNull()
   })
 
+  it('separates non-project hosts and reuses the same host', () => {
+    const existing = request({ linkedIssue: 42, executionHostId: 'ssh:one' })
+    const entries = { existing: pending('existing', existing) }
+    expect(
+      findPendingLinkedWorkItemCreationId(
+        entries,
+        request({ linkedIssue: 42, executionHostId: 'ssh:two' })
+      )
+    ).toBeNull()
+    expect(
+      findPendingLinkedWorkItemCreationId(
+        entries,
+        request({ linkedIssue: 42, executionHostId: 'ssh:one' })
+      )
+    ).toBe('existing')
+  })
+
   it('does not deduplicate unlinked workspace creation', () => {
     expect(
       findPendingLinkedWorkItemCreationId({ existing: pending('existing', request()) }, request())

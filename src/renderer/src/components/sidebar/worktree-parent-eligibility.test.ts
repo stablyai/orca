@@ -4,7 +4,11 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
-import { getEligibleWorktreeParents, isEligibleWorktreeParent } from './worktree-parent-candidates'
+import {
+  getEligibleWorktreeParents,
+  getWorktreeOwnerHostId,
+  isEligibleWorktreeParent
+} from './worktree-parent-candidates'
 
 function makeWorktree(id: string, repoId = 'repo'): Worktree {
   return {
@@ -161,7 +165,26 @@ describe('canAssignWorktreeParent', () => {
     ).toBe(false)
   })
 
-  it('stays repo-agnostic while the picker candidate filter is repo and host scoped', () => {
+  it('uses the sole repository owner for a legacy candidate badge', () => {
+    const candidate = makeWorktree('parent')
+    const repo: Repo = {
+      id: 'repo',
+      path: '/repo',
+      displayName: 'Remote',
+      badgeColor: '',
+      addedAt: 1,
+      executionHostId: 'ssh:builder'
+    }
+    expect(getWorktreeOwnerHostId(candidate, makeRepoMap(), [repo])).toBe('ssh:builder')
+    expect(
+      getWorktreeOwnerHostId(candidate, makeRepoMap(), [
+        repo,
+        { ...repo, executionHostId: 'local' }
+      ])
+    ).toBeNull()
+  })
+
+  it('offers sibling repositories on the same host', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameRepo = makeWorktree('same-repo', 'repo-a')
     const otherRepo = makeWorktree('other-repo', 'repo-b')
@@ -186,7 +209,31 @@ describe('canAssignWorktreeParent', () => {
           { id: 'repo-b', connectionId: null, executionHostId: 'local' }
         ])
       }).map((worktree) => worktree.id)
-    ).toEqual([sameRepo.id])
+    ).toEqual([sameRepo.id, otherRepo.id])
+  })
+
+  it('accepts legacy runtime parents and rejects a cycle across mixed runtime stamps', () => {
+    const child = {
+      ...makeWorktree('child'),
+      hostId: 'runtime:env-a' as const,
+      runtimeOwnerEnvironmentId: 'env-a'
+    }
+    const parent = { ...makeWorktree('parent'), hostId: 'runtime:env-a' as const }
+    const worktrees = [child, parent]
+    const args = {
+      child,
+      worktrees,
+      lineageById: {},
+      worktreeMap: makeMap(worktrees),
+      repoMap: makeRepoMap()
+    }
+    expect(getEligibleWorktreeParents(args)).toEqual([parent])
+    expect(
+      getEligibleWorktreeParents({
+        ...args,
+        lineageById: { [parent.id]: makeLineage(parent, child) }
+      })
+    ).toEqual([])
   })
 
   it('excludes same-repo candidates owned by a different runtime host', () => {
@@ -211,7 +258,7 @@ describe('canAssignWorktreeParent', () => {
     ).toEqual([sameHost.id])
   })
 
-  it('excludes a candidate across a known project boundary for picker and direct drop checks', () => {
+  it('includes sibling projects for picker and direct drop checks', () => {
     const child = { ...makeWorktree('child'), projectId: 'project-a' }
     const sameProject = { ...makeWorktree('same-project'), projectId: 'project-a' }
     const otherProject = { ...makeWorktree('other-project'), projectId: 'project-b' }
@@ -227,7 +274,7 @@ describe('canAssignWorktreeParent', () => {
         worktreeMap,
         repoMap
       }).map((worktree) => worktree.id)
-    ).toEqual([sameProject.id])
+    ).toEqual([sameProject.id, otherProject.id])
     expect(
       isEligibleWorktreeParent({
         child,
@@ -236,7 +283,7 @@ describe('canAssignWorktreeParent', () => {
         worktreeMap,
         repoMap
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('excludes archived worktrees from picker candidates', () => {

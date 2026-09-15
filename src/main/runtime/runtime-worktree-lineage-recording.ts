@@ -7,6 +7,11 @@ import type {
 } from '../../shared/worktree/lineage-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import {
+  readFolderLineageParentHost,
+  readWorktreeLineageParentMeta
+} from '../worktree-lineage-parent'
 
 type LineageParent =
   | {
@@ -36,9 +41,19 @@ export type WorktreeLineageRecordingResolution =
   | { kind: 'none'; warnings: WorktreeLineageWarning[] }
 
 export function recordCreatedWorktreeLineage(
-  store: RuntimeStore | null,
+  store: Pick<
+    RuntimeStore,
+    | 'getRepos'
+    | 'getWorktreeMeta'
+    | 'getWorktreeMetaForHost'
+    | 'getFolderWorkspaces'
+    | 'getProjectGroups'
+    | 'setWorktreeLineage'
+    | 'setWorkspaceLineage'
+  > | null,
   worktree: Pick<Worktree, 'id' | 'instanceId'>,
-  resolution: WorktreeLineageRecordingResolution
+  resolution: WorktreeLineageRecordingResolution,
+  hostId: ExecutionHostId
 ): {
   lineage: WorktreeLineage | null
   workspaceLineage: WorkspaceLineage | null
@@ -48,6 +63,23 @@ export function recordCreatedWorktreeLineage(
   let lineage: WorktreeLineage | null = null
   let workspaceLineage: WorkspaceLineage | null = null
   if (resolution.kind !== 'lineage') {
+    return { lineage, workspaceLineage, warnings }
+  }
+
+  const parent = resolution.parent
+  const valid =
+    store &&
+    (parent.type === 'folder'
+      ? readFolderLineageParentHost(store, parent.folderWorkspace.id) === hostId
+      : Boolean(parent.instanceId) &&
+        readWorktreeLineageParentMeta(store, parent.worktree.id, hostId)?.instanceId ===
+          parent.instanceId)
+  if (!valid) {
+    warnings.push({
+      code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+      message:
+        'Worktree created without lineage because the parent workspace changed or is unavailable.'
+    })
     return { lineage, workspaceLineage, warnings }
   }
 

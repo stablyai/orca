@@ -168,6 +168,49 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('routes an explicitly selected local owner past a colliding SSH owner', async () => {
+    const remote = { ...harnessRepo, connectionId: 'remote', executionHostId: 'ssh:remote' }
+    store.getRepo.mockReturnValue(remote)
+    store.getRepos.mockReturnValue([remote, harnessRepo])
+    listWorktreesMock.mockResolvedValue(createdWorktreeList)
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      executionHostId: 'local'
+    })
+    expect(addWorktreeMock).toHaveBeenCalled()
+    expect(store.setWorktreeMetaForHost).toHaveBeenCalledWith(
+      expect.any(String),
+      'local',
+      expect.any(Object)
+    )
+  })
+
+  it('rejects a missing explicitly selected owner before creation', async () => {
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        executionHostId: 'ssh:missing'
+      })
+    ).rejects.toThrow('Repository ownership is missing, ambiguous, or contradictory')
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('explains contradictory ownership before creation', async () => {
+    store.getRepos.mockReturnValue([
+      { ...harnessRepo, executionHostId: 'local', connectionId: 'remote' }
+    ])
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        executionHostId: 'local'
+      })
+    ).rejects.toThrow('contradictory on the selected host')
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
   it('routes local worktree creation through the selected WSL project runtime', async () => {
     mockSelectedWslProjectRuntime()
     listWorktreesMock.mockResolvedValue([

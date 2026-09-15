@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { Worktree } from '../../shared/worktree/types'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { readWorkspaceLineageParent } from '../worktree-lineage-parent'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
   assertAttachableParentWorkspace,
@@ -60,10 +62,27 @@ function parentMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
 function createStore(options: {
   metaById?: Record<string, WorktreeMeta>
   folderWorkspaceIds?: string[]
+  folderHostId?: ExecutionHostId
 }) {
   const metaById = options.metaById ?? {}
   const folderWorkspaceIds = new Set(options.folderWorkspaceIds ?? [])
   return {
+    getRepos: () =>
+      ['repo-1', 'repo-2'].map((id) => ({
+        id,
+        path: '/repos',
+        displayName: id,
+        badgeColor: 'blue',
+        addedAt: 1
+      })),
+    getFolderWorkspaces: () =>
+      [...folderWorkspaceIds].map((id) => ({
+        id,
+        folderPath: `/folders/${id}`,
+        projectGroupId: 'group',
+        executionHostId: options.folderHostId
+      })),
+    getProjectGroups: () => [{ id: 'group' }],
     getWorktreeMeta: vi.fn((id: string) => metaById[id]),
     getFolderWorkspace: vi.fn((id: string) =>
       folderWorkspaceIds.has(id) ? { id, path: `/folders/${id}` } : undefined
@@ -76,13 +95,19 @@ function createStore(options: {
 function record(
   store: ReturnType<typeof createStore>,
   args: Partial<CreateWorktreeArgs>,
-  worktree = createdWorktree()
+  worktree = createdWorktree(),
+  capturedParent: { instanceId: string | null } | null = args.parentWorkspace
+    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Fixture implements every metadata and ownership reader used by this resolver.
+      readWorkspaceLineageParent(store as never, args.parentWorkspace, worktree.hostId ?? 'local')
+    : null
 ) {
   return recordWorkspaceLineageForCreatedWorktree(
     store as never,
     args as CreateWorktreeArgs,
     worktree,
-    CREATED_AT
+    CREATED_AT,
+    worktree.hostId ?? 'local',
+    capturedParent
   )
 }
 
@@ -95,7 +120,7 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
     vi.restoreAllMocks()
   })
 
-  it('writes both lineage rows for a worktree parent inside the same repo/host/project', () => {
+  it('writes both lineage rows for a worktree parent on the same host', () => {
     const store = createStore({ metaById: { [PARENT_ID]: parentMeta() } })
 
     const result = record(store, { parentWorkspace: worktreeWorkspaceKey(PARENT_ID) })
@@ -126,35 +151,51 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
     })
   })
 
-  it('skips both lineage records when the parent belongs to a different repo', () => {
+  it('writes both lineage rows when the parent belongs to another repo on the same host', () => {
     const foreignParentId = 'repo-2::/repos/parent'
     const store = createStore({ metaById: { [foreignParentId]: parentMeta() } })
 
     const result = record(store, { parentWorkspace: worktreeWorkspaceKey(foreignParentId) })
 
+    expect(store.setWorktreeLineage).toHaveBeenCalledWith(
+      CHILD_ID,
+      expect.objectContaining({ parentWorktreeId: foreignParentId })
+    )
+    expect(result.lineage).toMatchObject({ parentWorktreeId: foreignParentId })
+    expect(store.setWorkspaceLineage).toHaveBeenCalled()
+    expect(result.workspaceLineage).toMatchObject({
+      parentWorkspaceKey: worktreeWorkspaceKey(foreignParentId)
+    })
+  })
+
+  it('writes both lineage rows when the parent belongs to another project on the same host', () => {
+    const store = createStore({
+      metaById: { [PARENT_ID]: parentMeta({ projectId: 'project-2' }) }
+    })
+
+    const result = record(store, { parentWorkspace: worktreeWorkspaceKey(PARENT_ID) })
+
+    expect(store.setWorktreeLineage).toHaveBeenCalled()
+    expect(result.lineage).toMatchObject({ parentWorktreeId: PARENT_ID })
+    expect(store.setWorkspaceLineage).toHaveBeenCalled()
+    expect(result.workspaceLineage).toMatchObject({
+      parentWorkspaceKey: worktreeWorkspaceKey(PARENT_ID)
+    })
+  })
+
+  it('skips both lineage records when the parent host conflicts', () => {
+    const store = createStore({
+      metaById: { [PARENT_ID]: parentMeta({ hostId: 'ssh:other-host' }) }
+    })
+
+    const result = record(store, { parentWorkspace: worktreeWorkspaceKey(PARENT_ID) })
+
     expect(store.setWorktreeLineage).not.toHaveBeenCalled()
     expect(result.lineage).toBeNull()
+    // A persisted cross-host row makes filterLineageForHost return null for the entire host.
     expect(store.setWorkspaceLineage).not.toHaveBeenCalled()
     expect(result.workspaceLineage).toBeNull()
   })
-
-  it.each([
-    ['host', parentMeta({ hostId: 'ssh:other-host' })],
-    ['project', parentMeta({ projectId: 'project-2' })]
-  ])(
-    'skips both lineage records when the parent %s conflicts, so no cross-host row is persisted',
-    (_label, meta) => {
-      const store = createStore({ metaById: { [PARENT_ID]: meta } })
-
-      const result = record(store, { parentWorkspace: worktreeWorkspaceKey(PARENT_ID) })
-
-      expect(store.setWorktreeLineage).not.toHaveBeenCalled()
-      expect(result.lineage).toBeNull()
-      // A persisted cross-host row makes filterLineageForHost return null for the entire host.
-      expect(store.setWorkspaceLineage).not.toHaveBeenCalled()
-      expect(result.workspaceLineage).toBeNull()
-    }
-  )
 
   it('skips worktree lineage when the parent has no instance identity', () => {
     const store = createStore({ metaById: { [PARENT_ID]: parentMeta({ instanceId: undefined }) } })
@@ -163,10 +204,7 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
 
     expect(store.setWorktreeLineage).not.toHaveBeenCalled()
     expect(result.lineage).toBeNull()
-    expect(result.workspaceLineage).toMatchObject({
-      parentWorkspaceKey: worktreeWorkspaceKey(PARENT_ID),
-      parentInstanceId: null
-    })
+    expect(result.workspaceLineage).toBeNull()
   })
 
   it('records only workspace lineage for a folder-workspace parent', () => {
@@ -181,6 +219,41 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
       parentInstanceId: null,
       capture: { source: 'active-workspace', confidence: 'explicit' }
     })
+  })
+
+  it('rejects a foreign-host folder for an unstamped local child', () => {
+    const store = createStore({ folderWorkspaceIds: ['folder-1'], folderHostId: 'ssh:remote' })
+    expect(
+      record(
+        store,
+        { parentWorkspace: folderWorkspaceKey('folder-1') },
+        createdWorktree({ hostId: undefined })
+      )
+    ).toEqual({ lineage: null, workspaceLineage: null })
+  })
+
+  it('does not attach to a replacement parent instance', () => {
+    const store = createStore({
+      metaById: { [PARENT_ID]: parentMeta({ instanceId: 'replacement' }) }
+    })
+    expect(
+      record(store, { parentWorkspace: worktreeWorkspaceKey(PARENT_ID) }, createdWorktree(), {
+        instanceId: 'parent-instance'
+      })
+    ).toEqual({ lineage: null, workspaceLineage: null })
+    expect(store.setWorkspaceLineage).not.toHaveBeenCalled()
+  })
+
+  it('accepts an unstamped local child under a sibling repository', () => {
+    const parentId = 'repo-2::/repos/parent'
+    const store = createStore({ metaById: { [parentId]: parentMeta() } })
+    expect(
+      record(
+        store,
+        { parentWorkspace: worktreeWorkspaceKey(parentId) },
+        createdWorktree({ hostId: undefined })
+      ).lineage
+    ).toMatchObject({ parentWorktreeId: parentId })
   })
 
   it('records nothing without a parent workspace', () => {
@@ -228,7 +301,8 @@ describe('assertAttachableParentWorkspace', () => {
     store: ReturnType<typeof createStore>,
     parentWorkspace: CreateWorktreeArgs['parentWorkspace']
   ) {
-    assertAttachableParentWorkspace(store as never, parentWorkspace, childKey)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The guard reads only the metadata and ownership methods implemented by this fixture.
+    assertAttachableParentWorkspace(store as never, parentWorkspace, childKey, 'local')
   }
 
   // Why: the pick can go stale between the composer and the create; nesting is decoration, not the job.

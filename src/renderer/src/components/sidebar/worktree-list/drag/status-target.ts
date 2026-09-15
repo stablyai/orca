@@ -32,7 +32,13 @@ export function getPointerDropStatusTarget(args: {
         ? ((statusTarget.dataset.workspaceStatus as WorkspaceStatus | undefined) ?? null)
         : null,
     isPinDrop: false,
-    lineageParentId
+    lineageParentId,
+    ...(lineageParentId
+      ? {
+          lineageParentRowKey:
+            target.closest<HTMLElement>('[data-worktree-row-key]')?.dataset.worktreeRowKey
+        }
+      : {})
   }
 }
 

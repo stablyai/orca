@@ -128,9 +128,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const lineageDelete = useMemo(
     () =>
       !isBatchDelete && worktree
-        ? getWorkspaceDeleteLineage(worktree, allWorktrees, worktreeLineageById)
+        ? getWorkspaceDeleteLineage(worktree, allWorktrees, worktreeLineageById, repos)
         : { descendants: [], deleteAllTargets: [] },
-    [allWorktrees, isBatchDelete, worktree, worktreeLineageById]
+    [allWorktrees, isBatchDelete, worktree, worktreeLineageById, repos]
   )
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   // Why: the main worktree is the repo's original clone directory — `git worktree remove`

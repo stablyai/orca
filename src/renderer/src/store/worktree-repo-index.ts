@@ -1,3 +1,4 @@
+import { getWorktreeLineageRuntimeOwner } from '../../../shared/resolved-worktree-lineage'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import {
@@ -15,9 +16,39 @@ type WorktreeSnapshot = {
 // Why: Zustand reruns selectors on every write, so identity projections need
 // cross-render caching without pinning replaced store snapshots in memory.
 const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
+const ownerSnapshotCache = new WeakMap<AppState['worktreesByRepo'], Map<string, WorktreeSnapshot>>()
 const repoMapCache = new WeakMap<AppState['repos'], Map<string, Repo>>()
 
-function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
+function getWorktreeSnapshot(
+  worktreesByRepo: AppState['worktreesByRepo'],
+  owner?: Pick<Worktree, 'runtimeOwnerEnvironmentId'>
+): WorktreeSnapshot {
+  if (owner) {
+    const key = owner.runtimeOwnerEnvironmentId ?? ''
+    let snapshots = ownerSnapshotCache.get(worktreesByRepo)
+    if (!snapshots) {
+      snapshots = new Map()
+      ownerSnapshotCache.set(worktreesByRepo, snapshots)
+    }
+    const cached = snapshots.get(key)
+    if (cached) {
+      return cached
+    }
+    // Why: direct and relayed views share the execution host's instance id; recording rechecks stale views.
+    const scoped = Object.fromEntries(
+      Object.entries(worktreesByRepo).map(([repoId, rows]) => [
+        repoId,
+        rows.filter(
+          (row) =>
+            (!row.runtimeOwnerEnvironmentId && !row.hostId) ||
+            getWorktreeLineageRuntimeOwner(row) === owner.runtimeOwnerEnvironmentId
+        )
+      ])
+    )
+    const snapshot = getWorktreeSnapshot(scoped)
+    snapshots.set(key, snapshot)
+    return snapshot
+  }
   const cachedSnapshot = worktreeSnapshotCache.get(worktreesByRepo)
   if (cachedSnapshot) {
     return cachedSnapshot
@@ -65,8 +96,11 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
   return snapshot
 }
 
-export function getIndexedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {
-  return getWorktreeSnapshot(worktreesByRepo).allWorktrees
+export function getIndexedAllWorktrees(
+  worktreesByRepo: AppState['worktreesByRepo'],
+  owner?: Pick<Worktree, 'runtimeOwnerEnvironmentId'>
+): Worktree[] {
+  return getWorktreeSnapshot(worktreesByRepo, owner).allWorktrees
 }
 
 /**
@@ -85,9 +119,10 @@ export function getIndexedWorktreeMap(
 /** Every host's row for one id, in `worktreesByRepo` order. */
 export function getIndexedWorktreesById(
   worktreesByRepo: AppState['worktreesByRepo'],
-  worktreeId: string
+  worktreeId: string,
+  owner?: Pick<Worktree, 'runtimeOwnerEnvironmentId'>
 ): Worktree[] {
-  return getWorktreeSnapshot(worktreesByRepo).worktreesById.get(worktreeId) ?? []
+  return getWorktreeSnapshot(worktreesByRepo, owner).worktreesById.get(worktreeId) ?? []
 }
 
 export function getIndexedWorktreeById(

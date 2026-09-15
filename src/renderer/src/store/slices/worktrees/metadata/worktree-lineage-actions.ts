@@ -7,7 +7,27 @@ import {
   refreshWorktreeLineageForSettings,
   setWorktreeLineageForRuntime
 } from './worktree-lineage-refresh'
-import { settingsForWorktreeOwner } from '../listing/worktree-owner-settings'
+import {
+  resolveWorktreeOperationRoute,
+  resolveWorktreeOperationRouteForHost,
+  settingsForWorktreeOperationRoute
+} from '@/lib/worktree-operation-route'
+import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from '../listing/worktree-slice-constants'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+
+function lineageMutationOwner(
+  state: AppState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+) {
+  const route = executionHostId
+    ? resolveWorktreeOperationRouteForHost(state, worktreeId, executionHostId)
+    : resolveWorktreeOperationRoute(state, worktreeId)
+  if (!route) {
+    throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+  }
+  return { route, settings: settingsForWorktreeOperationRoute(state.settings, route) }
+}
 
 // Why: this runs inside a catch, so letting the refresh reject would replace the failure it recovers from.
 async function refreshWorktreeLineageBestEffort(
@@ -58,12 +78,13 @@ export function createUpdateWorktreeLineage(
   return async (worktreeId, args) => {
     // Why: an unresolvable owner route (ambiguous or missing) rejects rather than skipping — this is a
     // user-initiated action, and both callers toast the failure. Don't swallow it into a silent no-op.
-    const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
+    const { route, settings: ownerSettings } = lineageMutationOwner(get(), worktreeId)
     try {
       applyWorktreeLineageUpdate(
         set,
         worktreeId,
-        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args)
+        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args),
+        route.executionHostId ?? undefined
       )
     } catch (err) {
       console.error('Failed to update worktree lineage:', err)
@@ -78,12 +99,19 @@ export function createAssignWorktreeParent(
   get: WorktreeSliceGet
 ): WorktreeSlice['assignWorktreeParent'] {
   return async (worktreeId, args) => {
-    const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
+    const { route, settings: ownerSettings } = lineageMutationOwner(
+      get(),
+      worktreeId,
+      args.executionHostId
+    )
     try {
       applyWorktreeLineageUpdate(
         set,
         worktreeId,
-        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args)
+        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, {
+          parentWorktreeId: args.parentWorktreeId
+        }),
+        route.executionHostId ?? undefined
       )
     } catch (err) {
       console.error('Failed to assign worktree parent:', err)

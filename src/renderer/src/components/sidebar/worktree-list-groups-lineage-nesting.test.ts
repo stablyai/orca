@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { buildRows } from './worktree-list/grouping/build-rows'
 import { getLineageGroupKey, getWorktreeLineageGroupKey } from './worktree-list/grouping/group-keys'
 import { getLineageRenderInfo, getWorktreeLineageAncestors } from './worktree-lineage-projection'
-import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
+import { repo, worktree, repoMap } from './worktree-list-groups-test-fixtures'
+import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
@@ -317,17 +318,12 @@ describe('buildRows workspace lineage nesting', () => {
     expect(rows.find((row) => row.type === 'item')).toMatchObject({ depth: 0 })
   })
 
-  it.each([
-    ['repo', { repoId: 'other-repo' }],
-    ['host', { hostId: 'ssh:other-host' as const }],
-    ['project', { projectId: 'github:other/project' }]
-  ])('does not nest resolved lineage across a known %s boundary', (_label, boundary) => {
+  it('does not nest resolved lineage across a known host boundary', () => {
     const boundedParent = {
       ...parent,
       repoId: 'repo-1',
-      hostId: 'local' as const,
-      projectId: 'github:stablyai/orca',
-      ...boundary
+      hostId: 'ssh:other-host' as const,
+      projectId: 'github:stablyai/orca'
     }
     const boundedChild: ResolvedLineageWorktree = {
       ...child,
@@ -354,6 +350,91 @@ describe('buildRows workspace lineage nesting', () => {
     )
 
     expect(rows.filter((row) => row.type === 'item').map((row) => row.depth)).toEqual([0, 0])
+  })
+
+  it.each([
+    ['repository', { repoId: 'repo-2' }],
+    ['project', { projectId: 'github:other/project' }]
+  ])('nests resolved lineage across a %s boundary on the same host', (_label, boundary) => {
+    const boundedParent = {
+      ...parent,
+      repoId: 'repo-1',
+      hostId: 'local' as const,
+      projectId: 'github:stablyai/orca'
+    }
+    const boundedChild: ResolvedLineageWorktree = {
+      ...child,
+      repoId: 'repo-1',
+      hostId: 'local' as const,
+      projectId: 'github:stablyai/orca',
+      lineage,
+      ...boundary
+    }
+    const otherRepo: Repo = { ...repo, id: boundedChild.repoId }
+    const boundedRepoMap = new Map([...repoMap, [otherRepo.id, otherRepo] as const])
+    const rows = buildRows(
+      'none',
+      [boundedChild, boundedParent],
+      boundedRepoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map<string, Worktree>([
+        [boundedParent.id, boundedParent],
+        [boundedChild.id, boundedChild]
+      ]),
+      true
+    )
+
+    expect(
+      rows.filter((row) => row.type === 'item').map((row) => [row.worktree.id, row.depth])
+    ).toEqual([
+      [boundedParent.id, 0],
+      [boundedChild.id, 1]
+    ])
+  })
+
+  it('nests a cross-repo child under its parent inside a shared status section', () => {
+    const otherRepo: Repo = { ...repo, id: 'repo-2', displayName: 'baseline' }
+    const crossRepoChild: ResolvedLineageWorktree = {
+      ...child,
+      repoId: otherRepo.id,
+      path: '/tmp/baseline/worker',
+      lineage
+    }
+    const rows = buildRows(
+      'workspace-status',
+      [crossRepoChild, parent],
+      new Map([
+        [repo.id, repo],
+        [otherRepo.id, otherRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [crossRepoChild.id]: lineage },
+      new Map<string, Worktree>([
+        [parent.id, parent],
+        [crossRepoChild.id, crossRepoChild]
+      ]),
+      true
+    )
+
+    const sectionKeys = new Set(
+      rows.filter((row) => row.type === 'item').map((row) => row.sectionKey)
+    )
+    expect(sectionKeys.size).toBe(1)
+    expect(
+      rows.filter((row) => row.type === 'item').map((row) => [row.worktree.id, row.depth])
+    ).toEqual([
+      [parent.id, 0],
+      [crossRepoChild.id, 1]
+    ])
   })
 
   it('keeps the hydrated lineage side-map authoritative when inline metadata disagrees', () => {

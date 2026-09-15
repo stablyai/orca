@@ -57,9 +57,12 @@ export function hasWorktreeParentLink(
   lineageById: AppState['worktreeLineageById'],
   workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
 ): boolean {
+  const workspaceLineage = workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
   return Boolean(
     getProjectedWorktreeLineage(worktree, lineageById) ||
-    workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
+    (workspaceLineage &&
+      (!workspaceLineage.childInstanceId ||
+        workspaceLineage.childInstanceId === worktree.instanceId))
   )
 }
 

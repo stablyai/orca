@@ -169,7 +169,9 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     mocks.state.activeModal = 'delete-worktree'
     mocks.state.modalData = {}
     mocks.state.allWorktrees.mockReturnValue([])
-    mocks.state.repos = []
+    mocks.state.repos = [
+      { id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 1 }
+    ]
     mocks.state.sshTargetLabels = new Map()
     mocks.state.sshConnectionStates = new Map()
     mocks.state.runtimeEnvironments = []
@@ -273,6 +275,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
 
     expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([child, parent], {
       force: true,
+      respectLineageDependencies: true,
       onForceDeleted: expect.any(Function)
     })
   })

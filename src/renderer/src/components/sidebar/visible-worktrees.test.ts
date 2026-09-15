@@ -855,7 +855,7 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([parent.id, child.id])
   })
 
-  it('does not include a cross-repo parent when repo filtering leaves the child visible', () => {
+  it('includes a cross-repo parent when repo filtering leaves the child visible', () => {
     const parent = makeWorktree('parent', 'repo1')
     const child = makeWorktree('child', 'repo2')
     const lineage = makeWorktreeLineage(child, parent)
@@ -869,7 +869,7 @@ describe('computeVisibleWorktreeIds', () => {
       })
     )
 
-    expect(result).toEqual([child.id])
+    expect(result).toEqual([parent.id, child.id])
   })
 
   it('does not include a known cross-host parent after host filtering', () => {
@@ -889,7 +889,7 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([child.id])
   })
 
-  it('does not include a known cross-project parent hidden by another filter', () => {
+  it('includes a known cross-project parent hidden by another filter', () => {
     const parent = Object.assign(makeWorktree('parent'), {
       projectId: 'project-b',
       isMainWorktree: true
@@ -906,6 +906,6 @@ describe('computeVisibleWorktreeIds', () => {
       })
     )
 
-    expect(result).toEqual([child.id])
+    expect(result).toEqual([parent.id, child.id])
   })
 })

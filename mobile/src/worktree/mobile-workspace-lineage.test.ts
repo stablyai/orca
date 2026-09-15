@@ -49,6 +49,21 @@ describe('applyMobileWorkspaceLineage', () => {
     expect(rows[0]?.lineageChildCount).toBe(1)
   })
 
+  it('nests projected children from sibling repositories', () => {
+    const parent = worktree({ worktreeId: 'repo-a::/parent', repoId: 'repo-a' })
+    const child = worktree({
+      worktreeId: 'repo-b::/child',
+      repoId: 'repo-b',
+      parentWorktreeId: parent.worktreeId
+    })
+    expect(
+      applyMobileWorkspaceLineage([child, parent]).map((row) => [row.worktreeId, row.lineageDepth])
+    ).toEqual([
+      [parent.worktreeId, 0],
+      [child.worktreeId, 1]
+    ])
+  })
+
   it('supports nested lineage chains', () => {
     const parent = worktree({ worktreeId: 'parent' })
     const child = worktree({ worktreeId: 'child', parentWorktreeId: 'parent' })

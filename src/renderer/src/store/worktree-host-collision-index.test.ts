@@ -20,6 +20,7 @@ import {
   getIndexedWorktreesById
 } from './worktree-repo-index'
 import { buildWorktreeByIdIndex } from './slices/worktree-by-id-index'
+import { replaceWorktreeInRepoLists } from './slices/worktrees/listing/worktree-owner-settings'
 
 const SHARED_ID = 'repo-1::/work/orca'
 
@@ -48,6 +49,39 @@ function byRepo(...worktrees: Worktree[]): AppState['worktreesByRepo'] {
 }
 
 describe('id-keyed worktree projections keep distinct hosts distinct', () => {
+  it('merges a lineage mutation only into its execution host and runtime owner', () => {
+    const relayed = { ...sshRow, runtimeOwnerEnvironmentId: 'hub' }
+    const updated = { ...relayed, parentWorktreeId: 'other-repo::/parent' }
+    const rows = replaceWorktreeInRepoLists(byRepo(localRow, sshRow, relayed), updated)
+
+    expect(rows['repo-1']).toEqual([localRow, sshRow, updated])
+  })
+
+  it('hydrates a sole unstamped legacy row when merging a lineage mutation', () => {
+    const updated = { ...sshRow, parentWorktreeId: 'other-repo::/parent' }
+
+    expect(replaceWorktreeInRepoLists(byRepo(baseWorktree), updated)['repo-1']).toEqual([updated])
+  })
+
+  it('keeps legacy runtime rows out of direct-owner picker catalogs', () => {
+    const legacy = { ...baseWorktree, hostId: 'runtime:env-a' as const }
+    const rows = byRepo(localRow, legacy)
+    expect(getIndexedAllWorktrees(rows, { runtimeOwnerEnvironmentId: undefined })).toEqual([
+      localRow
+    ])
+    expect(getIndexedAllWorktrees(rows, { runtimeOwnerEnvironmentId: 'env-a' })).toEqual([legacy])
+  })
+
+  it('scopes lineage by runtime owner without duplicating the default catalog', () => {
+    const direct = { ...sshRow, instanceId: 'direct' }
+    const relayed = { ...sshRow, instanceId: 'relayed', runtimeOwnerEnvironmentId: 'hub' }
+    const rows = byRepo(direct, relayed)
+    expect(getIndexedAllWorktrees(rows)).toEqual([relayed])
+    expect(getIndexedAllWorktrees(rows, {})).toEqual([direct])
+    expect(getIndexedAllWorktrees(rows, { runtimeOwnerEnvironmentId: 'hub' })).toEqual([relayed])
+    expect(getIndexedWorktreesById(rows, SHARED_ID, {})).toEqual([direct])
+  })
+
   it('lists a colliding id once per host', () => {
     const all = getIndexedAllWorktrees(byRepo(localRow, sshRow))
 

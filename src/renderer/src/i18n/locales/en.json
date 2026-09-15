@@ -1,4 +1,12 @@
 {
+  "worktree": {
+    "delete": {
+      "showFewerChildren": "Show fewer",
+      "showAllChildren": "Show all {{count}} child workspaces",
+      "blockedByChild": "Not deleted because a child workspace changed or could not be deleted.",
+      "conflictingDependencies": "Not deleted because workspace nesting conflicts with folder containment. Unnest these workspaces and retry."
+    }
+  },
   "sidebar": {
     "revealFiltered": {
       "title": "Reveal hidden workspace?",

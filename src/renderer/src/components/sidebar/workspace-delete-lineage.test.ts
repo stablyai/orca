@@ -106,28 +106,64 @@ describe('getWorkspaceDeleteLineage', () => {
     expect(lineage.deleteAllTargets).toEqual([parent])
   })
 
-  it('rejects cross-repo, cross-host, and cross-project descendants', () => {
+  it('resolves legacy endpoint ownership before traversing a stamped child', () => {
+    const parent = makeWorktree('parent', '/workspaces/parent')
+    const child = { ...makeWorktree('child', '/workspaces/child'), hostId: 'local' as const }
+    const repo = {
+      id: parent.repoId,
+      path: '/repo',
+      displayName: 'Repo',
+      badgeColor: '',
+      addedAt: 1
+    }
+    const lineage = { [child.id]: makeLineage(child, parent) }
+    expect(getWorkspaceDeleteLineage(parent, [parent, child], lineage, [repo]).descendants).toEqual(
+      [child]
+    )
+    expect(
+      getWorkspaceDeleteLineage(parent, [parent, child], lineage, [
+        repo,
+        { ...repo, connectionId: 'remote' }
+      ]).descendants
+    ).toEqual([])
+  })
+
+  it('rejects cross-host descendants but keeps cross-repo and cross-project ones', () => {
     const parent: Worktree = {
       ...makeWorktree('parent', '/workspaces/parent'),
       hostId: LOCAL_EXECUTION_HOST_ID,
       projectId: 'project-1'
     }
-    const children: Worktree[] = [
-      { ...makeWorktree('repo-child', '/workspaces/repo-child'), repoId: 'repo-2' },
-      {
-        ...makeWorktree('host-child', '/workspaces/host-child'),
-        hostId: toSshExecutionHostId('other')
-      },
-      { ...makeWorktree('project-child', '/workspaces/project-child'), projectId: 'project-2' }
-    ]
+    const repoChild: Worktree = {
+      ...makeWorktree('repo-child', '/workspaces/repo-child'),
+      hostId: 'local',
+      repoId: 'repo-2'
+    }
+    const hostChild: Worktree = {
+      ...makeWorktree('host-child', '/workspaces/host-child'),
+      hostId: toSshExecutionHostId('other')
+    }
+    const projectChild: Worktree = {
+      ...makeWorktree('project-child', '/workspaces/project-child'),
+      hostId: 'local',
+      projectId: 'project-2'
+    }
+    const children = [repoChild, hostChild, projectChild]
     const lineageById = Object.fromEntries(
       children.map((child) => [child.id, makeLineage(child, parent)])
     )
 
     const lineage = getWorkspaceDeleteLineage(parent, [parent, ...children], lineageById)
 
-    expect(lineage.descendants).toEqual([])
-    expect(lineage.deleteAllTargets).toEqual([parent])
+    expect(lineage.descendants.map((worktree) => worktree.id)).toEqual([
+      repoChild.id,
+      projectChild.id
+    ])
+    expect(lineage.deleteAllTargets.map((worktree) => worktree.id)).toEqual([
+      repoChild.id,
+      projectChild.id,
+      parent.id
+    ])
   })
 
   it('does not traverse cyclic projected lineage', () => {

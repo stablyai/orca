@@ -42,8 +42,11 @@ export function useWorktreeNativeDrag(args: {
 
   const handleWorktreeCardDragStart = useCallback(
     (event: React.DragEvent<HTMLDivElement>, worktreeId: string, draggedIds: readonly string[]) => {
+      const sourceRow = event.currentTarget.closest<HTMLElement>('[data-worktree-row-key]')
       const sourceGroupKey =
-        ctx.worktreeDragGroups.find((group) => group.worktreeIds.includes(worktreeId))?.key ?? null
+        sourceRow?.dataset.worktreeDragGroupKey ??
+        ctx.worktreeDragGroups.find((group) => group.worktreeIds.includes(worktreeId))?.key ??
+        null
       if (!sourceGroupKey) {
         return
       }
@@ -57,6 +60,7 @@ export function useWorktreeNativeDrag(args: {
         : []
       const sourceRect = event.currentTarget.getBoundingClientRect()
       session.worktreeDragSessionRef.current = {
+        sourceRowKey: sourceRow?.dataset.worktreeRowKey,
         draggingWorktreeId: worktreeId,
         sourceGroupKey,
         draggedIds,

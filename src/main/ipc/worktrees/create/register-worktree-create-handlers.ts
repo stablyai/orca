@@ -41,8 +41,15 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
       const args = normalizeLinkedWorkItemFields(rawArgs)
       // Why span here: parent the child git spans for the trace tree; don't attach branch name/remote URL (user content) — repo ID is the safer correlator.
       return withWorktreeSpan({ stage: 'create' }, async (span) => {
-        const repo = store.getRepo(args.repoId)
+        const repo = args.executionHostId
+          ? findExactRepoOwner(store, args.repoId, args.executionHostId)
+          : store.getRepo(args.repoId)
         if (!repo) {
+          if (args.executionHostId) {
+            throw new Error(
+              'Repository ownership is missing, ambiguous, or contradictory on the selected host.'
+            )
+          }
           throw new Error(`Repo not found: ${args.repoId}`)
         }
 

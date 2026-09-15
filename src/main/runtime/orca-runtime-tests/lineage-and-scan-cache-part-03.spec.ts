@@ -230,6 +230,68 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('projects lineage across repositories on the same host', async () => {
+    const repos = [
+      {
+        id: 'repo-parent',
+        path: '/tmp/repo-parent',
+        displayName: 'parent repo',
+        badgeColor: 'blue' as const,
+        addedAt: 1
+      },
+      {
+        id: 'repo-child',
+        path: '/tmp/repo-child',
+        displayName: 'child repo',
+        badgeColor: 'green' as const,
+        addedAt: 1
+      }
+    ]
+    const parentPath = '/tmp/repo-parent/parent'
+    const childPath = '/tmp/repo-child/child'
+    const parentId = `repo-parent::${parentPath}`
+    const childId = `repo-child::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ hostId: 'local', instanceId: 'parent-instance' }),
+      [childId]: makeWorktreeMeta({ hostId: 'local', instanceId: 'child-instance' })
+    }
+    const lineageById: Record<string, WorktreeLineage> = {
+      [childId]: {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (id: string) => metaById[id],
+      getAllWorktreeLineage: () => lineageById
+    }
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [
+      makeWorktreeInfo(repoPath === repos[0].path ? parentPath : childPath)
+    ])
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const resolved = await (
+      runtime as unknown as { listResolvedWorktrees: () => Promise<Worktree[]> }
+    ).listResolvedWorktrees()
+
+    expect(resolved.find((worktree) => worktree.id === childId)).toMatchObject({
+      parentWorktreeId: parentId,
+      lineage: expect.objectContaining({ parentWorktreeId: parentId })
+    })
+    expect(resolved.find((worktree) => worktree.id === parentId)).toMatchObject({
+      childWorktreeIds: [childId]
+    })
+  })
+
   it('worktree scan cache: rescans immediately after worktree invalidation', async () => {
     vi.mocked(listWorktrees).mockClear()
     const runtime = createRuntime()

@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
@@ -33,6 +34,7 @@ export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
  */
 export type WorktreeCreationRequest = {
   repoId: string
+  executionHostId?: ExecutionHostId
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null
@@ -147,20 +149,20 @@ export function findPendingLinkedWorkItemCreationId(
   pendingCreations: Readonly<Record<string, PendingWorktreeCreation>>,
   request: Pick<
     WorktreeCreationRequest,
-    'repoId' | 'linkedIssue' | 'linkedPR' | 'workspaceRunContext'
+    'repoId' | 'linkedIssue' | 'linkedPR' | 'workspaceRunContext' | 'executionHostId'
   >
 ): string | null {
   if (request.linkedIssue == null && request.linkedPR == null) {
     return null
   }
-  const hostId = request.workspaceRunContext?.hostId ?? null
+  const hostId = request.workspaceRunContext?.hostId ?? request.executionHostId ?? null
   const match = Object.values(pendingCreations).find((entry) => {
     const pending = entry.request
     return (
       pending.repoId === request.repoId &&
       pending.linkedIssue === request.linkedIssue &&
       pending.linkedPR === request.linkedPR &&
-      (pending.workspaceRunContext?.hostId ?? null) === hostId
+      (pending.workspaceRunContext?.hostId ?? pending.executionHostId ?? null) === hostId
     )
   })
   return match?.creationId ?? null

@@ -48,6 +48,27 @@ afterEach(() => {
 })
 
 describe('showDeleteWorktreeFailureToast', () => {
+  it('keeps failures for a colliding locator on different hosts separate', () => {
+    for (const identityKey of ['local:child', 'ssh:remote:child']) {
+      showDeleteWorktreeFailureToast({
+        error: 'Child failed',
+        canForceDelete: false,
+        forceDeleteReason: null,
+        worktreeId: 'child',
+        worktreeName: 'Child',
+        identityKey,
+        showViewChanges: false,
+        onDeleteAnyway: vi.fn(),
+        onViewChanges: vi.fn(),
+        onForceDelete: vi.fn()
+      })
+    }
+    expect(vi.mocked(toast.error).mock.calls.map((call) => call[1]?.id)).toEqual([
+      'delete-worktree-failure:local:child',
+      'delete-worktree-failure:ssh:remote:child'
+    ])
+  })
+
   it('uses a persistent in-body action footer when force delete is available', () => {
     const onViewChanges = vi.fn()
     const onForceDelete = vi.fn()

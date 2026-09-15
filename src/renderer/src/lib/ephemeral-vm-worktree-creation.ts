@@ -85,6 +85,7 @@ export async function prepareRequestForCreate(
     ...(preparedTarget.environmentId
       ? { ephemeralVmRuntimeEnvironmentId: preparedTarget.environmentId }
       : {}),
+    executionHostId: undefined,
     workspaceRunContext: {
       kind: 'workspace-run',
       projectId: preparedTarget.setup.setup.projectId,

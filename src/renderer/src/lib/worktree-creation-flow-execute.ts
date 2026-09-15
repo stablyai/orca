@@ -45,6 +45,15 @@ export async function executeWorktreeCreation(
 
   let result: CreateWorktreeResult
   try {
+    if (
+      preparedRequest.workspaceRunContext &&
+      preparedRequest.executionHostId &&
+      preparedRequest.workspaceRunContext.hostId !== preparedRequest.executionHostId
+    ) {
+      throw new Error('Conflicting workspace creation hosts.')
+    }
+    const executionHostId =
+      preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId
     const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)
     const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
     const backendStartup =
@@ -78,6 +87,7 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          executionHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.displayNameKind
             ? { displayNameKind: preparedRequest.displayNameKind }

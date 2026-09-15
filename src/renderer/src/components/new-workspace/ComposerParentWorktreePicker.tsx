@@ -13,13 +13,18 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
-  getIndexedAllWorktrees,
-  getIndexedWorktreeById,
-  getIndexedWorktreeMap
-} from '@/store/worktree-repo-index'
-import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+  getComposerParentCandidates,
+  getComposerLineageOwnerScope
+} from './composer-parent-candidates'
+import {
+  getRepoHostSummaries,
+  repoHostId,
+  worktreeMatchesHost
+} from '@/store/slices/worktrees/listing/worktree-host-ownership'
+import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { branchDisplayName } from '@/components/sidebar/WorktreeCardHelpers'
-import { getCyclicProjectedWorktreeLineageIds } from '@/components/sidebar/worktree-lineage-projection'
 import {
   clampWorktreeParentPickerIndex,
   filterWorktreeParentCandidates
@@ -29,18 +34,7 @@ import {
   PICKER_ROW_HEIGHT,
   PICKER_ROW_OVERSCAN
 } from '@/components/sidebar/worktree-parent-picker-placement'
-import {
-  getLineageChildrenByParentId,
-  getLineageChildWorktree
-} from '@/components/right-sidebar/folder-workspace-attached-worktrees'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
-import {
-  sharesWorktreeLineageBoundary,
-  type WorktreeLineageBoundary
-} from '../../../../shared/resolved-worktree-lineage'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 /** Single-line row: text-sm leading (20px) over py-2. Set as the row's explicit height. */
@@ -78,7 +72,6 @@ type ParentWorktreeCandidateListProps = {
 function ComposerParentWorktreePickerImpl({
   repoId,
   executionHostId,
-  projectId,
   value,
   onChange,
   disabled = false,
@@ -95,7 +88,19 @@ function ComposerParentWorktreePickerImpl({
     if (!value) {
       return null
     }
-    const parent = getIndexedWorktreeById(s.worktreesByRepo, value)
+    const hostId = executionHostId ?? repoHostId(s, repoId)
+    const owners = getRepoHostSummaries(s.repos)
+    const matches = getIndexedWorktreesById(
+      s.worktreesByRepo,
+      value,
+      getComposerLineageOwnerScope(hostId)
+    ).filter((candidate) => {
+      const owner = owners.get(candidate.repoId)
+      return worktreeMatchesHost(candidate, hostId, {
+        unhostedWorktreesMatchHost: owner?.count === 1 && owner.onlyHostId === hostId
+      })
+    })
+    const parent = matches.length === 1 ? matches[0] : undefined
     return parent && !parent.isArchived ? parent.displayName : null
   })
 
@@ -155,7 +160,6 @@ function ComposerParentWorktreePickerImpl({
           <ParentWorktreeCandidateList
             repoId={repoId}
             executionHostId={executionHostId}
-            projectId={projectId}
             value={value}
             activeFolderWorkspaceId={activeFolderWorkspaceId}
             onSelect={handleSelect}
@@ -173,47 +177,16 @@ function ComposerParentWorktreePickerImpl({
 }
 
 /** Worktrees reachable from the folder workspace, so a pick can't drop the new one out of it. */
-function getFolderWorkspaceSubtreeIds(
-  folderWorkspaceId: string,
-  workspaceLineageByChildKey: Readonly<Record<string, WorkspaceLineage>>,
-  worktreeLineageById: Record<string, WorktreeLineage>,
-  worktreeById: Map<string, Worktree>
-): Set<string> {
-  const folderKey = folderWorkspaceKey(folderWorkspaceId)
-  const rootIds = new Set<string>()
-  for (const lineage of Object.values(workspaceLineageByChildKey)) {
-    if (lineage.parentWorkspaceKey !== folderKey) {
-      continue
-    }
-    // Why: the folder view drops archived and instance-stale rows, so accepting them here
-    // would offer a parent whose whole branch the folder never actually shows.
-    const rootWorktree = getLineageChildWorktree(lineage, worktreeById)
-    if (rootWorktree) {
-      rootIds.add(rootWorktree.id)
-    }
-  }
-
-  const subtreeIds = new Set(rootIds)
-  for (const children of getLineageChildrenByParentId(
-    worktreeLineageById,
-    worktreeById,
-    rootIds
-  ).values()) {
-    for (const child of children) {
-      subtreeIds.add(child.id)
-    }
-  }
-  return subtreeIds
-}
 
 function ParentWorktreeCandidateList({
   repoId,
   executionHostId,
-  projectId,
   value,
   activeFolderWorkspaceId,
   onSelect
 }: ParentWorktreeCandidateListProps): React.JSX.Element {
+  const repos = useAppStore((s) => s.repos)
+  const settings = useAppStore((s) => s.settings)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
@@ -224,44 +197,24 @@ function ParentWorktreeCandidateList({
   const [search, setSearch] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
 
-  const candidates = useMemo(() => {
-    // Why `?? undefined`: an unresolved host or project is "not known yet", not "no host", and
-    // the boundary check reads undefined on either side as a wildcard. A candidate in this repo
-    // with no recorded hostId inherits that repo's host, so it is on the child's host too.
-    const childBoundary: WorktreeLineageBoundary = {
+  const candidates = useMemo(
+    () =>
+      getComposerParentCandidates(
+        { repos, worktreesByRepo, worktreeLineageById, workspaceLineageByChildKey },
+        executionHostId ?? repoHostId({ repos, settings }, repoId),
+        activeFolderWorkspaceId
+      ),
+    [
+      repos,
+      settings,
+      worktreesByRepo,
+      worktreeLineageById,
+      workspaceLineageByChildKey,
+      executionHostId,
       repoId,
-      hostId: executionHostId ?? undefined,
-      projectId: projectId ?? undefined
-    }
-    const worktreeMap = getIndexedWorktreeMap(worktreesByRepo)
-    const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap)
-    const folderSubtreeIds = activeFolderWorkspaceId
-      ? getFolderWorkspaceSubtreeIds(
-          activeFolderWorkspaceId,
-          workspaceLineageByChildKey,
-          worktreeLineageById,
-          worktreeMap
-        )
-      : null
-    return getIndexedAllWorktrees(worktreesByRepo)
-      .filter(
-        (candidate) =>
-          candidate.repoId === repoId &&
-          !candidate.isArchived &&
-          sharesWorktreeLineageBoundary(childBoundary, candidate) &&
-          !cyclicLineageIds.has(candidate.id) &&
-          (folderSubtreeIds === null || folderSubtreeIds.has(candidate.id))
-      )
-      .sort(compareWorktreeDisplayName)
-  }, [
-    activeFolderWorkspaceId,
-    executionHostId,
-    projectId,
-    repoId,
-    workspaceLineageByChildKey,
-    worktreeLineageById,
-    worktreesByRepo
-  ])
+      activeFolderWorkspaceId
+    ]
+  )
 
   const filtered = useMemo(
     () => filterWorktreeParentCandidates(candidates, search),
@@ -398,6 +351,30 @@ function ParentWorktreeCandidateList({
                     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-none text-muted-foreground">
                       <GitBranch className="size-3 shrink-0" />
                       <span className="truncate">{branchDisplayName(candidate.branch)}</span>
+                      {candidate.repoId !== repoId ? (
+                        <RepoBadgeLabel
+                          name={
+                            repos.find(
+                              (repo) =>
+                                repo.id === candidate.repoId &&
+                                getRepoExecutionHostId(repo) ===
+                                  (candidate.hostId ??
+                                    executionHostId ??
+                                    repoHostId({ repos, settings }, repoId))
+                            )?.displayName ?? candidate.repoId
+                          }
+                          color={
+                            repos.find(
+                              (repo) =>
+                                repo.id === candidate.repoId &&
+                                getRepoExecutionHostId(repo) ===
+                                  (candidate.hostId ??
+                                    executionHostId ??
+                                    repoHostId({ repos, settings }, repoId))
+                            )?.badgeColor ?? ''
+                          }
+                        />
+                      ) : null}
                     </div>
                   </div>
                 ) : (

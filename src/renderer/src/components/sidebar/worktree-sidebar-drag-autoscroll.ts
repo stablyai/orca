@@ -24,6 +24,8 @@ export type WorktreeSidebarDragRect = {
 }
 
 export type WorktreeSidebarDragSession = {
+  sourceRowKey?: string
+
   draggingWorktreeId: string
   sourceGroupKey: string
   draggedIds: readonly string[]

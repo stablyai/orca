@@ -53,6 +53,7 @@ export type WorktreePointerDrag = {
 }
 
 export type WorktreeSidebarLineageDropTarget = WorktreeSidebarStatusDropTarget & {
+  lineageParentRowKey?: string
   lineageParentId: string | null
 }
 

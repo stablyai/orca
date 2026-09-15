@@ -16,7 +16,7 @@ export type LineageFolder = FolderWorkspace
 export type LineageGroup = ProjectGroup
 
 export type LineageResolutionContext = {
-  store: Store
+  store: Pick<Store, 'getWorktreeMeta'>
   repos: Repo[]
   groups: LineageGroup[]
   reposById: Map<string, Repo[]>
@@ -40,10 +40,13 @@ export function indexLineageEntriesById<T extends { id: string }>(
   return index
 }
 
-export function createLineageResolutionContext(store: Store): LineageResolutionContext {
+export function createLineageResolutionContext(
+  store: Pick<Store, 'getRepos' | 'getWorktreeMeta'> &
+    Partial<Pick<Store, 'getFolderWorkspaces' | 'getProjectGroups'>>
+): LineageResolutionContext {
   const repos = store.getRepos()
-  const folders = store.getFolderWorkspaces()
-  const groups = store.getProjectGroups()
+  const folders = store.getFolderWorkspaces?.() ?? []
+  const groups = store.getProjectGroups?.() ?? []
   return {
     store,
     repos,

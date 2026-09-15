@@ -1,6 +1,8 @@
+import { resolveRuntimeWorktreeRemovalTarget } from './runtime-worktree-removal-target'
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
+import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
@@ -40,14 +42,17 @@ function gitWorktree(path: string): GitWorktreeInfo {
 
 function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
   metaById: Record<string, WorktreeMeta>
+  lineageById: Record<string, WorktreeLineage>
   scanRepo: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['scanRepo']>>
   listFolderWorkspaces: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>>
 } {
   const metaById: Record<string, WorktreeMeta> = {}
+  const lineageById: Record<string, WorktreeLineage> = {}
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Scoped resolution uses only the store methods supplied by this fixture.
   const store = {
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
-    getAllWorktreeLineage: () => ({}),
+    getAllWorktreeLineage: () => lineageById,
     getProjects: () => [],
     getSettings: () => ({}),
     setWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => {
@@ -61,7 +66,7 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
     worktrees: [gitWorktree(owner.id === 'unrelated' ? '/unrelated/worktree' : '/same/worktree')]
   }))
   const listFolderWorkspaces = vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>(() => [])
-  return { store, metaById, scanRepo, listFolderWorkspaces }
+  return { store, metaById, lineageById, scanRepo, listFolderWorkspaces }
 }
 
 describe('host-qualified scoped worktree resolution', () => {
@@ -132,11 +137,7 @@ describe('host-qualified scoped worktree resolution', () => {
       hostId: 'local',
       instanceId: 'local-instance'
     } as unknown as WorktreeMeta
-    ;(
-      deps.store as Store & {
-        getWorktreeMetaForHost: () => WorktreeMeta
-      }
-    ).getWorktreeMetaForHost = () => remoteMeta
+    deps.store.getWorktreeMetaForHost = () => remoteMeta
 
     const rows = await resolveRepoWorktreeRows(
       deps,
@@ -251,6 +252,124 @@ describe('host-qualified scoped worktree resolution', () => {
       resolveScopedWorktreeIdRow(deps, 'shared::/same/worktree', 'ssh:builder')
     ).resolves.toBeNull()
     expect(deps.scanRepo).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'exact child ID',
+      'repo-child::/same/worktree',
+      'repo-parent::/parent/worktree',
+      'repo-child::/same/worktree'
+    ],
+    [
+      'a trailing slash on the child ID',
+      'repo-child::/same/worktree',
+      'repo-parent::/parent/worktree',
+      'repo-child::/same/worktree/'
+    ],
+    [
+      'a doubled separator on the child ID',
+      'repo-child::/same/worktree',
+      'repo-parent::/parent/worktree',
+      'repo-child::/same//worktree'
+    ],
+    [
+      'an NFD child ID',
+      'repo-child::/same/café',
+      'repo-parent::/parent/worktree',
+      `repo-child::${'/same/café'.normalize('NFD')}`
+    ],
+    [
+      'a trailing slash on the parent ID',
+      'repo-child::/same/worktree',
+      'repo-parent::/parent/worktree',
+      'repo-parent::/parent/worktree/'
+    ]
+  ])(
+    'falls back to fleet resolution for cross-repo lineage requested with %s',
+    async (_label, childId, parentId, requestedId) => {
+      const deps = createDeps([
+        repo('repo-child', '/local/child-repo', { executionHostId: 'local' }),
+        repo('repo-parent', '/local/parent-repo', { executionHostId: 'local' })
+      ])
+      deps.lineageById[childId] = {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+
+      await expect(resolveScopedWorktreeIdRow(deps, requestedId)).resolves.toBeNull()
+      expect(deps.scanRepo).not.toHaveBeenCalled()
+    }
+  )
+
+  it('ignores colliding cross-repo lineage owned by another host', async () => {
+    const childId = 'repo-child::/same/worktree'
+    const parentId = 'repo-parent::/parent/worktree'
+    const deps = createDeps([
+      repo('repo-child', '/local/child-repo', { executionHostId: 'local' }),
+      repo('repo-child', '/remote/child-repo', { executionHostId: 'ssh:builder' }),
+      repo('repo-parent', '/remote/parent-repo', { executionHostId: 'ssh:builder' })
+    ])
+    deps.lineageById[childId] = {
+      worktreeId: childId,
+      worktreeInstanceId: 'remote-child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'remote-parent-instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    deps.store.getWorktreeMetaForHost = (worktreeId, hostId) => {
+      if (hostId !== 'ssh:builder') {
+        return undefined
+      }
+      return worktreeId === childId
+        ? mergeWorktreeMetaForWrite(undefined, { instanceId: 'remote-child-instance', hostId })
+        : mergeWorktreeMetaForWrite(undefined, { instanceId: 'remote-parent-instance', hostId })
+    }
+
+    await expect(resolveScopedWorktreeIdRow(deps, childId, 'local')).resolves.toMatchObject({
+      id: childId,
+      hostId: 'local'
+    })
+    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([
+      expect.objectContaining({ path: '/local/child-repo' })
+    ])
+
+    const bareMeta = mergeWorktreeMetaForWrite(undefined, {
+      instanceId: 'local-child-instance',
+      hostId: 'local'
+    })
+    deps.store.getWorktreeMeta = vi.fn(() => bareMeta)
+    deps.metaById[childId] = bareMeta
+    const resolveFleet = vi.fn(async () => {
+      throw new Error('Unexpected fleet lookup')
+    })
+    await expect(
+      resolveRuntimeWorktreeRemovalTarget({
+        selector: `id:${childId}`,
+        store: deps.store,
+        requiredHostId: 'ssh:builder',
+        resolveWorktree: resolveFleet,
+        resolveExplicitWorktreeIdScoped: (id, hostId) =>
+          resolveScopedWorktreeIdRow(deps, id, hostId)
+      })
+    ).resolves.toMatchObject({ id: childId, repoId: 'repo-child', path: '/same/worktree' })
+    expect(resolveFleet).not.toHaveBeenCalled()
+    expect(deps.store.getWorktreeMeta).not.toHaveBeenCalled()
+
+    deps.scanRepo.mockClear()
+    await expect(resolveScopedWorktreeIdRow(deps, childId, 'ssh:builder')).resolves.toMatchObject({
+      id: childId,
+      hostId: 'ssh:builder',
+      instanceId: 'remote-child-instance'
+    })
+    expect(deps.scanRepo).toHaveBeenCalledOnce()
   })
 
   it('reuses fleet owner counts without reloading repos per row', async () => {

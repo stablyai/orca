@@ -17,3 +17,10 @@ export function isRuntimeRepoNotFoundError(error: unknown): boolean {
 export function isRuntimeLineageParentMissingError(error: unknown): boolean {
   return hasRuntimeRpcErrorCode(error, 'LINEAGE_PARENT_NOT_FOUND')
 }
+
+export function isRuntimeLineageParentRejectedBeforeCreate(error: unknown): boolean {
+  return (
+    isRuntimeLineageParentMissingError(error) ||
+    hasRuntimeRpcErrorCode(error, 'LINEAGE_PARENT_CONTEXT_CONFLICT')
+  )
+}

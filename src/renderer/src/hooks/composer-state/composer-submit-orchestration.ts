@@ -233,6 +233,7 @@ export function useComposerSubmitOrchestration(
     resolvePendingSmartGitHubSubmit:
       external.githubSubmitResolution.resolvePendingSmartGitHubSubmit,
     selectedRepo: target.runtimeTargetSelection.selectedRepo,
+    selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoRequiresConnection: target.runtimeTargetSelection.selectedRepoRequiresConnection,
     selectedWorkspaceTarget: target.runtimeTargetSelection.selectedWorkspaceTarget,
     setCreateError: target.asyncComposerState.setCreateError,

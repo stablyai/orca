@@ -16,7 +16,11 @@ export function getProjectedWorktreeLineage(
   worktree: Worktree,
   lineageById: Readonly<Record<string, WorktreeLineage>>
 ): WorktreeLineage | null | undefined {
-  if (Object.hasOwn(lineageById, worktree.id)) {
+  if (
+    Object.hasOwn(lineageById, worktree.id) &&
+    // Another host can publish the same locator; prefer this row's matching inline lineage.
+    lineageById[worktree.id].worktreeInstanceId === worktree.instanceId
+  ) {
     return lineageById[worktree.id]
   }
   return (worktree as WorktreeWithResolvedLineage).lineage

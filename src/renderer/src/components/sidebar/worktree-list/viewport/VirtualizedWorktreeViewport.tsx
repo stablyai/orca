@@ -97,6 +97,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const session = useWorktreeDragSession({ rows, scrollRef })
   const lineageDrop = useWorktreeLineageDropCommit({
+    rows,
+    dragSessionRef: session.worktreeDragSessionRef,
     repoMap,
     worktreeMap,
     worktreeLineageById,

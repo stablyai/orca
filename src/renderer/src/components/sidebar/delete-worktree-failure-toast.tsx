@@ -13,12 +13,14 @@ type DeleteWorktreeFailureToastOptions = {
   forceDeleteReason: WorktreeForceDeleteReason | null
   lockReason?: string | null
   hasKnownChanges?: boolean
+  showViewChanges?: boolean
   /** The archive hook refused this removal, so the user may waive it (#19334). */
   canWaiveArchiveHook?: boolean
   onViewChanges: () => void
   onForceDelete: () => void
   onDeleteAnyway: () => void
   worktreeId: string
+  identityKey?: string
   worktreeName: string
 }
 
@@ -93,11 +95,13 @@ export function showDeleteWorktreeFailureToast({
   forceDeleteReason,
   lockReason,
   hasKnownChanges,
+  showViewChanges,
   canWaiveArchiveHook,
   onViewChanges,
   onForceDelete,
   onDeleteAnyway,
   worktreeId,
+  identityKey,
   worktreeName
 }: DeleteWorktreeFailureToastOptions): void {
   const toastCopy = getDeleteWorktreeToastCopy(
@@ -107,7 +111,7 @@ export function showDeleteWorktreeFailureToast({
     lockReason ?? null
   )
   const showToast = toastCopy.isDestructive ? toast.error : toast.info
-  const id = deleteWorktreeFailureToastId(worktreeId)
+  const id = deleteWorktreeFailureToastId(identityKey ?? worktreeId)
 
   // Why: Sonner's native action/cancel slots share the title row and squeeze
   // multi-line delete errors. Custom content gives the copy its own line.
@@ -117,8 +121,10 @@ export function showDeleteWorktreeFailureToast({
       <DeleteWorktreeFailureToastBody
         description={toastCopy.description}
         canForceDelete={canForceDelete}
+        showViewChanges={
+          showViewChanges ?? (!isLockedWorktreeRemovalError(error) || hasKnownChanges === true)
+        }
         canWaiveArchiveHook={canWaiveArchiveHook === true}
-        showViewChanges={!isLockedWorktreeRemovalError(error) || hasKnownChanges === true}
         onViewChanges={onViewChanges}
         onForceDelete={onForceDelete}
         onDeleteAnyway={onDeleteAnyway}
