@@ -61,50 +61,60 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     expect(() => killRoot()).not.toThrow()
   })
 
-  it('win32 immediate kill claims termination before awaiting the sweep', async () => {
-    // Why: createOrAttach rejects a doomed plain shell only via isTerminating, so the claim
-    // must land before the taskkill await or an attach can bind a pane to a dying session.
-    setPlatform('win32')
-    const session = createPlainShellSession()
-    const beginTermination = session.beginTermination as unknown as ReturnType<typeof vi.fn>
-    let claimedBeforeSweep = false
-    killWithDescendantSweepMock.mockImplementation(async () => {
-      claimedBeforeSweep = beginTermination.mock.calls.length === 1
-    })
-    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+  it.each(['win32', 'linux', 'darwin'] as const)(
+    '%s immediate kill claims termination before awaiting the sweep',
+    async (platform) => {
+      // Why: createOrAttach rejects a doomed plain shell only via isTerminating, so the claim
+      // must land before the taskkill await or an attach can bind a pane to a dying session.
+      setPlatform(platform)
+      const session = createPlainShellSession()
+      const beginTermination = session.beginTermination as unknown as ReturnType<typeof vi.fn>
+      let claimedBeforeSweep = false
+      killWithDescendantSweepMock.mockImplementation(async () => {
+        claimedBeforeSweep = beginTermination.mock.calls.length === 1
+      })
+      const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
 
-    await teardown.killSession('s1', session, true)
+      await teardown.killSession('s1', session, true)
 
-    expect(claimedBeforeSweep).toBe(true)
-  })
+      expect(claimedBeforeSweep).toBe(true)
+    }
+  )
 
-  it('win32 sweep ownsRoot guard requires the live session to still own the id', async () => {
-    setPlatform('win32')
-    const session = createPlainShellSession()
-    const sessions = new Map([['s1', session]])
-    const teardown = new TerminalSessionTeardown(sessions)
+  it.each(['win32', 'linux', 'darwin'] as const)(
+    '%s sweep ownsRoot guard requires the live session to still own the id',
+    async (platform) => {
+      setPlatform(platform)
+      const session = createPlainShellSession()
+      const sessions = new Map([['s1', session]])
+      const teardown = new TerminalSessionTeardown(sessions)
 
-    await teardown.killSession('s1', session, true)
-    const ownsRoot = (killWithDescendantSweepMock.mock.calls[0][2] as { ownsRoot: () => boolean })
-      .ownsRoot
-    expect(ownsRoot()).toBe(true)
+      await teardown.killSession('s1', session, true)
+      const ownsRoot = (killWithDescendantSweepMock.mock.calls[0][2] as { ownsRoot: () => boolean })
+        .ownsRoot
+      expect(ownsRoot()).toBe(true)
 
-    // A natural exit or reap must stop us from taskkilling a recycled PID.
-    ;(session as unknown as { isAlive: boolean }).isAlive = false
-    expect(ownsRoot()).toBe(false)
-    sessions.delete('s1')
-    ;(session as unknown as { isAlive: boolean }).isAlive = true
-    expect(ownsRoot()).toBe(false)
-  })
+      // A natural exit or reap must stop us from taskkilling a recycled PID.
+      ;(session as unknown as { isAlive: boolean }).isAlive = false
+      expect(ownsRoot()).toBe(false)
+      sessions.delete('s1')
+      ;(session as unknown as { isAlive: boolean }).isAlive = true
+      expect(ownsRoot()).toBe(false)
+    }
+  )
 
-  it('non-win32 immediate kill skips the tree kill (pgroup force-kill suffices)', async () => {
+  it('POSIX immediate close sweeps detached OMP tools before killing their parent', async () => {
     setPlatform('linux')
     const session = createPlainShellSession()
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
 
     await teardown.killSession('s1', session, true)
 
-    expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+      session.pid,
+      expect.any(Function),
+      expect.objectContaining({ ownsRoot: expect.any(Function) })
+    )
     expect(session.forceKillAndWaitForExit).toHaveBeenCalled()
   })
 

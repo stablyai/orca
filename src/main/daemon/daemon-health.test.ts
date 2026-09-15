@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { spawn } from 'node:child_process'
