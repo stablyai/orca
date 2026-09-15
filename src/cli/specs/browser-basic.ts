@@ -185,7 +185,11 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
     path: ['tab', 'create'],
     summary: 'Create a new browser tab in the current worktree',
     usage: 'orca tab create [--url <url>] [--worktree <selector>] [--profile <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile']
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile'],
+    notes: [
+      'A headless runtime backs every tab with its own renderer process and caps how many stay open at once (4 by default, ORCA_MAX_OFFSCREEN_BROWSER_TABS on the runtime host to change).',
+      'Past the cap the create fails with browser_tab_capacity: close a tab with `orca tab close --page <id>`, or reuse one page and re-navigate it instead of opening another.'
+    ]
   },
   {
     path: ['tab', 'profile', 'list'],
