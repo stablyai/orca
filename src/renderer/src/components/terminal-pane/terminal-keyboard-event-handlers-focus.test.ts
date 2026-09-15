@@ -41,7 +41,7 @@ describe('terminal keyboard pane ownership', () => {
         absorbRedispatchedEnter: () => false,
         defer: vi.fn()
       },
-      deferredChordSender: { defer: vi.fn() },
+      deferredChordSender: { defer: vi.fn(), absorbRedispatchedChord: () => false },
       getModifiedEnterChord: () => null,
       reconcileHeldImeEnterModifiers: vi.fn(),
       optionKittyReleases: { arm: vi.fn(), armNativeDeadKey: vi.fn() },
