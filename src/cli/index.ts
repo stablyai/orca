@@ -83,7 +83,10 @@ export async function main(
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
-  const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, COMMAND_PATHS))
+  const parsed = normalizeCommandPositionals(
+    COMMAND_SPECS,
+    parseArgs(argv, COMMAND_PATHS, COMMAND_SPECS)
+  )
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
     printHelp(COMMAND_SPECS, helpPath)

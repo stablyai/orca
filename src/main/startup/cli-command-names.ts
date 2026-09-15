@@ -53,6 +53,7 @@ export const CLI_COMMAND_NAMES = [
   'screenshot',
   'scroll',
   'scrollintoview',
+  'search',
   'select',
   'select-all',
   'serve',

@@ -1,7 +1,7 @@
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 import { unknownCommandData } from './command-suggestion'
-import { formatSkillsCommandFlagHelp } from './skills-command-flag-help'
+import { formatCommandScopedFlagHelp } from './command-scoped-flag-help'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
 
@@ -73,9 +73,9 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
-  const skillsHelp = formatSkillsCommandFlagHelp(command, flag)
-  if (skillsHelp) {
-    return skillsHelp
+  const scopedHelp = formatCommandScopedFlagHelp(command, flag)
+  if (scopedHelp) {
+    return scopedHelp
   }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
