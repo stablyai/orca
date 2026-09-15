@@ -21,7 +21,8 @@ vi.mock('node:fs', async (importOriginal) => {
 import {
   createCodexSubagentTranscriptState,
   hasTrackedCodexTranscriptSubagents,
-  reconcileCodexSubagentTranscript
+  reconcileCodexSubagentTranscript,
+  type CodexSubagentTranscriptState
 } from './codex-subagent-transcript'
 import { codexRosterToSnapshots, type CodexSubagentRoster } from './codex-subagent-roster'
 
@@ -42,6 +43,30 @@ function activity(kind: string, occurredAtMs = 1234): unknown {
       kind
     }
   }
+}
+
+function childId(index: number): string {
+  return `019fa65f-3144-7151-9c02-${String(index).padStart(12, '0')}`
+}
+
+function childActivity(index: number): unknown {
+  return {
+    type: 'event_msg',
+    payload: {
+      type: 'sub_agent_activity',
+      occurred_at_ms: 1234,
+      agent_thread_id: childId(index),
+      agent_path: '/root/sidebar_repro',
+      kind: 'started'
+    }
+  }
+}
+
+/** Children the reconciler went looking for — only a finished search sets the grace clock. */
+function searchedChildren(state: CodexSubagentTranscriptState): number {
+  return Array.from(state.subagents.values()).filter(
+    (tracked) => tracked.unresolvedSince !== undefined
+  ).length
 }
 
 /** `<root>/YYYY/MM/DD` for a timestamp, matching how Codex buckets rollouts by local start date. */
@@ -153,6 +178,67 @@ describe('Codex subagent transcript reconciliation', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('bounds rollout searches per tick and rotates the backlog', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    // Why: no child here has a rollout on disk, so every one costs a directory search.
+    writeFileSync(
+      parentPath,
+      jsonl(Array.from({ length: 500 }, (_, index) => childActivity(index)))
+    )
+    const state = createCodexSubagentTranscriptState()
+    const roster: CodexSubagentRoster = new Map()
+
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+
+    expect(searchedChildren(state)).toBe(64)
+    expect(state.subagents.size).toBe(500)
+
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+
+    // Rotation, not repetition: the second tick searches for 64 children it has not tried yet.
+    expect(searchedChildren(state)).toBe(128)
+  })
+
+  it('finishes every located child in a single tick, however many there are', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    const total = 200
+    const writeChildren = (records: unknown[]): void => {
+      for (let index = 0; index < total; index += 1) {
+        writeFileSync(join(dir, `rollout-child-${childId(index)}.jsonl`), jsonl(records))
+      }
+    }
+    writeFileSync(
+      parentPath,
+      jsonl(Array.from({ length: total }, (_, index) => childActivity(index)))
+    )
+    writeChildren([{ type: 'event_msg', payload: { type: 'task_started' } }])
+    const state = createCodexSubagentTranscriptState()
+    const roster: CodexSubagentRoster = new Map()
+    // Searching is what the budget caps, so a parent this wide needs several ticks to locate
+    // everyone. Reading them afterwards is not capped, which is what this test pins.
+    for (let tick = 0; tick < Math.ceil(total / 64); tick += 1) {
+      reconcileCodexSubagentTranscript(state, roster, parentPath)
+    }
+
+    expect(state.subagents.size).toBe(total)
+    expect(searchedChildren(state)).toBe(0)
+
+    writeChildren([
+      { type: 'event_msg', payload: { type: 'task_started' } },
+      { type: 'event_msg', payload: { type: 'task_complete' } }
+    ])
+    // Why: the Stop hook is the last reconcile a pane ever gets — anything still tracked here
+    // blocks the roster delete and strands a "working" row for the life of the pane.
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+
+    expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
+    expect(codexRosterToSnapshots(roster)).toBeUndefined()
   })
 
   it('removes a child when Codex reports it interrupted', () => {
