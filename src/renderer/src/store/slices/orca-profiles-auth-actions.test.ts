@@ -10,6 +10,17 @@ import type {
   SignOutCurrentOrcaProfileResult
 } from '../../../../shared/orca-profiles'
 
+const { toastMock } = vi.hoisted(() => ({
+  toastMock: {
+    loading: vi.fn(),
+    dismiss: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn()
+  }
+}))
+
+vi.mock('sonner', () => ({ toast: toastMock }))
+
 const listState: OrcaProfileListState = {
   activeProfileId: 'local-default',
   profiles: [
@@ -63,6 +74,7 @@ const orcaProfilesApi = {
   createLocal: vi.fn(),
   createCloudLinked: vi.fn(),
   connectCurrent: vi.fn(),
+  cancelConnect: vi.fn(),
   refreshAuth: vi.fn(),
   signOutCurrent: vi.fn(),
   selectOrg: vi.fn(),
@@ -105,6 +117,29 @@ describe('orca profile auth actions slice', () => {
     expect(store.getState().orcaProfileConnecting).toBe(false)
     expect(store.getState().orcaProfileAuthStatus).toEqual(connectedAuthStatus)
     expect(store.getState().orcaProfiles).toEqual(connectedProfiles)
+  })
+
+  it('offers Cancel while sign-in is pending and clears the prompt once it settles', async () => {
+    /** Lets the test settle the IPC call only after Cancel has been clicked. */
+    let settleConnect: (result: ConnectCurrentOrcaProfileResult) => void = () => {}
+    orcaProfilesApi.connectCurrent.mockReturnValue(
+      new Promise((resolve) => {
+        settleConnect = resolve
+      })
+    )
+    orcaProfilesApi.cancelConnect.mockResolvedValue(undefined)
+    toastMock.loading.mockReturnValue('sign-in-pending')
+    const store = createTestStore()
+
+    const pending = store.getState().connectCurrentOrcaProfile()
+    toastMock.loading.mock.calls[0]?.[1]?.cancel.onClick()
+    settleConnect({ status: 'cancelled', auth: localAuthStatus })
+
+    expect(orcaProfilesApi.cancelConnect).toHaveBeenCalledOnce()
+    await expect(pending).resolves.toMatchObject({ status: 'cancelled' })
+    expect(toastMock.dismiss).toHaveBeenCalledWith('sign-in-pending')
+    expect(toastMock.error).not.toHaveBeenCalled()
+    expect(store.getState().orcaProfileConnecting).toBe(false)
   })
 
   it('refreshes current profile auth and stores fresh capability flags', async () => {

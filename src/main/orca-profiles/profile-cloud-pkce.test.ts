@@ -60,14 +60,15 @@ function callbackUrl(redirectUri: string, params: Record<string, string>): strin
   return url.toString()
 }
 
-async function startedFlow(): Promise<{
+/** Starts a flow and returns the nonce/state/redirect the authorize URL carries. */
+async function startedFlow(signal?: AbortSignal): Promise<{
   authUrl: URL
   flow: ReturnType<typeof beginOrcaCloudPkceFlow>
   nonce: string
   redirectUri: string
   state: string
 }> {
-  const flow = beginOrcaCloudPkceFlow(config, 'local-default')
+  const flow = beginOrcaCloudPkceFlow(config, 'local-default', signal)
   await vi.waitFor(() => expect(openExternalMock).toHaveBeenCalledTimes(1))
   const authUrl = new URL(String(openExternalMock.mock.calls[0]?.[0]))
   const nonce = authUrl.searchParams.get('nonce')
@@ -131,6 +132,27 @@ describe('Orca cloud PKCE flow', () => {
       })
     }
   )
+
+  it('cancels a pending flow through its signal and closes the loopback listener', async () => {
+    const controller = new AbortController()
+    const { flow, redirectUri, state } = await startedFlow(controller.signal)
+    const observedFlow = flow.catch((error: unknown) => error)
+
+    controller.abort()
+
+    await expect(observedFlow).resolves.toMatchObject({ message: 'orca_cloud_auth_cancelled' })
+    await expect(readHttp(callbackUrl(redirectUri, { code: 'late-code', state }))).rejects.toThrow()
+  })
+
+  it('rejects an already-aborted signal without opening the browser', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      beginOrcaCloudPkceFlow(config, 'local-default', controller.signal)
+    ).rejects.toMatchObject({ message: 'orca_cloud_auth_cancelled' })
+    expect(openExternalMock).not.toHaveBeenCalled()
+  })
 
   it('adds desktop PKCE parameters to the authorize URL', async () => {
     const { authUrl, flow, nonce, redirectUri, state } = await startedFlow()

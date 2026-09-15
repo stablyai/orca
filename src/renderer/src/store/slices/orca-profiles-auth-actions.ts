@@ -21,9 +21,11 @@ export type OrcaProfilesAuthActions = {
   selectOrcaProfileOrg: (orgId: string) => Promise<SelectOrcaProfileOrgResult | null>
 }
 
-// Why a separate module: the cloud-auth actions share the profiles slice's
-// state keys but form their own cohesive surface (connect/refresh/sign-out/
-// org selection), and the combined slice file exceeded the repo line budget.
+/**
+ * Why a separate module: the cloud-auth actions share the profiles slice's
+ * state keys but form their own cohesive surface (connect/refresh/sign-out/
+ * org selection), and the combined slice file exceeded the repo line budget.
+ */
 export const createOrcaProfilesAuthActions: StateCreator<
   AppState,
   [],
@@ -69,11 +71,30 @@ export const createOrcaProfilesAuthActions: StateCreator<
     }
   },
 
+  /** Starts the browser sign-in; the pending toast's Cancel aborts main's loopback wait. */
   connectCurrentOrcaProfile: async () => {
     if (get().orcaProfileConnecting) {
       return null
     }
     set({ orcaProfileConnecting: true })
+    // Why: an abandoned browser tab otherwise locks every sign-in button until main's loopback timeout.
+    const pendingToastId = toast.loading(
+      translate(
+        'auto.store.slices.orca.profiles.signInPending',
+        'Waiting for sign-in in your browser…'
+      ),
+      {
+        cancel: {
+          label: translate('auto.store.slices.orca.profiles.cancelSignIn', 'Cancel'),
+          /** Asks main to abort the loopback wait; the pending connect then settles as cancelled. */
+          onClick: () => {
+            window.api.orcaProfiles.cancelConnect().catch((err: unknown) => {
+              console.error('Failed to cancel Orca profile sign-in:', err)
+            })
+          }
+        }
+      }
+    )
     try {
       const result = await window.api.orcaProfiles.connectCurrent()
       set({
@@ -115,6 +136,8 @@ export const createOrcaProfilesAuthActions: StateCreator<
         }
       )
       return null
+    } finally {
+      toast.dismiss(pendingToastId)
     }
   },
 

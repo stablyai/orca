@@ -16,6 +16,8 @@ export const orcaProfilesApi = {
   transferProject: (args) => ipcRenderer.invoke('orcaProfiles:transferProject', args),
   findProjectProfiles: (args) => ipcRenderer.invoke('orcaProfiles:findProjectProfiles', args),
   connectCurrent: () => ipcRenderer.invoke('orcaProfiles:connectCurrent'),
+  /** Main scopes the cancel to this window, so no flow id crosses the bridge. */
+  cancelConnect: () => ipcRenderer.invoke('orcaProfiles:cancelConnect'),
   refreshAuth: () => ipcRenderer.invoke('orcaProfiles:refreshAuth'),
   signOutCurrent: () => ipcRenderer.invoke('orcaProfiles:signOutCurrent'),
   selectOrg: (args) => ipcRenderer.invoke('orcaProfiles:selectOrg', args),

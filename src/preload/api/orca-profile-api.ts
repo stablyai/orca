@@ -41,7 +41,10 @@ export type OrcaProfileApi = {
   findProjectProfiles: (
     args: FindOrcaProfileProjectsByPathArgs
   ) => Promise<FindOrcaProfileProjectsByPathResult>
+  /** Starts the browser sign-in and resolves once it completes, fails, or is cancelled. */
   connectCurrent: () => Promise<ConnectCurrentOrcaProfileResult>
+  /** Aborts this window's pending `connectCurrent`, if any; a no-op otherwise. */
+  cancelConnect: () => Promise<void>
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>

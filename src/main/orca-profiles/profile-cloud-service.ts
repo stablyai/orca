@@ -36,10 +36,16 @@ import { selectCloudOrgWithMutationFence } from './profile-cloud-org-selection'
 
 export { refreshCurrentOrcaProfileAuth } from './profile-cloud-capability-refresh'
 
+/** Sign-in errors the user caused on purpose, reported as `cancelled` rather than `failed`. */
 function isUserCancelledAuthError(message: string): boolean {
-  return message === 'orca_cloud_auth_timeout' || message === 'orca_cloud_auth_denied'
+  return (
+    message === 'orca_cloud_auth_timeout' ||
+    message === 'orca_cloud_auth_denied' ||
+    message === 'orca_cloud_auth_cancelled'
+  )
 }
 
+/** Auth status for an already-resolved active profile, avoiding a second index read. */
 function activeAuth(
   active: ReturnType<typeof ensureActiveOrcaProfile>,
   userDataPath: string
@@ -51,8 +57,10 @@ export function getCurrentOrcaProfileAuthStatus(userDataPath: string): OrcaProfi
   return getOrcaProfileAuthStatusFromProfile(ensureActiveOrcaProfile(userDataPath), userDataPath)
 }
 
+/** Runs the browser sign-in for the active profile; `options.signal` cancels a pending wait. */
 export async function connectCurrentOrcaProfile(
-  userDataPath: string
+  userDataPath: string,
+  options?: { signal?: AbortSignal }
 ): Promise<ConnectCurrentOrcaProfileResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
   if (isOrcaCloudDevAuthEnabled()) {
@@ -74,11 +82,21 @@ export async function connectCurrentOrcaProfile(
   }
 
   try {
-    const code = await beginOrcaCloudPkceFlow(configState.config, active.profile.id)
+    const code = await beginOrcaCloudPkceFlow(
+      configState.config,
+      active.profile.id,
+      options?.signal
+    )
     const exchange = await exchangeOrcaCloudAuthCode(configState.config, {
       ...code,
       localProfileId: active.profile.id
     })
+    if (options?.signal?.aborted) {
+      // Why: the browser callback beat the Cancel click. The user asked not to be
+      // signed in, so the freshly minted session is revoked instead of linked.
+      await revokeOrcaCloudSession(configState.config, exchange).catch(() => undefined)
+      throw new Error('orca_cloud_auth_cancelled')
+    }
     saveOrcaCloudSessionExchange(active.profile.id, userDataPath, exchange)
     const list = linkOrcaProfileToCloud(active.profile.id, exchange.cloud, userDataPath)
     return {
@@ -89,7 +107,9 @@ export async function connectCurrentOrcaProfile(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (isUserCancelledAuthError(message)) {
+    // Why: an exchange that fails after Cancel is still a cancellation to the
+    // user; classifying it by its error would surface a misleading error toast.
+    if (options?.signal?.aborted || isUserCancelledAuthError(message)) {
       return {
         status: 'cancelled',
         auth: getCurrentOrcaProfileAuthStatus(userDataPath)
