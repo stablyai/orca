@@ -18,9 +18,12 @@ const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([
 
 export function isStatusBarItemAvailable(
   id: StatusBarItem,
-  detectedAgentIds: TuiAgent[] | null
+  detectedAgentIds: TuiAgent[] | null,
+  hasCredentialBackedUsage = false
 ): boolean {
-  if (!CLI_GATED_ITEMS.has(id)) {
+  // Why: Pi-linked Codex accounts query usage directly and deliberately do not
+  // install Codex CLI. Their durable credential route earns the same UI slot.
+  if (hasCredentialBackedUsage || !CLI_GATED_ITEMS.has(id)) {
     return true
   }
   if (detectedAgentIds === null) {

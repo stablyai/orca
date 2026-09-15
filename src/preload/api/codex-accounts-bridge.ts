@@ -5,6 +5,7 @@ export const codexAccountsApi = {
   list: () => ipcRenderer.invoke('codexAccounts:list'),
   add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
     ipcRenderer.invoke('codexAccounts:add', args),
+  importPi: () => ipcRenderer.invoke('codexAccounts:importPi'),
   reauthenticate: (args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
     ipcRenderer.invoke('codexAccounts:reauthenticate', args),
   remove: (args: { accountId: string }) => ipcRenderer.invoke('codexAccounts:remove', args),

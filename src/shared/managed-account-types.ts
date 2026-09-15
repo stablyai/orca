@@ -6,6 +6,7 @@ export type CodexManagedAccount = {
   wslDistro?: string | null
   wslLinuxHomePath?: string | null
   providerAccountId?: string | null
+  credentialSource?: 'pi'
   workspaceLabel?: string | null
   workspaceAccountId?: string | null
   createdAt: number
@@ -19,6 +20,7 @@ export type CodexManagedAccountSummary = {
   managedHomeRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   providerAccountId?: string | null
+  credentialSource?: 'pi'
   workspaceLabel?: string | null
   workspaceAccountId?: string | null
   createdAt: number

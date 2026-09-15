@@ -30,6 +30,10 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('grok', ['claude', 'kimi'])).toBe(false)
   })
 
+  it('shows a credential-backed provider without its CLI on PATH', () => {
+    expect(isStatusBarItemAvailable('codex', [], true)).toBe(true)
+  })
+
   it('shows CLI items detected on PATH', () => {
     expect(isStatusBarItemAvailable('claude', ['claude'])).toBe(true)
     expect(isStatusBarItemAvailable('codex', ['codex', 'claude'])).toBe(true)

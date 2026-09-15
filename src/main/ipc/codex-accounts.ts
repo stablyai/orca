@@ -38,6 +38,7 @@ export function registerCodexAccountHandlers(
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )
+  ipcMain.handle('codexAccounts:importPi', () => codexAccounts.addAccountFromPi())
   ipcMain.handle(
     'codexAccounts:reauthenticate',
     (_event, args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>

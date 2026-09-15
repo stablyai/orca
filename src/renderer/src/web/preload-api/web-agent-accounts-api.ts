@@ -36,6 +36,7 @@ export function createAccountsApi(): never {
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
+    importPi: () => Promise.reject(new Error('Pi import is only available in the desktop app.')),
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),

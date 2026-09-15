@@ -91,6 +91,22 @@ export function renderCodexAccountRow(
             >
               {getCodexAccountRuntimeLabel(account, accountRuntime.label)}
             </Badge>
+            {account.credentialSource === 'pi' ? (
+              <>
+                <Badge
+                  variant="outline"
+                  className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
+                >
+                  {translate('auto.components.settings.AccountsPane.piLinked', 'Pi-linked')}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
+                >
+                  {translate('auto.components.settings.AccountsPane.usageOnly', 'Usage only')}
+                </Badge>
+              </>
+            ) : null}
             {isActive ? (
               <Badge
                 variant="outline"
@@ -121,13 +137,27 @@ export function renderCodexAccountRow(
             ) : null}
             {needsReauthentication ? (
               <span className="truncate">
+                {account.credentialSource === 'pi'
+                  ? translate(
+                      'auto.components.settings.AccountsPane.piSignInOutOfDate',
+                      'Pi could not refresh this sign-in'
+                    )
+                  : translate(
+                      'auto.components.settings.AccountsPane.3d245ef7d9',
+                      'Codex reported this sign-in is out of date'
+                    )}
+              </span>
+            ) : account.credentialSource === 'pi' ? (
+              <span className="truncate">
                 {translate(
-                  'auto.components.settings.AccountsPane.3d245ef7d9',
-                  'Codex reported this sign-in is out of date'
+                  'auto.components.settings.AccountsPane.piUsageDescription',
+                  'Usage refreshes through Pi; Codex CLI is not used'
                 )}
               </span>
             ) : null}
-            {needsReauthentication ? <span className="shrink-0 opacity-50">•</span> : null}
+            {needsReauthentication || account.credentialSource === 'pi' ? (
+              <span className="shrink-0 opacity-50">•</span>
+            ) : null}
             <span className="shrink-0">{formatAccountTimestamp(account.lastAuthenticatedAt)}</span>
           </div>
         </button>
@@ -136,30 +166,32 @@ export function renderCodexAccountRow(
           {/* Why: selecting an account is the primary action in this row.
           Keeping maintenance actions visually lighter prevents re-auth/remove
           controls from overpowering the selection affordance in a dense list. */}
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={(event) => {
-              event.stopPropagation()
-              void runCodexAccountAction(
-                `reauth:${account.id}`,
-                () =>
-                  window.api.codexAccounts.reauthenticate({
-                    accountId: account.id
-                  }),
-                getProviderAccountRuntime(account)
-              )
-            }}
-            disabled={isRemoteAccountScope || isBusy}
-            className="h-6 px-2 text-muted-foreground hover:text-foreground"
-          >
-            {isReauthing ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3" />
-            )}
-            {translate('auto.components.settings.AccountsPane.8a0f870153', 'Re-authenticate')}
-          </Button>
+          {account.credentialSource !== 'pi' ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={(event) => {
+                event.stopPropagation()
+                void runCodexAccountAction(
+                  `reauth:${account.id}`,
+                  () =>
+                    window.api.codexAccounts.reauthenticate({
+                      accountId: account.id
+                    }),
+                  getProviderAccountRuntime(account)
+                )
+              }}
+              disabled={isRemoteAccountScope || isBusy}
+              className="h-6 px-2 text-muted-foreground hover:text-foreground"
+            >
+              {isReauthing ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3" />
+              )}
+              {translate('auto.components.settings.AccountsPane.8a0f870153', 'Re-authenticate')}
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             size="xs"
