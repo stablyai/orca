@@ -7,8 +7,23 @@ import {
 } from '../../../../shared/terminal-osc-color-reply'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 
-export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
+// Why: this CSI handler is registered after ImageAddon's and pre-empts it
+// (xterm dispatches newest-first). Advertise sixel only when the addon
+// actually attached — otherwise lsix/chafa emit sequences the pane cannot render.
+export const DEFAULT_DA1_RESPONSE = '\x1b[?62;9;22c'
+export const SIXEL_DA1_RESPONSE = '\x1b[?62;4;9;22c'
 export const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
+export const CONPTY_DA1_RESPONSE_WITHOUT_SIXEL = '\x1b[?61c'
+
+export function resolveDa1Response(options: {
+  hasImageSupport?: boolean
+  isNativeWindowsConpty?: boolean
+} = {}): string {
+  if (options.isNativeWindowsConpty) {
+    return options.hasImageSupport ? CONPTY_DA1_RESPONSE : CONPTY_DA1_RESPONSE_WITHOUT_SIXEL
+  }
+  return options.hasImageSupport ? SIXEL_DA1_RESPONSE : DEFAULT_DA1_RESPONSE
+}
 
 type TerminalCapabilityRepliesDeps = {
   terminal: Pick<Terminal, 'cols' | 'rows' | 'element' | 'options'>
@@ -128,7 +143,7 @@ export function installTerminalCapabilityReplyHandlers(
         // Why: restored scrollback may contain old DA1 queries; answering those
         // into the fresh shell recreates the stray-input leak this handler fixes.
         if (!deps.isReplaying()) {
-          deps.sendInput(deps.da1Response ?? DEFAULT_DA1_RESPONSE)
+          deps.sendInput(deps.da1Response ?? resolveDa1Response())
         }
         return true
       })

@@ -125,6 +125,7 @@ function createPane({
     webLinksAddon: {} as never,
     webglAddon: null,
     ligaturesAddon: null,
+    imageAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null

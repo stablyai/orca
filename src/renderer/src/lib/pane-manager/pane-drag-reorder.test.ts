@@ -134,6 +134,7 @@ function createPane(id: number, container: FakeElement): ManagedPaneInternal {
     hasComplexScriptOutput: false,
     webglAddon: null,
     ligaturesAddon: null,
+    imageAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
     fitAddon: {} as never,

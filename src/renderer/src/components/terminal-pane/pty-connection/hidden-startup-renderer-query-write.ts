@@ -7,10 +7,7 @@ import {
   isStatelessRendererReplyCsiQuery
 } from '../../../../../shared/terminal-reply-query-extraction'
 import type { PtyDataMeta } from '../pty-dispatcher'
-import {
-  DEFAULT_DA1_RESPONSE,
-  sendTerminalOscColorQueryReplies
-} from '../terminal-capability-replies'
+import { resolveDa1Response, sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'
 
 import { recordHiddenRendererSkip } from './e2e-terminal-pty-harness'
 
@@ -133,7 +130,12 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
         const col = Math.min(buffer.cursorX + 1, session.pane.terminal.cols)
         session.sendDesktopQueryReplyImmediate(`\x1b[${row};${col}R`)
       } else if (sequence === '\x1b[c' || sequence === '\x1b[0c') {
-        session.sendDesktopQueryReplyImmediate(DEFAULT_DA1_RESPONSE)
+        session.sendDesktopQueryReplyImmediate(
+          resolveDa1Response({
+            hasImageSupport: session.pane.hasImageSupport === true,
+            isNativeWindowsConpty: session.isNativeWindowsConpty === true
+          })
+        )
       } else {
         unansweredQueryData += sequence
       }
