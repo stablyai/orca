@@ -27,6 +27,7 @@ export type LivenessTimeoutEvidence = {
   missedProbes: number
   missedProbeLimit: number
   lastInboundAgeMs: number
+  lastControlResponseAgeMs: number
 }
 
 export class RpcSessionLivenessWatchdog {
@@ -35,6 +36,7 @@ export class RpcSessionLivenessWatchdog {
   private probing = false
   private missedProbes = 0
   private lastInboundAt = 0
+  private lastControlResponseAt = 0
   private lastVoluntaryProbeAt: number | null = null
   private readonly idleProbeMs: number | null
   private readonly probeTimeoutMs: number
@@ -60,6 +62,7 @@ export class RpcSessionLivenessWatchdog {
     this.probing = false
     this.missedProbes = 0
     this.lastInboundAt = this.now()
+    this.lastControlResponseAt = this.lastInboundAt
     this.lastVoluntaryProbeAt = null
     this.armIdle(identity)
   }
@@ -71,11 +74,25 @@ export class RpcSessionLivenessWatchdog {
     return this.lastInboundAt
   }
 
+  // Any authenticated frame, terminal/browser stream traffic included. Records
+  // arrival for diagnostics only: a peer still pushing stream bytes has proved
+  // nothing about whether it can still answer a control request.
   noteAuthenticatedInbound(identity: RpcSessionIdentity): void {
     if (this.identity !== identity) {
       return
     }
     this.lastInboundAt = this.now()
+  }
+
+  // A response the peer had to produce for a request we sent. Only this counts
+  // as liveness — the idle clock and any in-flight probe key off it.
+  noteControlResponse(identity: RpcSessionIdentity): void {
+    if (this.identity !== identity) {
+      return
+    }
+    const now = this.now()
+    this.lastInboundAt = now
+    this.lastControlResponseAt = now
     if (this.missedProbes > 0) {
       console.log('[net] activity-probe recovered', {
         transport: this.options.transport,
@@ -90,8 +107,8 @@ export class RpcSessionLivenessWatchdog {
     this.armIdle(identity)
   }
 
-  probeNow(identity: RpcSessionIdentity): void {
-    if (this.identity !== identity || this.probing) {
+  probeNow(identity: RpcSessionIdentity | null): void {
+    if (identity === null || this.identity !== identity || this.probing) {
       return
     }
     const now = this.now()
@@ -114,6 +131,7 @@ export class RpcSessionLivenessWatchdog {
     this.probing = false
     this.missedProbes = 0
     this.lastInboundAt = 0
+    this.lastControlResponseAt = 0
     this.lastVoluntaryProbeAt = null
   }
 
@@ -127,7 +145,7 @@ export class RpcSessionLivenessWatchdog {
       if (this.identity !== identity) {
         return
       }
-      const idleMs = this.now() - this.lastInboundAt
+      const idleMs = this.now() - this.lastControlResponseAt
       if (this.idleProbeMs !== null && idleMs < this.idleProbeMs) {
         this.armIdle(identity, Math.max(1, this.idleProbeMs - Math.max(0, idleMs)))
       } else {
@@ -204,7 +222,8 @@ export class RpcSessionLivenessWatchdog {
       reason,
       missedProbes: this.missedProbes,
       missedProbeLimit: this.missedProbeLimit,
-      lastInboundAgeMs: Math.max(0, this.now() - this.lastInboundAt)
+      lastInboundAgeMs: Math.max(0, this.now() - this.lastInboundAt),
+      lastControlResponseAgeMs: Math.max(0, this.now() - this.lastControlResponseAt)
     })
     this.options.terminate(identity)
   }
