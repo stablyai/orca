@@ -5,6 +5,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { readArchivedCodexRolloutNames } from './codex-session-archive'
 import { streamCodexSessionLedgerRecords } from './codex-session-ledger-stream'
 
 // State files for the session index heal: which backfilled rollouts exist
@@ -49,12 +50,14 @@ export type HealMarkerSummary = {
 
 /**
  * Diffs the backfill audit ledger against the heal ledger: every hardlinked or
- * copied rollout whose thread id has not been processed yet, most recent first.
+ * copied rollout that this pass has not processed yet and that the user has not
+ * archived in Codex, most recent first.
  */
 export async function collectPendingHealThreads(
   paths: CodexSessionIndexHealPaths
 ): Promise<PendingHealThread[]> {
   const processed = await readProcessedHealThreads(paths)
+  const archivedRolloutNames = await readArchivedCodexRolloutNames(paths.systemSessionsRoot)
   const pendingByThreadId = new Map<string, PendingHealThread>()
   for await (const line of streamCodexSessionLedgerRecords(paths.auditLogPath, {
     throwOnReadFailure: true
@@ -70,11 +73,19 @@ export async function collectPendingHealThreads(
     if (!isPathInsideOrEqual(paths.systemSessionsRoot, line.target)) {
       continue
     }
-    const match = CODEX_ROLLOUT_THREAD_ID_PATTERN.exec(lastPathSegment(line.target))
+    const rolloutFileName = lastPathSegment(line.target)
+    const match = CODEX_ROLLOUT_THREAD_ID_PATTERN.exec(rolloutFileName)
     if (!match) {
       continue
     }
     const threadId = match[2].toLowerCase()
+    if (archivedRolloutNames.has(rolloutFileName)) {
+      // Why: `thread/read` re-indexes the rollout into Codex's state DB, which
+      // would resurface a thread the user archived. The append-only publication
+      // record stays, but it must cancel any older pending event for the thread.
+      pendingByThreadId.delete(threadId)
+      continue
+    }
     const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
     if (
       auditRecordId
