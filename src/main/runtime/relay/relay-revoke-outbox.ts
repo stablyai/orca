@@ -21,6 +21,10 @@ export type RelayRevokeOutboxItem = RelayDeviceBinding & {
 
 const OUTBOX_FILENAME = 'mobile-relay-revoke-outbox.json'
 
+/** How long an unlanded revoke keeps forcing the relay online on its own. It is retried forever
+ *  regardless; this bounds only its claim on demand. */
+export const RELAY_REVOKE_DEMAND_WINDOW_MS = 24 * 60 * 60_000
+
 function isItem(value: unknown): value is RelayRevokeOutboxItem {
   if (!value || typeof value !== 'object') {
     return false
@@ -69,6 +73,31 @@ export class RelayRevokeOutbox {
   pendingFor(ownerIdentityKey: string, relayHostId: string): readonly RelayRevokeOutboxItem[] {
     return this.items.filter(
       (item) => item.ownerIdentityKey === ownerIdentityKey && item.relayHostId === relayHostId
+    )
+  }
+
+  /**
+   * The pending revokes that still justify forcing the relay online by themselves.
+   *
+   * Why this is narrower than `pendingFor`: an item is removed only on a SUCCESSFUL flush, so one
+   * the server rejects permanently stays pending forever, and demand counts pending revokes
+   * unfiltered by the host's pairing-connection policy. That combination pinned the relay up for
+   * the life of the install and defeated a `local-only` pick outright.
+   *
+   * What deliberately does NOT happen here is giving up on the revoke. The item stays in the
+   * outbox and keeps retrying on every connection, because failing to revoke leaves a live
+   * credential on the relay and silently discarding that intent is the worse hazard. Only its
+   * claim on demand expires: a revoke that has not landed in this long is not going to land
+   * because the relay is held open, so holding it open buys nothing and costs the user the
+   * setting they chose.
+   */
+  demandingFor(
+    ownerIdentityKey: string,
+    relayHostId: string,
+    now: number
+  ): readonly RelayRevokeOutboxItem[] {
+    return this.pendingFor(ownerIdentityKey, relayHostId).filter(
+      (item) => now - item.createdAt < RELAY_REVOKE_DEMAND_WINDOW_MS
     )
   }
 

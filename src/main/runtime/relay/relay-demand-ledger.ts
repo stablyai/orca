@@ -37,10 +37,15 @@ export class RelayDemandLedger {
     if (this.transientRefs.size > 0) {
       return true
     }
-    if (this.options.revokeOutbox.pendingFor(ownerIdentityKey, this.options.relayHostId).length) {
+    const now = (this.options.now ?? Date.now)()
+    // Why `demandingFor` and not `pendingFor`: a revoke the server rejects permanently is never
+    // removed, and this check is deliberately unfiltered by the host's pairing policy, so counting
+    // every pending item held the relay up forever. The item still retries; only its demand expires.
+    if (
+      this.options.revokeOutbox.demandingFor(ownerIdentityKey, this.options.relayHostId, now).length
+    ) {
       return true
     }
-    const now = (this.options.now ?? Date.now)()
     return this.options.deviceRegistry.listDevices().some((device) => {
       const binding = device.relayBinding
       if (
