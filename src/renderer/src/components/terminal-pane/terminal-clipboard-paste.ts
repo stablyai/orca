@@ -2,6 +2,7 @@ import {
   isClipboardTextTooLargeError,
   type ReadClipboardTextOptions
 } from '../../../../shared/clipboard-text'
+import { isImageReferenceOnlyClipboardText } from './terminal-clipboard-image-reference-text'
 import {
   TERMINAL_PASTE_MAX_BYTES,
   type TerminalPasteTextOptions
@@ -62,7 +63,10 @@ export async function pasteTerminalClipboard({
     // Why: browser clipboard text reads can fail for image-only clipboards.
     // Still try the image path so Cmd/Ctrl+V works for screenshots.
   }
-  if (text) {
+  // Why: a clipboard that carries an image plus text *naming* that image (browser
+  // "Copy Image", file managers) must not lose the bitmap to the text fast path.
+  const isImageReferenceText = text.length > 0 && isImageReferenceOnlyClipboardText(text)
+  const pasteClipboardText = async (): Promise<TerminalClipboardPasteResult> => {
     try {
       const textOptions =
         protectedMultilineTextPasteOptions ??
@@ -77,11 +81,16 @@ export async function pasteTerminalClipboard({
       return { status: 'skipped', reason: 'text-paste-failed' }
     }
   }
+  if (text && !isImageReferenceText) {
+    return pasteClipboardText()
+  }
 
   try {
     const filePath = await saveClipboardImageAsTempFile({ connectionId, runtimeEnvironmentId })
     if (!filePath) {
-      return { status: 'skipped', reason: 'empty' }
+      // Why: the text still described an image, but no bitmap came with it, so
+      // fall back to the paste the user would have gotten before this check.
+      return isImageReferenceText ? pasteClipboardText() : { status: 'skipped', reason: 'empty' }
     }
     const result = await pasteText(filePath, {
       // Why: a generated clipboard-image path is terminal image injection, not
@@ -95,6 +104,12 @@ export async function pasteTerminalClipboard({
     return { status: 'pasted', kind: 'image-path' }
   } catch (error) {
     onImagePasteError?.(error)
+    if (isImageReferenceText) {
+      // Why: report the image failure so a broken temp-file write is still
+      // visible, but keep the paste the user would have gotten before this
+      // check instead of dropping it entirely.
+      return pasteClipboardText()
+    }
     return { status: 'skipped', reason: 'image-paste-failed' }
   }
 }
