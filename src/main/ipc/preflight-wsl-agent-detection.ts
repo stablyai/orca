@@ -44,16 +44,10 @@ export async function detectWslCommandsOnPath(
   ].join('\n')
 
   try {
-    // Why probe: the cached login PATH gives the user's real nvm/mise/asdf PATH
-    // with no shell in the loop, so there is no rc/motd banner to land in stdout.
-    const result = await runWslProcess({
-      distro: wslTarget.distro,
-      loginPath: 'preferred',
-      script,
-      // POSIX `command -v` loop; declared because the payload is opaque here.
-      shell: 'sh',
-      timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
-    })
+    // Why: WSL cold-start plus many parallel wsl.exe probes can timeout and
+    // cache an empty result. One timedOut retry absorbs a single miss without
+    // turning every hard shell failure into a multi-second hang.
+    const result = await runWslAgentDetectionWithColdStartRetry(wslTarget, script)
     // runProcess resolves on a timeout and on a non-zero exit, so partial
     // stdout would otherwise read as a complete answer.
     if (result.timedOut || result.code !== 0) {
@@ -63,6 +57,28 @@ export async function detectWslCommandsOnPath(
   } catch {
     return new Set()
   }
+}
+
+async function runWslAgentDetectionWithColdStartRetry(
+  wslTarget: WslPreflightTarget,
+  script: string
+) {
+  const runOnce = () =>
+    runWslProcess({
+      distro: wslTarget.distro,
+      loginPath: 'preferred',
+      script,
+      // POSIX `command -v` loop; declared because the payload is opaque here.
+      shell: 'sh',
+      timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
+    })
+  const first = await runOnce()
+  // Why: runWslProcess resolves on timeout (timedOut=true) instead of throwing
+  // ETIMEDOUT; retry that miss once, not a non-zero shell failure.
+  if (!first.timedOut) {
+    return first
+  }
+  return await runOnce()
 }
 
 function shellQuote(value: string): string {
