@@ -592,6 +592,7 @@ describe('orca cli worktree awareness', () => {
           handle: 'term_worker',
           condition: 'tui-idle',
           satisfied: false,
+          observedState: 'codex-cwd-prompt',
           status: 'running',
           exitCode: null,
           blockedReason: 'codex-cwd-prompt'
@@ -618,6 +619,7 @@ describe('orca cli worktree awareness', () => {
       }
     )
     expect(logSpy.mock.calls.flat().join('\n')).toContain('blockedReason: codex-cwd-prompt')
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('observedState: codex-cwd-prompt')
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode
