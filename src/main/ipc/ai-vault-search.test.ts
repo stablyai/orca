@@ -124,6 +124,8 @@ describe('desktop IPC and preload search boundary', () => {
       kind: 'unavailable',
       reason: 'no-service'
     })
+    // Status is the one read where "no such method" must not collapse into "off".
+    await expect(aiVaultApi.searchStatus('runtime:env-1')).rejects.toThrow('host-too-old')
     runtimeSearch.mockRejectedValue(
       Object.assign(new Error('runtime disconnected'), { code: 'connection_lost' })
     )
@@ -186,5 +188,49 @@ describe('desktop IPC and preload search boundary', () => {
     await expect(handlers.get('aiVault:searchStatus')!(null, 'all')).rejects.toThrow(
       'not available for this execution host'
     )
+  })
+
+  it('turns a paired runtime host on and answers with the status it reported', async () => {
+    const local = fakeSearchService()
+    setSessionSearchService(local)
+    const enabled = { ...unavailableSessionSearchStatus(), enabled: true, generation: 4 }
+    runtimeSearch.mockResolvedValue(enabled)
+
+    expect(await aiVaultApi.setSearchEnabled('runtime:env-1', true)).toEqual(enabled)
+    expect(runtimeSearch).toHaveBeenCalledExactlyOnceWith('env-1', 'aiVault.setSearchEnabled', {
+      enabled: true
+    })
+    // The desktop's own index is never a side effect of enabling a remote one.
+    expect(local.status).not.toHaveBeenCalled()
+  })
+  it('maps an unknown-method refusal to host-too-old and keeps every other failure', async () => {
+    runtimeSearch.mockRejectedValue(
+      Object.assign(new Error('Unknown method: aiVault.setSearchEnabled'), { code: -32601 })
+    )
+    await expect(aiVaultApi.setSearchEnabled('runtime:env-1', true)).rejects.toThrow('host-too-old')
+
+    runtimeSearch.mockRejectedValue(Object.assign(new Error('not paired'), { code: 'forbidden' }))
+    await expect(aiVaultApi.setSearchEnabled('runtime:env-1', true)).rejects.toThrow('not paired')
+  })
+  it('rejects a host answer that is not a status rather than reporting success', async () => {
+    runtimeSearch.mockResolvedValue({ enabled: true })
+    await expect(aiVaultApi.setSearchEnabled('runtime:env-1', true)).rejects.toThrow()
+  })
+  it('refuses local, SSH, unroutable hosts and a non-boolean', async () => {
+    await expect(aiVaultApi.setSearchEnabled('local', true)).rejects.toThrow('through Settings')
+    await expect(aiVaultApi.setSearchEnabled('ssh:box', true)).rejects.toThrow('unsupported')
+    await expect(handlers.get('aiVault:setSearchEnabled')!(null, 'nope', true)).rejects.toThrow(
+      'not available for this execution host'
+    )
+    await expect(
+      handlers.get('aiVault:setSearchEnabled')!(null, 'runtime:env-1', 'yes')
+    ).rejects.toThrow()
+    expect(runtimeSearch).not.toHaveBeenCalled()
+    expect(sshSearch).not.toHaveBeenCalled()
+  })
+  it('reports host-too-old when this desktop has no runtime transport injected', async () => {
+    handlers.clear()
+    registerAiVaultSearchHandlers()
+    await expect(aiVaultApi.setSearchEnabled('runtime:env-1', true)).rejects.toThrow('host-too-old')
   })
 })

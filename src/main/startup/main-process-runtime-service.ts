@@ -1,4 +1,7 @@
-import { installChildSessionSearchService } from '../ai-vault-search/session-search-enablement'
+import {
+  applySessionSearchSettingsChange,
+  installChildSessionSearchService
+} from '../ai-vault-search/session-search-enablement'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -131,6 +134,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(state.store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     orchestrationEnvironmentTransport,
+    // Why the same function the settings IPC handler calls: a paired client's write and a
+    // local one must reconcile the scanner child through one path, or they can disagree.
+    applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
   // Both desktop and headless serve own a host-local search service.

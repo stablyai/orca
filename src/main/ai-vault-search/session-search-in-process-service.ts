@@ -28,7 +28,7 @@ export function installInProcessSessionSearchService(args: {
   resolveRoots?: SessionSearchIndexerOptions['resolveRoots']
   settings: AiVaultSearchSettings
   onError?: (error: unknown) => void
-}): { dispose(): void } | null {
+}): { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null {
   if (!sessionSearchSqliteAvailable()) {
     return null
   }
@@ -45,6 +45,9 @@ export function installInProcessSessionSearchService(args: {
     reconcile: () => instance.reconcile()
   })
   return {
+    // Why exposed: on these hosts a settings write reaches the index through this
+    // object, there being no scanner child to forward a policy to.
+    apply: (settings) => instance.apply(settings),
     dispose: () => {
       setSessionSearchService(null)
       instance.close()

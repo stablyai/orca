@@ -130,6 +130,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   // Why (#19334): "your archive hook failed, nothing was deleted" is a distinct decision — retry,
   // waive, or skip the hook. Flattened to runtime_error a caller can only pattern-match the text.
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
+  // Why here and not only on the transport: a method that admits paired clients only refuses
+  // with the same code the mobile-allowlist check does, so a caller reads one answer either way.
+  'forbidden',
   NESTED_WORKER_DEPTH_EXCEEDED_CODE,
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,

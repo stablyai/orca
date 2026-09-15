@@ -39,6 +39,9 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       addressesOwnRuntime(executionHostScope)
         ? search.searchStatus()
         : Promise.resolve(unavailableSessionSearchStatus()),
+    // Why refused and not forwarded: consent for a host's index is an operator action,
+    // and the browser client has no desktop settings surface to reconcile it against.
+    setSearchEnabled: () => Promise.reject(new Error('unsupported')),
     clearSearchIndex: () =>
       Promise.reject(new Error('Clearing Agent Session History is unavailable in the browser.')),
     listSessions: (args?: AiVaultListArgs) => {

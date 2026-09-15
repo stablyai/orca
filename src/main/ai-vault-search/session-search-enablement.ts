@@ -1,7 +1,4 @@
-import {
-  resolveAiVaultSearchSettings,
-  sameAiVaultSearchSettings
-} from '../../shared/ai-vault-search-settings'
+import { changedAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { updateSessionSearchInService } from '../ai-vault/session-scanner-service-spawn'
 import { createChildSessionSearchService } from './session-search-child-service'
@@ -49,12 +46,7 @@ export function applySessionSearchSettingsChange(
   before: Pick<GlobalSettings, 'aiVaultSearch'>,
   after: Pick<GlobalSettings, 'aiVaultSearch'>
 ): void {
-  if (
-    sameAiVaultSearchSettings(
-      resolveAiVaultSearchSettings(before),
-      resolveAiVaultSearchSettings(after)
-    )
-  ) {
+  if (!changedAiVaultSearchSettings(before, after)) {
     return
   }
   if (installed) {

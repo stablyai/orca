@@ -33,6 +33,15 @@ export type AiVaultApi = {
   ) => Promise<AiVaultSearchResponse>
   /** Status describes one index, so it never accepts the `all` scope. */
   searchStatus: (executionHostScope?: ExecutionHostId) => Promise<AiVaultSearchStatus>
+  /**
+   * Turns indexing on or off on a paired Orca server and answers its status after the change.
+   * Runtime hosts only: the local index follows this desktop's own settings write, SSH hosts
+   * reject with `unsupported`, and a server predating the method rejects with `host-too-old`.
+   */
+  setSearchEnabled: (
+    executionHostId: ExecutionHostId,
+    enabled: boolean
+  ) => Promise<AiVaultSearchStatus>
   /** Deletes and rebuilds this desktop's local search index. */
   clearSearchIndex: () => Promise<void>
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>

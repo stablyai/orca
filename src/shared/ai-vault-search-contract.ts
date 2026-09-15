@@ -103,6 +103,8 @@ export const AiVaultSearchResponseSchema = z.discriminatedUnion('kind', [
   })
 ])
 export const AiVaultSearchStatusRequestSchema = z.object({})
+/** Consent flip for one host's index. Answered with that host's status after the change is applied. */
+export const AiVaultSetSearchEnabledParamsSchema = z.object({ enabled: z.boolean() })
 export const AiVaultSearchStatusSchema = z.object({
   enabled: z.boolean(),
   phase: z.enum(['idle', 'indexing', 'current', 'degraded', 'closed']),

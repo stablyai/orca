@@ -28,6 +28,10 @@ import {
 } from './runtime-skill-command-surface'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
+import {
+  RuntimeSessionSearchSettingsController,
+  type SessionSearchSettingsApply
+} from './runtime-session-search-settings'
 import { RuntimeAutomationController } from './runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from './runtime-orchestration-federation'
 import { configureAiVaultSessionSources } from '../ai-vault/cached-session-list'
@@ -90,6 +94,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       skillTransactionRecovery?: Promise<unknown>
+      // Why a host hook and not a direct call: the process that owns this runtime's index
+      // differs per host (scanner child on the desktop, in-process on orcad), and on orcad
+      // it is installed after construction, so the closure has to resolve it at call time.
+      applySessionSearchSettings?: SessionSearchSettingsApply
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
     }
   ) {
@@ -128,6 +136,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     })
     installRuntimeServiceCommandSurface(runtime, {
       aiVault: this.aiVault,
+      sessionSearchSettings: new RuntimeSessionSearchSettingsController(
+        store,
+        deps?.applySessionSearchSettings ?? null
+      ),
       clientEvents: this.clientEvents,
       nativeChatDraftResolutions: this.nativeChatDraftResolutions,
       subscriptions: this.subscriptions,
