@@ -135,6 +135,82 @@ describe('parcel watcher process canary', () => {
     )
   })
 
+  it.each(['error', 'delayed-close', 'throw'] as const)(
+    'advances the real child lifecycle queue after shallow %s teardown',
+    async (schedule) => {
+      detectShallowWatchDeliveryMock.mockResolvedValue(true)
+      const handles: (EventEmitter & { close: () => void })[] = []
+      watchMock.mockImplementation(() => {
+        const watcher = new EventEmitter() as EventEmitter & {
+          close: () => void
+        }
+        watcher.close = () => {
+          watcher.emit('close')
+        }
+        handles.push(watcher)
+        return watcher
+      })
+      const sendMock = vi.fn()
+      process.send = sendMock
+      await import('./parcel-watcher-process-entry')
+      await vi.advanceTimersByTimeAsync(0)
+      for (const id of [1, 2]) {
+        process.emit('message', {
+          op: 'subscribe',
+          id,
+          dir: `/folder-${id}`,
+          opts: { mode: 'shallow', include: ['HEAD'] }
+        })
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      handles[0].close = () => {
+        if (schedule === 'throw') {
+          throw new Error('handle still active')
+        }
+      }
+      if (schedule === 'error') {
+        handles[0].emit('error', new Error('terminal'))
+      }
+      process.emit('message', { op: 'unsubscribe', id: 1 })
+      process.emit('message', {
+        op: 'subscribe',
+        id: 3,
+        dir: '/folder-3',
+        opts: { mode: 'shallow', include: ['HEAD'] }
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      if (schedule === 'delayed-close') {
+        expect(sendMock).not.toHaveBeenCalledWith({
+          op: 'subscribe-started',
+          id: 3
+        })
+        handles[0].emit('close')
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(sendMock).toHaveBeenCalledWith({ op: 'subscribed', id: 3 })
+      if (schedule === 'throw') {
+        expect(sendMock).toHaveBeenCalledWith({
+          op: 'unsubscribe-failed',
+          id: 1,
+          message: 'handle still active'
+        })
+        expect(sendMock).not.toHaveBeenCalledWith({
+          op: 'unsubscribed',
+          id: 1
+        })
+        handles[0].emit('close')
+      } else {
+        expect(sendMock).toHaveBeenCalledWith({ op: 'unsubscribed', id: 1 })
+      }
+      for (const id of [1, 2, 3]) {
+        process.emit('message', { op: 'unsubscribe', id })
+      }
+      await vi.advanceTimersByTimeAsync(0)
+      expect(sendMock).toHaveBeenCalledWith({ op: 'unsubscribed', id: 2 })
+      expect(sendMock).toHaveBeenCalledWith({ op: 'unsubscribed', id: 3 })
+    }
+  )
+
   it('does not restart while a native subscription is still crawling', async () => {
     subscribeMock
       .mockResolvedValueOnce({ unsubscribe: vi.fn() })
